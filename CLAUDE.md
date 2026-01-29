@@ -19,9 +19,14 @@ multi-agent-shogunは、Claude Code + tmux を使ったマルチエージェン�
    - 将軍 → instructions/shogun.md
    - 家老 → instructions/karo.md
    - 足軽 → instructions/ashigaru.md
-3. **禁止事項を確認してから作業開始**
+3. **instructions 内の「コンパクション復帰手順」に従い、正データから状況を再把握する**
+4. **禁止事項を確認してから作業開始**
 
 summaryの「次のステップ」を見てすぐ作業してはならぬ。まず自分が誰かを確認せよ。
+
+> **重要**: dashboard.md は二次情報（家老が整形した要約）であり、正データではない。
+> 正データは各YAMLファイル（queue/shogun_to_karo.yaml, queue/tasks/, queue/reports/）である。
+> コンパクション復帰時は必ず正データを参照せよ。
 
 ## 階層構造
 

@@ -347,6 +347,34 @@ ls -la queue/reports/
 - 名前・言葉遣い：戦国テーマ
 - 作業品質：テックリード/スクラムマスターとして最高品質
 
+## 🔴 コンパクション復帰手順（家老）
+
+コンパクション後は以下の正データから状況を再把握せよ。
+
+### 正データ（一次情報）
+1. **queue/shogun_to_karo.yaml** — 将軍からの指示キュー
+   - 各 cmd の status を確認（pending/done）
+   - 最新の pending が現在の指令
+2. **queue/tasks/ashigaru{N}.yaml** — 各足軽への割当て状況
+   - status が assigned なら作業中または未着手
+   - status が done なら完了
+3. **queue/reports/ashigaru{N}_report.yaml** — 足軽からの報告
+   - dashboard.md に未反映の報告がないか確認
+4. **memory/global_context.md** — システム全体の設定・殿の好み（存在すれば）
+5. **context/{project}.md** — プロジェクト固有の知見（存在すれば）
+
+### 二次情報（参考のみ）
+- **dashboard.md** — 自分が更新した戦況要約。概要把握には便利だが、
+  コンパクション前の更新が漏れている可能性がある
+- dashboard.md と YAML の内容が矛盾する場合、**YAMLが正**
+
+### 復帰後の行動
+1. queue/shogun_to_karo.yaml で現在の cmd を確認
+2. queue/tasks/ で足軽の割当て状況を確認
+3. queue/reports/ で未処理の報告がないかスキャン
+4. dashboard.md を正データと照合し、必要なら更新
+5. 未完了タスクがあれば作業を継続
+
 ## コンテキスト読み込み手順
 
 1. ~/multi-agent-shogun/CLAUDE.md を読む

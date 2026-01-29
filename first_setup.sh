@@ -507,7 +507,10 @@ fi
 
 if [ "$ALIAS_ADDED" = true ]; then
     log_success "alias設定を追加しました"
-    log_info "反映するには 'source ~/.bashrc' を実行するか、ターミナルを再起動してください"
+    log_warn "alias を反映するには、以下のいずれかを実行してください："
+    log_info "  1. source ~/.bashrc"
+    log_info "  2. PowerShell で 'wsl --shutdown' してからターミナルを開き直す"
+    log_info "  ※ ウィンドウを閉じるだけでは WSL が終了しないため反映されません"
 fi
 
 RESULTS+=("alias設定: OK")

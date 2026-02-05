@@ -129,6 +129,13 @@ The P82B96 is a dual bidirectional I2C bus buffer that enables cable extension u
    - SDA and SCL on separate twisted pairs
    - Connect shield to GND at one end only
 
+3. **推奨ケーブル: M5Stack GROVE互換ケーブル**
+   - スイッチサイエンスで購入可能
+   - 100cm (¥550): https://www.switch-science.com/products/5216
+   - 200cm: https://www.switch-science.com/products/5217
+   - Grove端子付きでそのまま接続可能
+   - P82B96と併用で5〜20m延長OK
+
 3. **Decoupling Capacitors**
    - Add 100nF ceramic capacitor near P82B96 VCC pin
    - Add 100nF at remote sensor VCC

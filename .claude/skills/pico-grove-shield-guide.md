@@ -134,6 +134,23 @@ Grove Shield for Pi Pico は国内での入手性が悪化している。
 | 3 | 赤 | VCC (3.3V または 5V) |
 | 4 | 黒 | GND |
 
+### Grove ケーブル長さバリエーション
+
+#### M5Stack GROVE互換ケーブル（スイッチサイエンス）
+
+長距離I2C配線に最適。P82B96バッファ併用でさらに延長可能。
+
+| 長さ | 型番 | 価格 | URL |
+|------|------|------|-----|
+| 5cm | A034-A | - | https://www.switch-science.com/products/5212 |
+| 10cm | A034-B | - | https://www.switch-science.com/products/5213 |
+| 20cm | A034-C | - | https://www.switch-science.com/products/5214 |
+| 50cm | A034-E | - | https://www.switch-science.com/products/5215 |
+| **100cm** | **A034-D** | **¥550** | **https://www.switch-science.com/products/5216** |
+| **200cm** | A034-F | - | https://www.switch-science.com/products/5217 |
+
+**注意**: 長距離（1m以上）でI2C通信する場合は、P82B96等のI2Cバスバッファ併用を推奨。
+
 ## 3. I2Cセンサー接続例
 
 ### 対応センサーとアドレス

@@ -446,7 +446,7 @@ W5500-EVB-Pico-PoE
 - DINレール対応
 - **これ1台で制御ノード完結！**
 
-※ 2024年時点でスイッチサイエンス売り切れ。Waveshare直販または再入荷待ち。
+※ スイッチサイエンスで販売中（在庫確認要）
 
 **Waveshare Pico-Relay-B**（代替）:
 - https://www.waveshare.com/pico-relay-b.htm

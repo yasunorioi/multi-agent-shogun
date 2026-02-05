@@ -483,6 +483,86 @@ W5500-EVB-Pico-PoE
 
 **参考**: https://jitaku-yasai.com/home-made/ec-meter-selfmade/
 
+#### ECセンサーノード構成
+
+```
+W5500-EVB-Pico-PoE
+       │
+       └── EC Sensor Board
+           ├── MCP3421 + ECフロントエンド
+           ├── ノイズ対策電源 (LDO + フェライト)
+           ├── [CAL] ボタン ← キャリブレーション
+           ├── [MODE] ボタン ← モード切替
+           └── Status LED
+```
+
+#### キャリブレーション操作
+
+```
+【2ボタン操作】
+  [CAL] ← キャリブレーション  [MODE] ← モード切替/キャンセル
+
+【手順】
+1. プローブを校正液1（1.413 mS/cm）に浸す
+2. [CAL] 長押し3秒 → LED点滅（キャリブモード開始）
+3. 値が安定したら [CAL] 短押し → LED1回点灯（校正点1保存）
+4. プローブを洗浄 → 校正液2（12.88 mS/cm）に浸す
+5. 値が安定したら [CAL] 短押し → LED2回点灯（校正点2保存）
+6. [MODE] 押す or 30秒放置 → 通常モードに戻る
+
+【LED表示】
+- 消灯: 通常動作中
+- 点滅: キャリブモード（入力待ち）
+- 1回点灯: 校正点1完了
+- 2回点灯: 校正点2完了
+- 高速点滅: エラー（値が範囲外等）
+
+【校正液】
+- 低レンジ: 1.413 mS/cm（標準）
+- 高レンジ: 12.88 mS/cm（標準）
+```
+
+#### キャリブレーションデータ保存（Flash）
+
+```python
+import json
+import microcontroller
+
+# キャリブレーションデータ構造
+cal_data = {
+    "cal_low": 1.413,      # 校正液1 (mS/cm)
+    "raw_low": 12345,      # 校正液1のADC生値
+    "cal_high": 12.88,     # 校正液2 (mS/cm)
+    "raw_high": 54321,     # 校正液2のADC生値
+    "calibrated_at": "2026-02-06T12:00:00"
+}
+
+# Flash NVM に保存（Pico内蔵）
+def save_calibration(cal_data):
+    data_bytes = json.dumps(cal_data).encode('utf-8')
+    # NVMは最大4096バイト
+    microcontroller.nvm[0:len(data_bytes)] = data_bytes
+    microcontroller.nvm[len(data_bytes)] = 0  # 終端
+
+def load_calibration():
+    try:
+        end = microcontroller.nvm[:].index(0)
+        data_bytes = bytes(microcontroller.nvm[0:end])
+        return json.loads(data_bytes.decode('utf-8'))
+    except:
+        return None  # 未キャリブレーション
+
+# EC値計算（2点校正の線形補間）
+def calc_ec(raw_value, cal_data):
+    if cal_data is None:
+        return None  # 要キャリブレーション
+
+    slope = (cal_data["cal_high"] - cal_data["cal_low"]) / \
+            (cal_data["raw_high"] - cal_data["raw_low"])
+    ec = cal_data["cal_low"] + slope * (raw_value - cal_data["raw_low"])
+    return ec
+```
+
 #### BOM（ECセンサー基板）
 
 | Component | Value | LCSC Part # | Qty | Price |
@@ -495,7 +575,9 @@ W5500-EVB-Pico-PoE
 | フェライト | BLM18AG601 | C71858 | 1 | $0.02 |
 | 測定抵抗 | 1kΩ 0603 | C22548 | 1 | $0.001 |
 | Grove端子 | HY2.0-4P | C722729 | 1 | $0.04 |
-| | | | **Subtotal** | **$1.66** |
+| タクトスイッチ | 6x6mm | C318884 | 2 | $0.02 |
+| LED | 0603 Green | C125098 | 1 | $0.01 |
+| | | | **Subtotal** | **$1.69** |
 
 ※ MCP3421は Extended Parts のため $3 手数料追加の可能性あり
 

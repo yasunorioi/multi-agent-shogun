@@ -583,7 +583,220 @@ def calc_ec(raw_value, cal_data):
 
 ---
 
-### 5. Relay Driver Circuit (1 Channel)
+### 5. 共通Web UI + ログ + MQTT異常通知
+
+#### Web UIエンドポイント（全ノード共通）
+
+```
+http://[ノードIP]/
+├── /         ← メイン画面（センサー値/状態）
+├── /log      ← ログ閲覧（直近100件 + 異常履歴）
+└── /config   ← 設定確認（読み取り専用）
+```
+
+#### 共通HTMLテンプレート
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{node_name}</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 16px; background: #1a1a2e; color: #fff; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .status { padding: 4px 8px; border-radius: 4px; }
+    .ok { background: #10b981; }
+    .warn { background: #f59e0b; }
+    .error { background: #ef4444; }
+    .card { background: #16213e; padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+    .value { font-size: 48px; font-weight: bold; }
+    .unit { font-size: 18px; color: #888; }
+    .label { color: #888; margin-bottom: 4px; }
+    .nav { display: flex; gap: 8px; margin-top: 16px; }
+    .nav a { color: #60a5fa; text-decoration: none; }
+    .log { font-family: monospace; font-size: 12px; white-space: pre; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div><strong>{node_name}</strong> ({node_type})</div>
+    <div class="status {status_class}">{status}</div>
+  </div>
+  {content}
+  <div class="nav">
+    <a href="/">Home</a> | <a href="/log">Log</a> | <a href="/config">Config</a>
+  </div>
+  <div style="color:#666;margin-top:16px;font-size:12px;">
+    IP: {ip} | Uptime: {uptime} | MQTT: {mqtt_status}
+  </div>
+</body>
+</html>
+```
+
+#### ノード別メインコンテンツ
+
+**センサーノード**:
+```html
+<div class="card">
+  <div class="label">温度</div>
+  <div class="value">25.3<span class="unit">℃</span></div>
+</div>
+<div class="card">
+  <div class="label">湿度</div>
+  <div class="value">65<span class="unit">%</span></div>
+</div>
+<div class="card">
+  <div class="label">CO2</div>
+  <div class="value">850<span class="unit">ppm</span></div>
+</div>
+```
+
+**ECノード**:
+```html
+<div class="card">
+  <div class="label">EC値</div>
+  <div class="value">2.4<span class="unit">mS/cm</span></div>
+</div>
+<div class="card">
+  <div class="label">キャリブレーション</div>
+  <div>最終: 2026-02-06 12:00</div>
+  <div class="status ok">正常</div>
+</div>
+```
+
+#### ログ設計
+
+**通常ログ（リングバッファ、直近100件）**:
+```json
+{"ts": 1707200000, "temp": 25.3, "humid": 65, "co2": 850}
+{"ts": 1707200060, "temp": 25.4, "humid": 64, "co2": 855}
+```
+
+**異常ログ（別枠保持、最大50件）**:
+```json
+{"ts": 1707200000, "type": "sensor_error", "msg": "SHT40 read failed"}
+{"ts": 1707200100, "type": "mqtt_disconnect", "msg": "Broker unreachable"}
+{"ts": 1707200200, "type": "calibration", "msg": "EC calibration completed"}
+{"ts": 1707200300, "type": "reboot", "msg": "Watchdog reset"}
+```
+
+#### CircuitPythonログ実装
+
+```python
+import json
+import time
+import microcontroller
+
+# ログ設定
+MAX_NORMAL_LOGS = 100
+MAX_ERROR_LOGS = 50
+LOG_FILE = "/logs/normal.json"
+ERROR_FILE = "/logs/error.json"
+
+# メモリ内バッファ（起動時にFlashから読み込み）
+normal_logs = []
+error_logs = []
+
+def add_log(data):
+    """通常ログ追加（リングバッファ）"""
+    global normal_logs
+    data["ts"] = time.time()
+    normal_logs.append(data)
+    if len(normal_logs) > MAX_NORMAL_LOGS:
+        normal_logs.pop(0)
+
+def add_error(error_type, message):
+    """異常ログ追加"""
+    global error_logs
+    entry = {"ts": time.time(), "type": error_type, "msg": message}
+    error_logs.append(entry)
+    if len(error_logs) > MAX_ERROR_LOGS:
+        error_logs.pop(0)
+    # 異常は即座にFlash保存
+    save_logs()
+
+def save_logs():
+    """ログをFlashに保存（定期的 or 異常時）"""
+    try:
+        with open(LOG_FILE, "w") as f:
+            json.dump(normal_logs[-50:], f)  # 直近50件のみ保存
+        with open(ERROR_FILE, "w") as f:
+            json.dump(error_logs, f)
+    except OSError:
+        pass  # Flash書き込みエラーは無視
+
+def load_logs():
+    """起動時にFlashからログ読み込み"""
+    global normal_logs, error_logs
+    try:
+        with open(LOG_FILE, "r") as f:
+            normal_logs = json.load(f)
+    except:
+        normal_logs = []
+    try:
+        with open(ERROR_FILE, "r") as f:
+            error_logs = json.load(f)
+    except:
+        error_logs = []
+```
+
+#### MQTT異常通知トピック
+
+```
+greenhouse/{house_id}/node/{node_id}/
+├── status          # "online" / "offline" (LWT)
+├── error           # 異常発生時にpublish
+└── heartbeat       # 定期死活監視（60秒間隔）
+
+# 異常通知ペイロード例
+{
+  "type": "sensor_error",
+  "sensor": "SHT40",
+  "message": "I2C communication failed",
+  "timestamp": 1707200000
+}
+```
+
+**異常タイプ一覧**:
+
+| type | 内容 | 重要度 |
+|------|------|--------|
+| `sensor_error` | センサー読み取り失敗 | 高 |
+| `sensor_range` | 値が範囲外 | 中 |
+| `mqtt_disconnect` | MQTT切断 | 高 |
+| `calibration_needed` | 要キャリブレーション | 中 |
+| `low_memory` | メモリ不足警告 | 低 |
+| `reboot` | 再起動発生 | 中 |
+
+#### Home Assistant MQTT Discovery（異常通知）
+
+```python
+# 異常通知用センサー自動登録
+discovery_payload = {
+    "name": f"{HOUSE_ID} {NODE_ID} Error",
+    "state_topic": f"greenhouse/{HOUSE_ID}/node/{NODE_ID}/error",
+    "value_template": "{{ value_json.type }}",
+    "json_attributes_topic": f"greenhouse/{HOUSE_ID}/node/{NODE_ID}/error",
+    "unique_id": f"{HOUSE_ID}_{NODE_ID}_error",
+    "device_class": "problem",
+    "device": {
+        "identifiers": [f"pico_{HOUSE_ID}_{NODE_ID}"],
+        "name": f"Node {NODE_ID}",
+        "manufacturer": "DIY"
+    }
+}
+mqtt_client.publish(
+    f"homeassistant/sensor/{HOUSE_ID}_{NODE_ID}_error/config",
+    json.dumps(discovery_payload),
+    retain=True
+)
+```
+
+---
+
+### 6. Relay Driver Circuit (1 Channel)
 
 #### Circuit Diagram
 
@@ -650,7 +863,7 @@ def calc_ec(raw_value, cal_data):
 
 ---
 
-### 6. JLCPCB Component Selection (LCSC Part Numbers)
+### 7. JLCPCB Component Selection (LCSC Part Numbers)
 
 #### Bill of Materials (BOM)
 
@@ -696,7 +909,7 @@ def calc_ec(raw_value, cal_data):
 
 ---
 
-### 7. KiCad Design Reference
+### 8. KiCad Design Reference
 
 #### Schematic Blocks
 

@@ -4,6 +4,7 @@ claude-shogun-orders.md
 # Claude Code settings
 .claude/*
 !.claude/settings.json
+!.claude/skills/
 .mcp.json
 
 # Test outputs (generated during testing)

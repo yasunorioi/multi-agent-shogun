@@ -431,17 +431,30 @@ W5500-EVB-Pico-PoE
 
 | 製品 | ch数 | 定格 | 価格 | 特徴 |
 |------|------|------|------|------|
-| **Waveshare Pico-Relay-B** | 8ch | 250VAC/10A | $15程度 | フォトカプラ絶縁、ブザー、RGB LED付き |
-| PicoRelay8 | 8ch | 250VAC/10A | $12程度 | シンプル、各chターミナルブロック |
+| **★ 8ch絶縁リレーモジュール PoE版** | 8ch | 250VAC/10A | ¥8,371 | **RP2350+W5500+PoE+RS485 全部入り** |
+| Waveshare Pico-Relay-B | 8ch | 250VAC/10A | $15程度 | フォトカプラ絶縁、Pico別途必要 |
+| PicoRelay8 | 8ch | 250VAC/10A | $12程度 | シンプル、Pico別途必要 |
 
-**Waveshare Pico-Relay-B**:
+**★ 最推奨: 8ch絶縁入力リレーモジュール（RP2350搭載、PoE版）**
+- https://www.switch-science.com/products/10824
+- RP2350B（デュアルCortex-M33、150MHz）搭載
+- W5500 + PoE 内蔵 → 別途Picoボード不要
+- 8ch絶縁デジタル入力（5〜36V対応）
+- 8chリレー出力（10A/250VAC）
+- RS-485ポート搭載 → 外気象センサー接続可能
+- RTC、TFカード、USB Type-C
+- DINレール対応
+- **これ1台で制御ノード完結！**
+
+※ 2024年時点でスイッチサイエンス売り切れ。Waveshare直販または再入荷待ち。
+
+**Waveshare Pico-Relay-B**（代替）:
 - https://www.waveshare.com/pico-relay-b.htm
 - Pico直挿し、8chリレー全てターミナルブロック出し
 - フォトカプラ絶縁で安全
 - 農業用途: 電磁弁、ポンプ、換気扇、暖房機等
-
-**注意**: W5500-EVB-Pico-PoEとは直接スタックできない。
-→ ジャンパワイヤでGPIO接続、または Pico 2 W + WiFi 構成で使用
+- **注意**: W5500-EVB-Pico-PoEとは直接スタックできない
+  → Pico 2 W + WiFi 構成で使用
 
 #### ECフロントエンド回路（参考）
 

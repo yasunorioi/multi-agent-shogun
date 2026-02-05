@@ -25,6 +25,7 @@ This skill provides a comprehensive template for designing custom PCBs for agric
 
 ## Target Configuration
 
+### 構成A: フル構成（基板にI2Cバッファ内蔵）
 ```
 W5500-EVB-Pico-PoE (Base Board)
        │
@@ -35,6 +36,28 @@ W5500-EVB-Pico-PoE (Base Board)
            ├── Screw Terminals (Field Wiring)
            └── Status LEDs
 ```
+
+### 構成B: シンプル構成（I2Cハブ外付け）★推奨
+```
+W5500-EVB-Pico-PoE (Base Board)
+       │
+       └── Custom Expansion Board (Minimal)
+           ├── Grove I2C x1 ← 1ポートのみ！
+           ├── Relay 1ch
+           └── Status LED
+                │
+                └── 外部 I2Cハブ (TCA9548A等)
+                    ├── センサー1 (SHT40)
+                    ├── センサー2 (SCD41)
+                    ├── センサー3 (BMP280)
+                    └── P82B96 → 長距離センサー
+```
+
+**構成Bのメリット**:
+- 基板がシンプル（部品点数削減、コスト↓）
+- I2Cハブで同一アドレスセンサー複数接続可能
+- ユーザーが好みのハブを選択可能
+- 失敗時の不良在庫リスク低減
 
 ---
 
@@ -155,7 +178,177 @@ The P82B96 is a dual bidirectional I2C bus buffer that enables cable extension u
 
 ---
 
-### 3. Relay Driver Circuit (1 Channel)
+### 3. 5V DCファン制御回路（強制換気用）
+
+#### 用途
+
+温湿度センサー用の強制換気ファン（5V DC）を制御。
+PoEから5V供給可能なため、追加電源不要。
+
+#### 回路図
+
+```
+GPIO (GP22) ──[1kΩ]──┬── Gate
+                      │
+                    ┌─┴─┐
+                    │   │ 2N7002 (N-ch MOSFET)
+                    └─┬─┘
+                      │ Drain
+                      │
+              ファン (-) ──┘
+
+              ファン (+) ── 5V (VBUS from PoE)
+                      │
+                  Source ── GND
+```
+
+#### 部品選定
+
+| Component | Value | LCSC Part # | Purpose |
+|-----------|-------|-------------|---------|
+| MOSFET | 2N7002 (SOT-23) | C8545 | ローサイドスイッチ |
+| Gate Resistor | 1kΩ 0603 | C22548 | 電流制限 |
+| Fan Connector | 2.54mm 2P | C395881 | ファン接続端子 |
+
+#### 仕様
+
+| Parameter | Value |
+|-----------|-------|
+| 制御電圧 | 3.3V GPIO |
+| ファン電圧 | 5V (VBUS) |
+| 最大電流 | 500mA（2N7002定格） |
+| 制御方式 | ON/OFF or PWM |
+
+#### CircuitPython 制御コード
+
+```python
+import board
+import digitalio
+import pwmio
+import time
+
+# ========================================
+# 方式1: ON/OFF制御（シンプル）
+# ========================================
+fan = digitalio.DigitalInOut(board.GP22)
+fan.direction = digitalio.Direction.OUTPUT
+
+def fan_on():
+    fan.value = True
+
+def fan_off():
+    fan.value = False
+
+# ========================================
+# 方式2: PWM速度制御（風量調整可能）
+# ========================================
+fan_pwm = pwmio.PWMOut(board.GP22, frequency=25000, duty_cycle=0)
+
+def set_fan_speed(percent):
+    """ファン速度を0-100%で設定"""
+    duty = int(percent / 100 * 65535)
+    fan_pwm.duty_cycle = duty
+
+# 使用例
+set_fan_speed(50)   # 50%
+set_fan_speed(100)  # 全開
+set_fan_speed(0)    # 停止
+```
+
+#### 温湿度連動制御（実用例）
+
+```python
+import board
+import busio
+import digitalio
+import adafruit_sht4x
+import time
+
+# センサー初期化
+i2c = busio.I2C(scl=board.GP5, sda=board.GP4)
+sht = adafruit_sht4x.SHT4x(i2c)
+
+# ファン初期化
+fan = digitalio.DigitalInOut(board.GP22)
+fan.direction = digitalio.Direction.OUTPUT
+
+# 制御パラメータ
+FAN_ON_HUMIDITY = 80    # 湿度80%以上でファンON
+FAN_OFF_HUMIDITY = 70   # 湿度70%以下でファンOFF
+FAN_ON_TEMP = 35        # 温度35℃以上でファンON
+FAN_OFF_TEMP = 30       # 温度30℃以下でファンOFF
+
+def control_fan(temp, humidity):
+    """温湿度に基づくファン制御（ヒステリシス付き）"""
+    if humidity > FAN_ON_HUMIDITY or temp > FAN_ON_TEMP:
+        fan.value = True
+        return "ON"
+    elif humidity < FAN_OFF_HUMIDITY and temp < FAN_OFF_TEMP:
+        fan.value = False
+        return "OFF"
+    # 範囲内なら現状維持
+    return "ON" if fan.value else "OFF"
+
+# メインループ
+while True:
+    temperature, humidity = sht.measurements
+    status = control_fan(temperature, humidity)
+    print(f"Temp: {temperature:.1f}°C, Humid: {humidity:.1f}%, Fan: {status}")
+    time.sleep(10)
+```
+
+#### MQTT連携（Home Assistant制御）
+
+```python
+import board
+import digitalio
+import json
+from adafruit_minimqtt import adafruit_minimqtt as MQTT
+
+# ファン初期化
+fan = digitalio.DigitalInOut(board.GP22)
+fan.direction = digitalio.Direction.OUTPUT
+
+HOUSE_ID = "h1"
+FAN_COMMAND_TOPIC = f"greenhouse/{HOUSE_ID}/fan/set"
+FAN_STATE_TOPIC = f"greenhouse/{HOUSE_ID}/fan/state"
+
+def on_fan_command(client, topic, message):
+    """Home Assistantからのファン制御コマンド受信"""
+    payload = message.upper()
+    if payload == "ON" or payload == "1":
+        fan.value = True
+        client.publish(FAN_STATE_TOPIC, "ON")
+    elif payload == "OFF" or payload == "0":
+        fan.value = False
+        client.publish(FAN_STATE_TOPIC, "OFF")
+
+# MQTTクライアント設定
+mqtt_client.subscribe(FAN_COMMAND_TOPIC)
+mqtt_client.on_message = on_fan_command
+
+# Home Assistant MQTT Discovery（自動登録）
+discovery_payload = {
+    "name": "ハウス1 換気ファン",
+    "command_topic": FAN_COMMAND_TOPIC,
+    "state_topic": FAN_STATE_TOPIC,
+    "unique_id": f"{HOUSE_ID}_fan",
+    "device": {
+        "identifiers": [f"pico_{HOUSE_ID}"],
+        "name": f"Greenhouse {HOUSE_ID}",
+        "manufacturer": "DIY"
+    }
+}
+mqtt_client.publish(
+    f"homeassistant/switch/{HOUSE_ID}_fan/config",
+    json.dumps(discovery_payload),
+    retain=True
+)
+```
+
+---
+
+### 4. Relay Driver Circuit (1 Channel)
 
 #### Circuit Diagram
 
@@ -463,13 +656,81 @@ GPIO ──[R1]── 2N2222A ──┬── Relay ──┬── Terminal
 
 ---
 
+## I2Cハブ活用（構成B向け）
+
+### I2Cハブ製品比較
+
+| 製品 | チップ | ポート数 | 価格 | 特徴 |
+|------|--------|---------|------|------|
+| Grove I2C Hub | - | 4ポート | ¥300程度 | 単純分岐（アドレス重複不可） |
+| **TCA9548A** | TCA9548A | **8ch** | ¥500程度 | **アドレス重複OK**、M5Stackあり |
+| PCA9548A | PCA9548A | 8ch | 同上 | TCA互換 |
+
+### TCA9548A の威力
+
+**同一I2Cアドレスのセンサーを複数接続可能！**
+
+```python
+import board
+import busio
+from adafruit_tca9548a import TCA9548A
+
+i2c = busio.I2C(scl=board.GP5, sda=board.GP4)
+tca = TCA9548A(i2c)  # アドレス 0x70
+
+# チャンネル0: SHT40 (0x44) - ハウス内
+sht_inside = adafruit_sht4x.SHT4x(tca[0])
+
+# チャンネル1: SHT40 (0x44) - ハウス外
+sht_outside = adafruit_sht4x.SHT4x(tca[1])
+
+# → 同じ0x44でも別チャンネルなのでOK！
+```
+
+### M5Stack製品
+
+| 製品名 | 型番 | 価格 | URL |
+|--------|------|------|-----|
+| I2C Hub 1 to 6 | U006 | ¥330 | https://www.switch-science.com/products/5765 |
+| PaHub2 (TCA9548A) | U040-B | ¥990 | https://www.switch-science.com/products/9517 |
+
+### 構成B 回路図
+
+```
+Pico I2C (GP4/GP5)
+       │
+       └── Grove端子 (基板上、1ポート)
+              │
+              └── Groveケーブル (20cm)
+                     │
+              ┌──────┴──────┐
+              │  TCA9548A   │  ← 外付けI2Cハブ
+              │  (M5 PaHub) │
+              └──────┬──────┘
+                     │
+       ┌─────┬──────┼──────┬─────┐
+       │     │      │      │     │
+      ch0   ch1    ch2    ch3   ch4...
+       │     │      │      │
+    SHT40  SCD41  BMP280  P82B96
+   (0x44) (0x62)  (0x76)    │
+                            │
+                     長距離ケーブル(5-20m)
+                            │
+                        遠隔センサー
+```
+
+---
+
 ## References
 
 - [P82B96 Datasheet (TI)](https://www.ti.com/product/P82B96)
 - [P82B96 Datasheet (NXP)](https://www.nxp.com/docs/en/data-sheet/P82B96.pdf)
+- [TCA9548A Datasheet (TI)](https://www.ti.com/product/TCA9548A)
 - [JLCPCB Capabilities](https://jlcpcb.com/capabilities/pcb-capabilities)
 - [LCSC Electronics](https://www.lcsc.com/)
 - [KiCad JLCPCB Plugin](https://github.com/Bouni/kicad-jlcpcb-tools)
+- [M5Stack PaHub2](https://docs.m5stack.com/en/unit/pahub2)
 
 ---
 

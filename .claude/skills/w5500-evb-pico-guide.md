@@ -700,12 +700,99 @@ while True:
 - **Grove - I2C Hub (6 Port)**: 1つのI2Cポートを6分岐
 - アドレスが異なるセンサーなら同一バスで動作
 
+## 12. 実テスト結果（2026-02-05実施）
+
+### テスト環境
+
+| 項目 | 値 |
+|------|---|
+| ボード | W5500-EVB-Pico2 |
+| CircuitPython | 10.0.3 |
+| MQTTブローカー | Mosquitto (Docker: arsprout-mqtt) |
+| ネットワーク | 192.168.15.0/24 |
+
+### テスト結果サマリ
+
+| テスト項目 | 結果 | 詳細 |
+|-----------|------|------|
+| USB CDC（シリアル通信） | ✅ OK | /dev/ttyACM0、115200bps |
+| CircuitPython REPL | ✅ OK | Ctrl+C, Ctrl+D 正常動作 |
+| GPIO制御（LED） | ✅ OK | board.LED 点灯/消灯 |
+| W5500初期化 | ✅ OK | SPI経由で認識 |
+| MACアドレス取得 | ✅ OK | de:ad:be:ef:fe:ed |
+| DHCP IP取得 | ✅ OK | 192.168.15.13 |
+| SocketPool作成 | ✅ OK | CircuitPython 10.x API |
+| MQTT接続（Mosquitto） | ✅ OK | 192.168.15.14:1883 |
+| MQTT Publish | ✅ OK | メッセージ送信成功 |
+| MQTT Subscribe | ✅ OK | mosquitto_subで受信確認 |
+
+### 実証済みコード（動作確認済み）
+
+```python
+import board
+import busio
+import digitalio
+from adafruit_wiznet5k.adafruit_wiznet5k import WIZNET5K
+from adafruit_wiznet5k.adafruit_wiznet5k_socketpool import SocketPool
+import adafruit_minimqtt.adafruit_minimqtt as MQTT
+
+# W5500初期化
+spi = busio.SPI(board.GP18, MOSI=board.GP19, MISO=board.GP16)
+cs = digitalio.DigitalInOut(board.GP17)
+rst = digitalio.DigitalInOut(board.GP20)
+eth = WIZNET5K(spi, cs, reset=rst, is_dhcp=True)
+print("Pico IP:", eth.pretty_ip(eth.ip_address))
+
+# SocketPool作成（CircuitPython 10.x方式）
+pool = SocketPool(eth)
+
+# MQTTクライアント作成・接続・Publish
+mqtt = MQTT.MQTT(broker="192.168.15.14", port=1883, socket_pool=pool)
+mqtt.connect()
+mqtt.publish("test/pico/w5500", "Hello from W5500-EVB-Pico2!")
+mqtt.disconnect()
+```
+
+### 確認コマンド（Mosquitto側）
+
+```bash
+# Subscribe（メッセージ受信確認）
+docker exec arsprout-mqtt mosquitto_sub -t "test/pico/w5500" -v
+
+# 出力例:
+# test/pico/w5500 Hello from W5500-EVB-Pico2!
+```
+
+### 発見した注意点
+
+1. **CircuitPython 10.x では SocketPool API が必須**
+   - 旧API（`MQTT.set_socket()`）は使用不可
+   - `adafruit_wiznet5k_socketpool` モジュールを使用
+
+2. **ライブラリ依存関係**
+   - `adafruit_minimqtt` → `adafruit_connection_manager`, `adafruit_ticks` が必要
+   - circupで自動解決される
+
+3. **board定義の確認**
+   - `dir(board)` で利用可能なピン・機能を確認
+   - `W5K_*` プレフィックスのピン定義あり（W5K_SPI, W5K_CS等）
+
+4. **デバッグ時のシリアル接続**
+   - `/dev/ttyACM0` (Linux)
+   - `screen /dev/ttyACM0 115200` でREPL接続
+   - Ctrl+C でコード停止、Ctrl+D でソフトリブート
+
+---
+
 ## 参考リンク
 
 - [WIZnet公式ドキュメント](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/W5500-EVB-Pico-PoE)
+- [WIZnet W5500-EVB-Pico 製品ページ](https://wiznet.io/products/evaluation-boards/w5500-evb-pico)
 - [CircuitPython W5500 ライブラリ](https://docs.circuitpython.org/projects/wiznet5k/en/stable/)
 - [Adafruit Learn: Networking with WIZnet](https://learn.adafruit.com/networking-in-circuitpython/networking-with-wiznet-ethernet)
 - [GitHub: adafruit_wiznet5k](https://github.com/adafruit/Adafruit_CircuitPython_Wiznet5k)
+- [Grove Shield for Pi Pico (Seeed Studio)](https://www.seeedstudio.com/Grove-Shield-for-Pi-Pico-v1-0-p-4846.html)
+- [M5Stack Unit ENV III](https://docs.m5stack.com/en/unit/envIII)
 
 ## 関連スキル
 

@@ -13,6 +13,9 @@ test_output/
 # Generated skills (local development)
 skills/
 
+# Python virtual environments
+hf/
+
 # Temporary files
 *.tmp
 *.bak

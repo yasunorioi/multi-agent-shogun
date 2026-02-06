@@ -6,7 +6,7 @@
 # 変更時のみ編集すること。
 
 role: shogun
-version: "2.0"
+version: "3.0"
 
 # 絶対禁止事項（違反は切腹）
 forbidden_actions:
@@ -42,10 +42,12 @@ workflow:
     note: |
       家老が同じファイルのstatusを更新している場合があるため、
       Editする直前にReadでファイル末尾を読み直せ（レースコンディション対策）。
+      assigned_karo フィールドで担当家老を指定せよ（roju=外部PJ, ooku=内部システム）。
   - step: 3
     action: send_keys
-    target: multiagent:0.0
+    target: "multiagent:agents.0 (老中) or multiagent:agents.1 (大奥)"
     method: two_bash_calls
+    note: "担当家老のペインに送る。老中=agents.0, 大奥=agents.1"
   - step: 4
     action: wait_for_report
     note: "家老がdashboard.mdを更新する。将軍は更新しない。"
@@ -74,9 +76,10 @@ files:
   status: status/master_status.yaml
   command_queue: queue/shogun_to_karo.yaml
 
-# ペイン設定
+# ペイン設定（2-karo体制）
 panes:
-  karo: multiagent:0.0
+  karo_roju: multiagent:agents.0   # 老中（外部プロジェクト担当）
+  karo_ooku: multiagent:agents.1   # 大奥（内部システム担当）
 
 # send-keys ルール
 send_keys:
@@ -85,10 +88,11 @@ send_keys:
   to_karo_allowed: true
   from_karo_allowed: false  # dashboard.md更新で報告
 
-# 家老の状態確認ルール
+# 家老の状態確認ルール（指示前に担当家老の状態を確認せよ）
 karo_status_check:
   method: tmux_capture_pane
-  command: "tmux capture-pane -t multiagent:0.0 -p | tail -20"
+  command_roju: "tmux capture-pane -t multiagent:agents.0 -p | tail -20"
+  command_ooku: "tmux capture-pane -t multiagent:agents.1 -p | tail -20"
   busy_indicators:
     - "thinking"
     - "Effecting…"
@@ -190,23 +194,25 @@ date "+%Y-%m-%dT%H:%M:%S"
 
 ```bash
 # ダメな例1: 1行で書く
-tmux send-keys -t multiagent:0.0 'メッセージ' Enter
+tmux send-keys -t multiagent:agents.0 'メッセージ' Enter
 
 # ダメな例2: &&で繋ぐ
-tmux send-keys -t multiagent:0.0 'メッセージ' && tmux send-keys -t multiagent:0.0 Enter
+tmux send-keys -t multiagent:agents.0 'メッセージ' && tmux send-keys -t multiagent:agents.0 Enter
 ```
 
 ### ✅ 正しい方法（2回に分ける）
 
-**【1回目】** メッセージを送る：
+**【1回目】** メッセージを送る（老中の例）：
 ```bash
-tmux send-keys -t multiagent:0.0 'queue/shogun_to_karo.yaml に新しい指示がある。確認して実行せよ。'
+tmux send-keys -t multiagent:agents.0 'queue/shogun_to_karo.yaml に新しい指示がある。確認して実行せよ。'
 ```
 
 **【2回目】** Enterを送る：
 ```bash
-tmux send-keys -t multiagent:0.0 Enter
+tmux send-keys -t multiagent:agents.0 Enter
 ```
+
+**ペイン対応表**: 老中=`agents.0`, 大奥=`agents.1`
 
 ## 指示の書き方
 

@@ -24,6 +24,7 @@ hf/
 demo_output/
 
 # Runtime data (generated during operation)
+data/
 output/
 queue/research/
 queue/tasks/

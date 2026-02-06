@@ -52,9 +52,10 @@ workflow:
     value: done
   - step: 7
     action: send_keys
-    target: multiagent:0.0
+    target: "assigned_byで決定（デフォルト: multiagent:agents.0）"
     method: two_bash_calls
     mandatory: true
+    note: "報告先の家老ペインは、タスクYAMLの assigned_by フィールドで確認せよ"
     retry:
       check_idle: true
       max_retries: 3
@@ -65,10 +66,18 @@ files:
   task: "queue/tasks/ashigaru{N}.yaml"
   report: "queue/reports/ashigaru{N}_report.yaml"
 
-# ペイン設定
+# ペイン設定（2-karo体制: 老中 + 大奥）
 panes:
-  karo: multiagent:0.0
-  self_template: "multiagent:0.{N}"
+  karo_roju: multiagent:agents.0    # 老中（外部プロジェクト）
+  karo_ooku: multiagent:agents.1    # 大奥（内部システム）
+  self_template: "multiagent:agents.{N+1}"  # ashigaru1=agents.2, ashigaru2=agents.3, ...
+
+# 報告先の決定
+report_target:
+  rule: "タスクYAMLの assigned_by フィールドで確認"
+  assigned_by_roju: multiagent:agents.0
+  assigned_by_ooku: multiagent:agents.1
+  default: multiagent:agents.0       # assigned_by未指定時は老中
 
 # send-keys ルール
 send_keys:
@@ -183,19 +192,24 @@ queue/reports/ashigaru{自分の番号}_report.yaml  ← これだけ書け
 ### ❌ 絶対禁止パターン
 
 ```bash
-tmux send-keys -t multiagent:0.0 'メッセージ' Enter  # ダメ
+tmux send-keys -t multiagent:agents.0 'メッセージ' Enter  # ダメ（1行でEnterを含める）
 ```
 
 ### ✅ 正しい方法（2回に分ける）
 
+報告先の家老ペインは、タスクYAMLの `assigned_by` フィールドで確認せよ。
+- `assigned_by: roju` → `multiagent:agents.0`（老中）
+- `assigned_by: ooku` → `multiagent:agents.1`（大奥）
+- `assigned_by` 未指定 → `multiagent:agents.0`（デフォルト: 老中）
+
 **【1回目】**
 ```bash
-tmux send-keys -t multiagent:0.0 'ashigaru{N}、任務完了でござる。報告書を確認されよ。'
+tmux send-keys -t multiagent:agents.0 'ashigaru{N}、任務完了でござる。報告書を確認されよ。'
 ```
 
 **【2回目】**
 ```bash
-tmux send-keys -t multiagent:0.0 Enter
+tmux send-keys -t multiagent:agents.0 Enter
 ```
 
 ### ⚠️ 報告送信は義務（省略禁止）
@@ -211,9 +225,10 @@ tmux send-keys -t multiagent:0.0 Enter
 
 ### 手順
 
-**STEP 1: 家老の状態確認**
+**STEP 1: 報告先家老の状態確認**
+（報告先はタスクYAMLの `assigned_by` で決定。未指定なら老中 agents.0）
 ```bash
-tmux capture-pane -t multiagent:0.0 -p | tail -5
+tmux capture-pane -t multiagent:agents.0 -p | tail -5
 ```
 
 **STEP 2: idle判定**
@@ -234,25 +249,39 @@ sleep 10
 
 **STEP 4: send-keys 送信（従来通り2回に分ける）**
 ※ ペインタイトルのリセットは家老が行う。足軽は触るな（Claude Codeが処理中に上書きするため無意味）。
+※ 送信先は STEP 1 と同じ報告先家老のペイン。
 
 **【1回目】**
 ```bash
-tmux send-keys -t multiagent:0.0 'ashigaru{N}、任務完了でござる。報告書を確認されよ。'
+tmux send-keys -t multiagent:agents.0 'ashigaru{N}、任務完了でござる。報告書を確認されよ。'
 ```
 
 **【2回目】**
 ```bash
-tmux send-keys -t multiagent:0.0 Enter
+tmux send-keys -t multiagent:agents.0 Enter
 ```
 
 **STEP 6: 到達確認（必須）**
 ```bash
 sleep 5
-tmux capture-pane -t multiagent:0.0 -p | tail -5
+tmux capture-pane -t multiagent:agents.0 -p | tail -5
 ```
 - 家老が thinking / working 状態 → 到達OK
 - 家老がプロンプト待ち（❯）のまま → **到達失敗。STEP 5を再送せよ**
 - 再送は最大2回まで。2回失敗しても報告ファイルは書いてあるので、家老の未処理報告スキャンで発見される
+
+## タスクYAMLの `assigned_by` フィールド
+
+タスクYAMLには `assigned_by: roju|ooku` が含まれる場合がある。
+これは、どちらの家老がタスクを割り当てたかを示す。
+
+| assigned_by | 報告先 | ペイン |
+|-------------|--------|--------|
+| roju | 老中 | multiagent:agents.0 |
+| ooku | 大奥 | multiagent:agents.1 |
+| （未指定） | 老中（デフォルト） | multiagent:agents.0 |
+
+報告YAML書き込み後の send-keys も、このペインに送ること。
 
 ## 報告の書き方
 

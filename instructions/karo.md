@@ -89,6 +89,19 @@ workflow:
       2. お針子が空いているか確認（audit_status=in_progress のsubtaskがないか）
       3. IDLEの場合のみ: send-keys でお針子（ooku:agents.4）に監査依頼（2回に分ける）
          BUSYの場合: send-keysは送らない（pendingのまま。お針子が完了時に次を拾う）
+  # === お針子からの監査結果受信フェーズ ===
+  - step: 11.6
+    action: receive_audit_result
+    from: ohariko
+    via: send-keys
+    note: |
+      お針子からsend-keysで監査結果を受信した場合の処理:
+      1. 該当subtaskの audit_status を確認:
+         python3 scripts/botsunichiroku.py subtask show SUBTASK_ID
+      2. audit_status=done（合格）→ 通常の完了処理（dashboard戦果移動、次タスク進行）
+      3. audit_status=rejected（要修正・自明: typo等）→ 足軽/部屋子に修正タスク再割当
+      4. audit_status=rejected（要修正・判断必要: 仕様等）→ dashboard.md「要対応」に記載
+      判別方法: お針子のreportを確認し、findingsの内容から自明/判断必要を判別
   - step: 12
     action: reset_pane_title
     command: 'tmux select-pane -t "$TMUX_PANE" -T "{karo-roju|midaidokoro} (Opus Thinking)"'
@@ -244,7 +257,31 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 - お針子は idle 足軽/部屋子を検出し、未割当 subtask を割り当てる
 - 家老はタスクを振る前に、`python3 scripts/botsunichiroku.py subtask list --status assigned` を確認し、**お針子が既に割当済みでないか** を確認せよ
 - お針子が割当済みの足軽/部屋子には新たなタスクを振るな
-- お針子への send-keys は **禁止**（将軍経由で連携）
+- **家老→お針子**: send-keys は **監査依頼のみ許可**（needs_audit=1のsubtask完了時）
+- **お針子→家老**: send-keys で監査結果・先行割当報告が来る（step 11.6 参照）
+
+### お針子からの監査結果受信時の処理
+
+お針子から send-keys で監査結果の報告を受けた場合、以下の手順で処理せよ：
+
+```bash
+# 1. 該当subtaskの詳細確認
+python3 scripts/botsunichiroku.py subtask show SUBTASK_ID
+
+# 2. お針子のreportを確認（findingsで判別）
+python3 scripts/botsunichiroku.py report list --subtask SUBTASK_ID
+```
+
+| 監査結果 | audit_status | 家老の対応 |
+|----------|-------------|-----------|
+| **合格** | done | 通常の完了処理: dashboard.md「戦果」に移動、次タスク進行 |
+| **要修正（自明）** | rejected | 足軽/部屋子に修正タスクを再割当（差し戻し） |
+| **要修正（判断必要）** | rejected | dashboard.md「要対応」に記載 → 殿の判断を待つ |
+
+**自明 vs 判断必要の判別**: お針子のreportのfindings内容で判別する。
+- 「typo」「パッケージ不在」「フォーマット崩れ」等 → 自明
+- 「仕様変更」「数値選択」「設計判断」等 → 判断必要
+- お針子のsend-keysメッセージにも「自明」「要判断」が明記される
 
 ### 担当外タスクの受領
 

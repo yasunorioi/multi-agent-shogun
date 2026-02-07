@@ -4,7 +4,7 @@
 
 **Command your AI army like a feudal warlord.**
 
-Run 8 Claude Code agents in parallel — orchestrated through a samurai-inspired hierarchy with zero coordination overhead.
+Run 12 Claude Code agents across 3 tmux sessions — orchestrated through a feudal hierarchy with zero coordination overhead.
 
 [![GitHub Stars](https://img.shields.io/github/stars/yohey-w/multi-agent-shogun?style=social)](https://github.com/yohey-w/multi-agent-shogun)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -19,11 +19,11 @@ Run 8 Claude Code agents in parallel — orchestrated through a samurai-inspired
   <img src="assets/screenshots/tmux_multiagent_9panes.png" alt="multi-agent-shogun: 9 panes running in parallel" width="800">
 </p>
 
-<p align="center"><i>One Karo (manager) coordinating 8 Ashigaru (workers) — real session, no mock data.</i></p>
+<p align="center"><i>Shogun system: 2 Karo managing 8 workers + 1 auditor across 3 tmux sessions.</i></p>
 
 ---
 
-Give a single command. The **Shogun** (general) delegates to the **Karo** (steward), who distributes work across up to **8 Ashigaru** (foot soldiers) — all running as independent Claude Code processes in tmux. Communication flows through YAML files and tmux `send-keys`, meaning **zero extra API calls** for agent coordination.
+Give a single command. The **Shogun** (general) delegates to two **Karo** — **Roju** (external projects) and **Midaidokoro** (internal system) — who distribute work across **8 Ashigaru and Heyago workers**. Communication flows through an **SQLite database** and tmux `send-keys`, meaning **zero extra API calls** for agent coordination.
 
 <!-- TODO: add demo.gif — record with asciinema or vhs -->
 
@@ -34,15 +34,15 @@ Most multi-agent frameworks burn API tokens on coordination. Shogun doesn't.
 | | Claude Code `Task` tool | LangGraph | CrewAI | **multi-agent-shogun** |
 |---|---|---|---|---|
 | **Architecture** | Subagents inside one process | Graph-based state machine | Role-based agents | Feudal hierarchy via tmux |
-| **Parallelism** | Sequential (one at a time) | Parallel nodes (v0.2+) | Limited | **8 independent agents** |
-| **Coordination cost** | API calls per Task | API + infra (Postgres/Redis) | API + CrewAI platform | **Zero** (YAML + tmux) |
+| **Parallelism** | Sequential (one at a time) | Parallel nodes (v0.2+) | Limited | **11 independent agents** |
+| **Coordination cost** | API calls per Task | API + infra (Postgres/Redis) | API + CrewAI platform | **Zero** (SQLite DB + tmux) |
 | **Observability** | Claude logs only | LangSmith integration | OpenTelemetry | **Live tmux panes** + dashboard |
 | **Skill discovery** | None | None | None | **Bottom-up auto-proposal** |
 | **Setup** | Built into Claude Code | Heavy (infra required) | pip install | Shell scripts |
 
 ### What makes this different
 
-**Zero coordination overhead** — Agents talk through YAML files on disk. The only API calls are for actual work, not orchestration. Run 8 agents and pay only for 8 agents' work.
+**Zero coordination overhead** — Agents communicate through an SQLite database (Botsunichiroku) and tmux send-keys. The only API calls are for actual work, not orchestration. Run 11 agents and pay only for 11 agents' work.
 
 **Full transparency** — Every agent runs in a visible tmux pane. Every instruction, report, and decision is a plain YAML file you can read, diff, and version-control. No black boxes.
 
@@ -66,9 +66,11 @@ Reports in YAML:  skill_candidate:
                      name: "api-endpoint-scaffold"
                      reason: "Same REST scaffold pattern used in 3 projects"
     ↓
-Appears in dashboard.md → You approve → Skill created in .claude/commands/
+Appears in dashboard.md → You approve → Skill created in .claude/skills/
     ↓
 Any agent can now invoke /api-endpoint-scaffold
+    ↓
+Ohariko (お針子) audits text deliverables before finalization
 ```
 
 Skills grow organically from real work — not from a predefined template library. Your skill set becomes a reflection of **your** workflow.
@@ -81,26 +83,35 @@ Skills grow organically from real work — not from a predefined template librar
         You (上様 / The Lord)
              │
              ▼  Give orders
-      ┌─────────────┐
-      │   SHOGUN    │  Receives your command, plans strategy
-      │    (将軍)    │  Session: shogun
-      └──────┬──────┘
-             │  YAML + send-keys
-      ┌──────▼──────┐
-      │    KARO     │  Breaks tasks down, assigns to workers
-      │    (家老)    │  Session: multiagent, pane 0
-      └──────┬──────┘
-             │  YAML + send-keys
-    ┌─┬─┬─┬─┴─┬─┬─┬─┐
-    │1│2│3│4│5│6│7│8│  Execute in parallel
-    └─┴─┴─┴─┴─┴─┴─┴─┘
-         ASHIGARU (足軽)
-         Panes 1-8
+      ┌─────────────┐     ┌──────────────┐
+      │   SHOGUN    │ ←───│   OHARIKO    │  Auditor + pre-assigner
+      │    (将軍)    │     │  (お針子)     │  Direct line to Shogun
+      └──────┬──────┘     └──────────────┘
+             │ DB + send-keys
+       ┌─────┴──────┐
+       │            │
+┌──────▼──────┐ ┌──────▼──────┐
+│    ROJU     │ │ MIDAIDOKORO │
+│   (老中)    │ │  (御台所)    │
+│ External PJ │ │ Internal sys│
+└──────┬──────┘ └──────┬──────┘
+       │               │
+  ┌─┬─┬┴┬─┐      ┌─┬─┬┘
+  │1│2│3│4│5│      │1│2│3│
+  └─┴─┴─┴─┴─┘      └─┴─┴─┘
+   ASHIGARU          HEYAGO
+  (足軽 1-5)        (部屋子 1-3)
 ```
 
+- 3 sessions: `shogun` (1 pane), `multiagent` (6 panes), `ooku` (5 panes)
+- Roju manages external projects with Ashigaru 1-5
+- Midaidokoro manages internal system with Heyago 1-3
+- Ohariko audits deliverables and pre-assigns idle workers
+
 **Communication protocol:**
-- **Downward** (orders): Write YAML → wake target with `tmux send-keys`
-- **Upward** (reports): Write YAML only (no send-keys to avoid interrupting your input)
+- **Downward** (orders): Register subtask in Botsunichiroku DB → wake target with `tmux send-keys`
+- **Upward** (reports): Register report in Botsunichiroku DB → wake manager with `send-keys`
+- **Audit**: Ohariko reviews text deliverables → reports directly to Shogun
 - **Polling**: Forbidden. Event-driven only. Your API bill stays predictable.
 
 **Context persistence (4 layers):**
@@ -109,10 +120,10 @@ Skills grow organically from real work — not from a predefined template librar
 |-------|------|----------|
 | Memory MCP | Preferences, rules, cross-project knowledge | Everything |
 | Project files | `config/projects.yaml`, `context/*.md` | Everything |
-| YAML Queue | Tasks, reports (source of truth) | Everything |
+| Botsunichiroku DB | Commands, subtasks, reports (SQLite) | Everything |
 | Session | `CLAUDE.md`, instructions | `/clear` wipes it |
 
-After `/clear`, an agent recovers in **~2,000 tokens** by reading Memory MCP + its task YAML. No expensive re-prompting.
+After `/clear`, an agent recovers in **~5,000 tokens** by reading Memory MCP + its assigned subtasks from the DB. No expensive re-prompting.
 
 ---
 
@@ -120,17 +131,17 @@ After `/clear`, an agent recovers in **~2,000 tokens** by reading Memory MCP + i
 
 Agents can be deployed in different **formations** (陣形 / *jindate*) depending on the task:
 
-| Formation | Ashigaru 1–4 | Ashigaru 5–8 | Best for |
-|-----------|-------------|-------------|----------|
-| **Normal** (default) | Sonnet | Opus | Everyday tasks — cost-efficient |
-| **Battle** (`-k` flag) | Opus | Opus | Critical tasks — maximum capability |
+| Formation | Shogun | Karo (x2) | Ashigaru 1-4 | Ashigaru 5 | Heyago 1-3 | Ohariko |
+|-----------|--------|-----------|-------------|-----------|-----------|---------|
+| **Normal** (default) | Opus | Opus Thinking | Sonnet Thinking | Opus Thinking | Opus Thinking | Sonnet Thinking |
+| **Battle** (`-k` flag) | Opus | Opus Thinking | Opus Thinking | Opus Thinking | Opus Thinking | Sonnet Thinking |
 
 ```bash
-./shutsujin_departure.sh          # Normal formation
-./shutsujin_departure.sh -k       # Battle formation (all Opus)
+./shutsujin_departure.sh          # Normal formation (3 sessions: shogun + multiagent + ooku)
+./shutsujin_departure.sh -k       # Battle formation (all Opus Thinking for Ashigaru)
 ```
 
-The Karo can also promote individual Ashigaru mid-session with `/model opus` when a specific task demands it.
+The Karo can also promote individual Ashigaru mid-session with `/model opus` when a specific task demands it, or demote Opus workers to Sonnet for cost-efficient tasks.
 
 ---
 
@@ -168,7 +179,9 @@ cd ~/multi-agent-shogun && chmod +x *.sh
 ```bash
 cd /path/to/multi-agent-shogun
 ./shutsujin_departure.sh
-tmux attach-session -t shogun   # Connect and give orders
+tmux attach-session -t shogun      # Connect and give orders
+# tmux attach-session -t multiagent  # Watch Ashigaru work
+# tmux attach-session -t ooku        # Watch Heyago + Ohariko
 ```
 
 <details>
@@ -178,6 +191,7 @@ tmux attach-session -t shogun   # Connect and give orders
 alias csst='cd /mnt/c/tools/multi-agent-shogun && ./shutsujin_departure.sh'
 alias css='tmux attach-session -t shogun'
 alias csm='tmux attach-session -t multiagent'
+alias cso='tmux attach-session -t ooku'
 ```
 
 </details>
@@ -229,11 +243,11 @@ You: "Research the top 5 MCP servers and create a comparison table"
 
 ### 2. Shogun delegates instantly
 
-The Shogun writes the task to `queue/shogun_to_karo.yaml` and wakes the Karo. Control returns to you immediately — no waiting.
+The Shogun registers the command in Botsunichiroku DB and dispatches to the appropriate Karo. Control returns to you immediately — no waiting.
 
 ### 3. Karo distributes
 
-The Karo breaks the task into subtasks and assigns each to an Ashigaru:
+The Karo (Roju for external projects, Midaidokoro for internal system) breaks the task into subtasks registered in the DB:
 
 | Worker | Assignment |
 |--------|-----------|
@@ -335,17 +349,24 @@ multi-agent-shogun/
 │
 ├── instructions/              # Agent behavior definitions
 │   ├── shogun.md
-│   ├── karo.md
-│   └── ashigaru.md
+│   ├── karo.md               # Shared by Roju and Midaidokoro
+│   ├── ashigaru.md            # Shared by Ashigaru and Heyago
+│   └── ohariko.md             # Auditor instructions
 │
 ├── config/
 │   ├── settings.yaml          # Language, model, screenshot settings
 │   └── projects.yaml          # Project registry
 │
-├── queue/                     # Communication (source of truth)
-│   ├── shogun_to_karo.yaml
-│   ├── tasks/ashigaru{1-8}.yaml
-│   └── reports/ashigaru{1-8}_report.yaml
+├── data/
+│   └── botsunichiroku.db      # Command/subtask/report database (SQLite)
+│
+├── scripts/
+│   ├── botsunichiroku.py      # DB CLI (cmd/subtask/report operations)
+│   ├── init_db.py             # Database initialization
+│   └── generate_dashboard.py  # Auto-generate dashboard.md
+│
+├── queue/                     # Legacy (archived). DB is now source of truth
+│   └── shogun_to_karo.yaml    # Shogun → Karo dispatch queue
 │
 ├── memory/                    # Memory MCP persistent storage
 ├── dashboard.md               # Human-readable status board
@@ -399,6 +420,19 @@ tmux attach-session -t multiagent
 
 </details>
 
+<details>
+<summary><b>Ooku session issues?</b></summary>
+
+The ooku session hosts Midaidokoro, Heyago 1-3, and Ohariko:
+```bash
+tmux attach-session -t ooku
+# Pane 0: Midaidokoro (manager)
+# Pane 1-3: Heyago (researchers)
+# Pane 4: Ohariko (auditor)
+```
+
+</details>
+
 ---
 
 ## tmux Quick Reference
@@ -407,6 +441,7 @@ tmux attach-session -t multiagent
 |---------|-------------|
 | `tmux attach -t shogun` | Connect to the Shogun |
 | `tmux attach -t multiagent` | Connect to workers |
+| `tmux attach -t ooku` | Connect to Heyago + Ohariko |
 | `Ctrl+B` then `0`–`8` | Switch panes |
 | `Ctrl+B` then `d` | Detach (agents keep running) |
 
@@ -434,7 +469,7 @@ Based on [Claude-Code-Communication](https://github.com/Akira-Papa/Claude-Code-C
 
 <div align="center">
 
-**One command. Eight agents. Zero coordination cost.**
+**One command. Eleven agents. Zero coordination cost.**
 
 ⭐ Star this repo if you find it useful — it helps others discover it.
 

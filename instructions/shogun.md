@@ -45,9 +45,9 @@ workflow:
       assigned_karo フィールドで担当家老を指定せよ（roju=外部PJ, ooku=内部システム）。
   - step: 3
     action: send_keys
-    target: "multiagent:agents.0 (老中) or multiagent:agents.1 (大奥)"
+    target: "multiagent:agents.0 (老中) or ooku:agents.0 (御台所)"
     method: two_bash_calls
-    note: "担当家老のペインに送る。老中=agents.0, 大奥=agents.1"
+    note: "担当家老のペインに送る。老中=multiagent:agents.0, 御台所=ooku:agents.0"
   - step: 4
     action: wait_for_report
     note: "家老がdashboard.mdを更新する。将軍は更新しない。"
@@ -76,11 +76,11 @@ files:
   status: status/master_status.yaml
   command_queue: queue/shogun_to_karo.yaml
 
-# ペイン設定（2-karo体制 + お針子）
+# ペイン設定（3セッション構成: shogun / multiagent / ooku）
 panes:
   karo_roju: multiagent:agents.0   # 老中（外部プロジェクト担当）
-  karo_ooku: multiagent:agents.1   # 大奥（内部システム担当）
-  ohariko: multiagent:agents.10    # お針子（監査・先行割当）
+  midaidokoro: ooku:agents.0         # 御台所（内部システム担当）
+  ohariko: ooku:agents.4           # お針子（監査・先行割当）
 
 # send-keys ルール
 send_keys:
@@ -93,7 +93,7 @@ send_keys:
 karo_status_check:
   method: tmux_capture_pane
   command_roju: "tmux capture-pane -t multiagent:agents.0 -p | tail -20"
-  command_ooku: "tmux capture-pane -t multiagent:agents.1 -p | tail -20"
+  command_ooku: "tmux capture-pane -t ooku:agents.0 -p | tail -20"
   busy_indicators:
     - "thinking"
     - "Effecting…"
@@ -213,7 +213,7 @@ tmux send-keys -t multiagent:agents.0 'queue/shogun_to_karo.yaml に新しい指
 tmux send-keys -t multiagent:agents.0 Enter
 ```
 
-**ペイン対応表**: 老中=`agents.0`, 大奥=`agents.1`, お針子=`agents.10`
+**ペイン対応表（3セッション構成）**: 老中=`multiagent:agents.0`, 御台所=`ooku:agents.0`, お針子=`ooku:agents.4`
 
 ## 指示の書き方
 
@@ -297,28 +297,28 @@ command: "install.batのフルインストールフローをシミュレーシ�
 
 ## 新ロール（部屋子・お針子）
 
-### 部屋子（Heyago）- 大奥配下の調査実働
+### 部屋子（Heyago）- 御台所配下の調査実働
 
-- **内部ID**: ashigaru6, ashigaru7, ashigaru8（ペイン: agents.7-9）
-- **配下**: 大奥（karo-ooku）
+- **内部ID**: ashigaru6, ashigaru7, ashigaru8（ペイン: ooku:agents.1-3）
+- **配下**: 御台所（midaidokoro）
 - **役割**: 調査・分析タスクが主。実装ではなくリサーチ
-- **指示**: 大奥に指示を出せば、大奥が部屋子に振る。将軍が部屋子に直接指示してはならない（F002）
+- **指示**: 御台所に指示を出せば、御台所が部屋子に振る。将軍が部屋子に直接指示してはならない（F002）
 - **タスクYAML**: ashigaru6-8.yaml をそのまま使用
 
 ### お針子（Ohariko）- 監査・将軍直通・先行割当
 
-- **ペイン**: agents.10
+- **ペイン**: ooku:agents.4
 - **特権**: 将軍への send-keys 直通（唯一の例外）
 - **役割**: 没日録DBを全権閲覧し、ボトルネック検出・先行割当を行う
 - **制約**: 新規cmd作成不可、既存cmdの未割当subtask割当のみ
-- **指示方法**: 監査依頼は直接 agents.10 に send-keys（家老経由不要）
+- **指示方法**: 監査依頼は直接 ooku:agents.4 に send-keys（家老経由不要）
 
 ### 振り分けルール
 
 | タスク種別 | 振り先 |
 |-----------|--------|
 | 外部プロジェクト（arsprout, rotation-planner等） | 老中 |
-| 内部システム（shogunシステム改善、スキル等） | 大奥 |
+| 内部システム（shogunシステム改善、スキル等） | 御台所 |
 | 監査・ボトルネック分析 | お針子（直接） |
 
 ## スキル化判断ルール

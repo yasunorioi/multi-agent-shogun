@@ -11,7 +11,7 @@ Usage:
     python3 scripts/botsunichiroku.py cmd update CMD_ID --status STATUS
     python3 scripts/botsunichiroku.py cmd show CMD_ID [--json]
 
-    python3 scripts/botsunichiroku.py subtask list [--cmd CMD_ID] [--worker WORKER] [--status STATUS] [--json]
+    python3 scripts/botsunichiroku.py subtask list [--cmd CMD_ID] [--worker WORKER] [--status STATUS] [--needs-audit 0|1] [--audit-status STATUS] [--json]
     python3 scripts/botsunichiroku.py subtask add CMD_ID "description" [--worker WORKER] [--wave N] [--project PROJECT] [--target-path PATH] [--needs-audit]
     python3 scripts/botsunichiroku.py subtask update SUBTASK_ID [--status STATUS] [--worker WORKER] [--audit-status {pending,in_progress,done}]
     python3 scripts/botsunichiroku.py subtask show SUBTASK_ID [--json]
@@ -24,6 +24,8 @@ Usage:
 
     python3 scripts/botsunichiroku.py counter next NAME
     python3 scripts/botsunichiroku.py counter show [--json]
+
+    python3 scripts/botsunichiroku.py audit list [--all] [--json]
 
     python3 scripts/botsunichiroku.py stats [--json]
     python3 scripts/botsunichiroku.py archive [--days N] [--dry-run]
@@ -259,6 +261,12 @@ def subtask_list(args) -> None:
     if args.status:
         query += " AND status = ?"
         params.append(args.status)
+    if hasattr(args, "needs_audit") and args.needs_audit is not None:
+        query += " AND needs_audit = ?"
+        params.append(args.needs_audit)
+    if hasattr(args, "audit_status") and args.audit_status:
+        query += " AND audit_status = ?"
+        params.append(args.audit_status)
     query += " ORDER BY parent_cmd DESC, wave, id"
 
     rows = conn.execute(query, params).fetchall()
@@ -582,6 +590,49 @@ def counter_show(args) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Audit subcommand
+# ---------------------------------------------------------------------------
+
+
+def audit_list(args) -> None:
+    conn = get_connection()
+    if args.all:
+        query = """SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description
+                   FROM subtasks WHERE needs_audit = 1
+                   ORDER BY parent_cmd DESC, id"""
+    else:
+        query = """SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description
+                   FROM subtasks WHERE needs_audit = 1 AND (audit_status IS NULL OR audit_status = 'pending')
+                   ORDER BY parent_cmd DESC, id"""
+    rows = conn.execute(query).fetchall()
+    conn.close()
+
+    if args.json:
+        print_json([row_to_dict(r) for r in rows])
+        return
+
+    if not rows:
+        if args.all:
+            print("No audit items found.")
+        else:
+            print("No pending audits.")
+        return
+
+    headers = ["ID", "CMD", "WORKER", "STATUS", "AUDIT", "DESCRIPTION"]
+    table_rows = []
+    for r in rows:
+        table_rows.append([
+            r["id"],
+            r["parent_cmd"],
+            r["worker_id"] or "-",
+            r["status"],
+            r["audit_status"] or "pending",
+            r["description"],
+        ])
+    print_table(headers, table_rows, [14, 10, 12, 14, 10, 40])
+
+
+# ---------------------------------------------------------------------------
 # Stats subcommand
 # ---------------------------------------------------------------------------
 
@@ -774,6 +825,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cmd", help="Filter by parent command ID")
     p.add_argument("--worker", help="Filter by worker ID")
     p.add_argument("--status", help="Filter by status")
+    p.add_argument("--needs-audit", type=int, choices=[0, 1], help="Filter by needs_audit (0 or 1)")
+    p.add_argument("--audit-status", choices=["pending", "in_progress", "done", "rejected"], help="Filter by audit status")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=subtask_list)
 
@@ -856,6 +909,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = counter_sub.add_parser("show", help="Show all counters")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=counter_show)
+
+    # === audit ===
+    audit_parser = top_sub.add_parser("audit", help="Manage audits")
+    audit_sub = audit_parser.add_subparsers(dest="action", required=True)
+
+    # audit list
+    p = audit_sub.add_parser("list", help="List audit items (default: pending only)")
+    p.add_argument("--all", action="store_true", help="Show all audit items (not just pending)")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=audit_list)
 
     # === stats ===
     p = top_sub.add_parser("stats", help="Show database statistics")

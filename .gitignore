@@ -13,7 +13,8 @@ test_output/
 # Generated skills (local development)
 skills/
 
-# Python virtual environments
+# Python
+__pycache__/
 hf/
 
 # Temporary files
@@ -49,3 +50,7 @@ projects/
 # Internal docs (operation logs, test plans, article drafts)
 docs/
 archive/
+
+# Generated scripts / test directories (not ready for tracking)
+scripts/generate_dashboard.py
+tests/

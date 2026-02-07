@@ -654,7 +654,7 @@ split_pane_safely -v "ooku:agents"
 # ooku ペイン設定
 OOKU_LABELS=("midaidokoro" "heyago1" "heyago2" "heyago3" "ohariko")
 OOKU_COLORS=("magenta" "cyan" "cyan" "cyan" "yellow")
-OOKU_AGENT_IDS=("midaidokoro" "ashigaru6" "ashigaru7" "ashigaru8" "ohariko")
+OOKU_AGENT_IDS=("midaidokoro" "heyago1" "heyago2" "heyago3" "ohariko")
 
 if [ "$KESSEN_MODE" = true ]; then
     OOKU_TITLES=("midaidokoro(Opus)" "heyago1(Opus)" "heyago2(Opus)" "heyago3(Opus)" "ohariko(Opus)")
@@ -962,15 +962,12 @@ OOKU_EOF
     sleep 0.5
     tmux send-keys -t "ooku:agents.${PANE_BASE}" Enter
 
-    # 部屋子1-3に指示書を読み込ませる（ooku:agents pane 1-3、内部agent_id: ashigaru6-8）
+    # 部屋子1-3に指示書を読み込ませる（ooku:agents pane 1-3）
     sleep 2
     log_info "  └─ 部屋子に指示書を伝達中..."
-    HEYAGO_NAMES=("部屋子1" "部屋子2" "部屋子3")
-    HEYAGO_ASHIGARU_NUMS=(6 7 8)
-    for i in {0..2}; do
-        p=$((PANE_BASE + 1 + i))
-        ashigaru_num=${HEYAGO_ASHIGARU_NUMS[$i]}
-        tmux send-keys -t "ooku:agents.${p}" "instructions/ashigaru.md を読んで役割を理解せよ。汝は${HEYAGO_NAMES[$i]}（内部ID: ashigaru${ashigaru_num}）である。御台所配下の調査実働部隊じゃ。"
+    for i in {1..3}; do
+        p=$((PANE_BASE + i))
+        tmux send-keys -t "ooku:agents.${p}" "instructions/ashigaru.md を読んで役割を理解せよ。汝は部屋子${i}（内部ID: heyago${i}）である。御台所配下の調査実働部隊じゃ。"
         sleep 0.3
         tmux send-keys -t "ooku:agents.${p}" Enter
         sleep 0.5

@@ -131,9 +131,10 @@ DEFAULT_AGENTS = [
     ("ashigaru3", "ashigaru", "足軽3号", "sonnet", "idle", None, "multiagent:agents.4"),
     ("ashigaru4", "ashigaru", "足軽4号", "sonnet", "idle", None, "multiagent:agents.5"),
     ("ashigaru5", "ashigaru", "足軽5号", "sonnet", "idle", None, "multiagent:agents.6"),
-    ("ashigaru6", "ashigaru", "足軽6号", "sonnet", "idle", None, "multiagent:agents.7"),
-    ("ashigaru7", "ashigaru", "足軽7号", "sonnet", "idle", None, "multiagent:agents.8"),
-    ("ashigaru8", "ashigaru", "足軽8号", "sonnet", "idle", None, "multiagent:agents.9"),
+    ("ashigaru6", "heyago", "部屋子1号", "sonnet", "idle", None, "multiagent:agents.7"),
+    ("ashigaru7", "heyago", "部屋子2号", "sonnet", "idle", None, "multiagent:agents.8"),
+    ("ashigaru8", "heyago", "部屋子3号", "sonnet", "idle", None, "multiagent:agents.9"),
+    ("ohariko", "ohariko", "お針子", "sonnet", "idle", None, "multiagent:agents.10"),
 ]
 
 DEFAULT_COUNTERS = [

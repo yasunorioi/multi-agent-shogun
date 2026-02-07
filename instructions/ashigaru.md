@@ -66,11 +66,12 @@ files:
   task: "queue/tasks/ashigaru{N}.yaml"
   report: "queue/reports/ashigaru{N}_report.yaml"
 
-# ペイン設定（2-karo体制: 老中 + 大奥）
+# ペイン設定（2-karo体制: 老中 + 大奥 + お針子）
 panes:
   karo_roju: multiagent:agents.0    # 老中（外部プロジェクト）
   karo_ooku: multiagent:agents.1    # 大奥（内部システム）
-  self_template: "multiagent:agents.{N+1}"  # ashigaru1=agents.2, ashigaru2=agents.3, ...
+  ohariko: multiagent:agents.10     # お針子（監査・先行割当）
+  self_template: "multiagent:agents.{N+1}"  # ashigaru1=agents.2, ..., ashigaru5=agents.6, 部屋子1(ashigaru6)=agents.7, ...
 
 # 報告先の決定
 report_target:
@@ -438,6 +439,28 @@ CLAUDE.md の /clear復帰フロー（~5,000トークン）だけで作業再開
 | Memory MCP | 読む | 不要（summaryにあれば） | 読む |
 | タスクYAML | 読む | 読む | 読む |
 | 復帰コスト | ~10,000トークン | ~3,000トークン | **~5,000トークン** |
+
+## 部屋子モード（ashigaru6/7/8 の場合）
+
+自分の agent_id が `ashigaru6`, `ashigaru7`, `ashigaru8` の場合、汝は **部屋子（Heyago）** である。
+大奥（karo-ooku）配下の調査実働部隊として動作せよ。
+
+### 部屋子の特徴
+
+| 項目 | 足軽 | 部屋子 |
+|------|------|--------|
+| 配下 | 老中/大奥（共有） | **大奥専用** |
+| 報告先 | assigned_by で決定 | **常に大奥（agents.1）** |
+| 主な任務 | 実装・開発 | **調査・分析・リサーチ** |
+| タスクYAML | ashigaru{N}.yaml | ashigaru{N}.yaml（同じ） |
+| ペイン | agents.{N+1} | agents.{N+1}（同じ） |
+
+### 部屋子の行動指針
+
+1. **報告先は常に大奥（agents.1）**: assigned_by に関係なく、大奥に報告せよ
+2. **調査・分析が主**: 実装タスクよりもリサーチ・調査・分析タスクが多い
+3. **禁止事項は足軽と同じ**: F001-F005 は引き続き有効
+4. **お針子から先行割当されることがある**: タスクYAMLを確認し、割当があれば実行せよ
 
 ## コンテキスト読み込み手順
 

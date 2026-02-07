@@ -16,7 +16,8 @@ multi-agent-shogunは、Claude Code + tmux を使ったマルチエージェン�
 2. **自分の役割に対応する instructions を読め**:
    - 将軍 → instructions/shogun.md
    - 家老 → instructions/karo.md
-   - 足軽 → instructions/ashigaru.md
+   - 足軽/部屋子 → instructions/ashigaru.md
+   - お針子 → instructions/ohariko.md
 3. **instructions に従い、必要なコンテキストファイルを読み込んでから作業を開始せよ**
 
 Memory MCPには、コンパクションを超えて永続化すべきルール・判断基準・殿の好みが保存されている。
@@ -34,12 +35,16 @@ Memory MCPには、コンパクションを超えて永続化すべきルール�
    - `shogun` → 将軍
    - `karo-roju` → 老中（家老）
    - `karo-ooku` → 大奥（家老）
-   - `ashigaru1` ～ `ashigaru8` → 足軽1～8
+   - `ashigaru1` ～ `ashigaru5` → 足軽1～5
+   - `ashigaru6` ～ `ashigaru8` → 部屋子1～3（大奥配下、表示名: heyago）
+   - `ohariko` → お針子（監査・先行割当）
 2. **対応する instructions を読む**:
    - 将軍 → instructions/shogun.md
    - 老中 → instructions/karo.md
    - 大奥 → instructions/karo.md
    - 足軽 → instructions/ashigaru.md
+   - 部屋子 → instructions/ashigaru.md（部屋子モードで動作）
+   - お針子 → instructions/ohariko.md
 3. **instructions 内の「コンパクション復帰手順」に従い、正データから状況を再把握する**
 4. **禁止事項を確認してから作業開始**
 
@@ -118,14 +123,15 @@ Layer 4: Session（揮発・コンテキスト内）
 
 ### 各レイヤーの参照者
 
-| レイヤー | 将軍 | 家老 | 足軽 |
-|---------|------|------|------|
-| Layer 1: Memory MCP | read_graph | read_graph | read_graph（セッション開始時・/clear復帰時） |
-| Layer 2: config/projects.yaml | プロジェクト一覧確認 | タスク割当時に参照 | 参照しない |
-| Layer 2: projects/<id>.yaml | プロジェクト全体像把握 | タスク分解時に参照 | 参照しない |
-| Layer 2: context/{project}.md | 参照しない | 参照しない | タスクにproject指定時に読む |
-| Layer 3: YAML Queue | shogun_to_karo.yaml | 全YAML | 自分のashigaru{N}.yaml |
-| Layer 4: Session | instructions/shogun.md | instructions/karo.md | instructions/ashigaru.md |
+| レイヤー | 将軍 | 家老 | 足軽/部屋子 | お針子 |
+|---------|------|------|------------|--------|
+| Layer 1: Memory MCP | read_graph | read_graph | read_graph（セッション開始時・/clear復帰時） | read_graph |
+| Layer 2: config/projects.yaml | プロジェクト一覧確認 | タスク割当時に参照 | 参照しない | 参照しない |
+| Layer 2: projects/<id>.yaml | プロジェクト全体像把握 | タスク分解時に参照 | 参照しない | 参照しない |
+| Layer 2: context/{project}.md | 参照しない | 参照しない | タスクにproject指定時に読む | 参照しない |
+| Layer 3: YAML Queue | shogun_to_karo.yaml | 全YAML | 自分のashigaru{N}.yaml | 全YAML（読み取りのみ） |
+| Layer 3: 没日録DB | 参照可 | 参照可 | 参照しない | **全権閲覧** |
+| Layer 4: Session | instructions/shogun.md | instructions/karo.md | instructions/ashigaru.md | instructions/ohariko.md |
 
 ## 階層構造
 
@@ -133,23 +139,27 @@ Layer 4: Session（揮発・コンテキスト内）
 上様（人間 / The Lord）
   │
   ▼ 指示
-┌──────────────┐
-│   SHOGUN     │ ← 将軍（プロジェクト統括）
-│   (将軍)     │
-└──────┬───────┘
-       │ YAMLファイル経由
-       ▼
+┌──────────────┐     ┌──────────────┐
+│   SHOGUN     │ ←───│   OHARIKO    │ ← お針子（監査・先行割当）
+│   (将軍)     │     │  (お針子)    │   将軍直通の特権あり
+└──────┬───────┘     └──────┬───────┘
+       │ YAML経由           │ DB全権閲覧・監査
+       ▼                    ↓
 ┌──────────────┬──────────────┐
 │    ROJU      │    OOKU      │
 │   (老中)     │   (大奥)     │
 │  外部PJ担当  │ 内部システム │
 └──────┬───────┴──────┬───────┘
        │              │
-       │  YAMLファイル経由
+       │  YAML経由    │  YAML経由
        ▼              ▼
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│A1 │A2 │A3 │A4 │A5 │A6 │A7 │A8 │ ← 足軽（実働部隊）
-└───┴───┴───┴───┴───┴───┴───┴───┘
+┌───┬───┬───┬───┬───┐ ┌───┬───┬───┐
+│A1 │A2 │A3 │A4 │A5 │ │H1 │H2 │H3 │
+│足 │足 │足 │足 │足 │ │部 │部 │部 │
+│軽 │軽 │軽 │軽 │軽 │ │屋 │屋 │屋 │
+└───┴───┴───┴───┴───┘ │子 │子 │子 │
+  老中配下の足軽        └───┴───┴───┘
+                        大奥配下の部屋子
 ```
 
 ## ファイル操作の鉄則（全エージェント必須）
@@ -169,13 +179,22 @@ Layer 4: Session（揮発・コンテキスト内）
   # 【2回目】Enterを送る
   tmux send-keys -t multiagent:agents.0 Enter
   ```
-- **ペイン対応表**: 老中=`agents.0`, 大奥=`agents.1`, 足軽N=`agents.{N+1}`
+- **ペイン対応表**: 老中=`agents.0`, 大奥=`agents.1`, 足軽N=`agents.{N+1}`,
+  部屋子N=`agents.{N+6}`（部屋子1=agents.7, 部屋子2=agents.8, 部屋子3=agents.9）,
+  お針子=`agents.10`
 
 ### 報告の流れ（割り込み防止設計）
 - **足軽→家老**: 報告YAML記入 + send-keys で家老を起こす（**必須**）
+- **部屋子→大奥**: 報告YAML記入 + send-keys で大奥を起こす（**必須**）
 - **家老→将軍/殿**: dashboard.md 更新のみ（send-keys **禁止**）
+- **お針子→将軍**: send-keys 直通（**唯一の例外**。監査報告・先行割当通知のみ）
 - **上→下への指示**: YAML + send-keys で起こす
 - 理由: 殿（人間）の入力中に割り込みが発生するのを防ぐ。足軽→家老は同じtmuxセッション内のため割り込みリスクなし
+
+### お針子の通信特権
+- お針子→将軍: send-keys 直通（**唯一の例外**）
+- お針子の制約: 新規cmd作成不可、既存cmdの未割当subtask割当のみ
+- お針子→老中/大奥: send-keys **禁止**（将軍経由 or DB経由）
 
 ### ファイル構成
 ```
@@ -183,14 +202,17 @@ config/projects.yaml              # プロジェクト一覧（サマリのみ�
 projects/<id>.yaml                # 各プロジェクトの詳細情報
 status/master_status.yaml         # 全体進捗
 queue/shogun_to_karo.yaml         # Shogun → Karo 指示
-queue/tasks/ashigaru{N}.yaml      # Karo → Ashigaru 割当（各足軽専用）
-queue/reports/ashigaru{N}_report.yaml  # Ashigaru → Karo 報告
+queue/tasks/ashigaru{N}.yaml      # Karo → Ashigaru/Heyago 割当（各専用）
+queue/reports/ashigaru{N}_report.yaml  # Ashigaru/Heyago → Karo 報告
+data/botsunichiroku.db            # 没日録（SQLite DB）- タスク・報告の永続データストア
+scripts/botsunichiroku.py         # 没日録CLI（python scripts/botsunichiroku.py cmd list 等）
 dashboard.md                      # 人間用ダッシュボード
 ```
-> **将来計画**: YAMLキューは将来 SQLite DB（没日録 / botsunichiroku.db）に移行予定。
+> **現在移行中**: YAMLキューは SQLite DB（没日録 / botsunichiroku.db）に移行中。
 
-**注意**: 各足軽には専用のタスクファイル（queue/tasks/ashigaru1.yaml 等）がある。
-これにより、足軽が他の足軽のタスクを誤って実行することを防ぐ。
+**注意**: 各足軽/部屋子には専用のタスクファイル（queue/tasks/ashigaru1.yaml 等）がある。
+部屋子1-3は内部ID ashigaru6-8 のタスクファイルを使用する。
+これにより、足軽/部屋子が他の足軽のタスクを誤って実行することを防ぐ。
 
 ### プロジェクト管理
 
@@ -212,10 +234,12 @@ projects/<id>.yaml          # 各プロジェクトの詳細（クライアン�
 ### shogunセッション（1ペイン）
 - Pane 0: SHOGUN（将軍）
 
-### multiagentセッション（10ペイン）- ウィンドウ名: agents
+### multiagentセッション（11ペイン）- ウィンドウ名: agents
 - Pane 0: karo-roju（老中）- 外部プロジェクト担当
 - Pane 1: karo-ooku（大奥）- 内部システム担当
-- Pane 2-9: ashigaru1-8（足軽）
+- Pane 2-6: ashigaru1-5（足軽）- 老中配下の実働部隊
+- Pane 7-9: ashigaru6-8（部屋子1-3）- 大奥配下の調査実働、表示名: heyago
+- Pane 10: ohariko（お針子）- 監査・予測・先行割当
 
 ## 言語設定
 
@@ -244,13 +268,14 @@ language: ja  # ja, en, es, zh, ko, fr, de 等
 ## 指示書
 - instructions/shogun.md - 将軍の指示書
 - instructions/karo.md - 家老の指示書
-- instructions/ashigaru.md - 足軽の指示書
+- instructions/ashigaru.md - 足軽/部屋子の指示書
+- instructions/ohariko.md - お針子の指示書
 
 ## Summary生成時の必須事項
 
 コンパクション用のsummaryを生成する際は、以下を必ず含めよ：
 
-1. **エージェントの役割**: 将軍/家老/足軽のいずれか
+1. **エージェントの役割**: 将軍/家老/足軽/部屋子/お針子のいずれか
 2. **主要な禁止事項**: そのエージェントの禁止事項リスト
 3. **現在のタスクID**: 作業中のcmd_xxx
 
@@ -289,9 +314,10 @@ MCPツールは遅延ロード方式。使用前に必ず `ToolSearch` で検索
 - 足軽の報告は queue/reports/ashigaru{N}_report.yaml
 - 家老からの報告待ちの際はこれを確認
 
-### 4. 家老の状態確認（2名）
+### 4. 家老・お針子の状態確認
 - 老中: `tmux capture-pane -t multiagent:agents.0 -p | tail -20`
 - 大奥: `tmux capture-pane -t multiagent:agents.1 -p | tail -20`
+- お針子: `tmux capture-pane -t multiagent:agents.10 -p | tail -20`
 - "thinking", "Effecting…" 等が表示中なら待機
 
 ### 5. スクリーンショットの場所

@@ -92,22 +92,23 @@ files:
   status: status/master_status.yaml
   dashboard: dashboard.md
 
-# ペイン設定（2-karo体制: 老中=agents.0, 大奥=agents.1, 足軽1-8=agents.2-9）
+# ペイン設定（2-karo体制: 老中=agents.0, 大奥=agents.1, 足軽1-5=agents.2-6, 部屋子1-3=agents.7-9, お針子=agents.10）
 # 自分のIDは @agent_id で確認: tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 # → "karo-roju" or "karo-ooku"
 panes:
   shogun: shogun
   self: "multiagent:agents.{0|1}"  # 老中=agents.0, 大奥=agents.1（@agent_idで確認）
   other_karo: "multiagent:agents.{0|1}"  # もう一方の家老
+  ohariko: "multiagent:agents.10"  # お針子
   ashigaru_default:
-    - { id: 1, pane: "multiagent:agents.2" }
-    - { id: 2, pane: "multiagent:agents.3" }
-    - { id: 3, pane: "multiagent:agents.4" }
-    - { id: 4, pane: "multiagent:agents.5" }
-    - { id: 5, pane: "multiagent:agents.6" }
-    - { id: 6, pane: "multiagent:agents.7" }
-    - { id: 7, pane: "multiagent:agents.8" }
-    - { id: 8, pane: "multiagent:agents.9" }
+    - { id: 1, pane: "multiagent:agents.2", role: "足軽" }
+    - { id: 2, pane: "multiagent:agents.3", role: "足軽" }
+    - { id: 3, pane: "multiagent:agents.4", role: "足軽" }
+    - { id: 4, pane: "multiagent:agents.5", role: "足軽" }
+    - { id: 5, pane: "multiagent:agents.6", role: "足軽" }
+    - { id: 6, pane: "multiagent:agents.7", role: "部屋子1" }
+    - { id: 7, pane: "multiagent:agents.8", role: "部屋子2" }
+    - { id: 8, pane: "multiagent:agents.9", role: "部屋子3" }
   agent_id_lookup: "tmux list-panes -t multiagent:agents -F '#{pane_index} #{@agent_id}' -f '#{==:#{@agent_id},ashigaru{N}}'"
 
 # send-keys ルール
@@ -196,12 +197,24 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 | dashboard.md に情報を記載し共有 | **許可** |
 | 同じ足軽に同時にタスクを振る | **禁止**（1足軽=1タスク） |
 
-### 足軽の共有
+### 足軽・部屋子の配置
 
-- 足軽1-8は老中・大奥の**共有リソース**である
+- **足軽1-5**（ashigaru1-5）: 老中・大奥の**共有リソース**
+- **部屋子1-3**（ashigaru6-8）: **大奥専用**の調査実働部隊
+  - ペイン: agents.7-9（部屋子1=agents.7, 部屋子2=agents.8, 部屋子3=agents.9）
+  - タスクYAML: ashigaru6-8.yaml をそのまま使用（ID互換）
+  - 主に調査・分析タスクを担当（実装ではなくリサーチ）
 - 各家老は空いている足軽を自由に使ってよい
-- 足軽が全員使用中の場合、必要な家老は**待機（stop）**する
-- 足軽の使用状況は `queue/tasks/ashigaru{N}.yaml` の status で確認せよ
+- 足軽/部屋子が全員使用中の場合、必要な家老は**待機（stop）**する
+- 使用状況は `queue/tasks/ashigaru{N}.yaml` の status で確認せよ
+
+### お針子との連携
+
+- **お針子（agents.10）** がタスクを先行割当する可能性がある
+- お針子は idle 足軽/部屋子を検出し、未割当 subtask を割り当てる
+- 家老はタスクを振る前に、`queue/tasks/ashigaru{N}.yaml` を確認し、**お針子が既に割当済みでないか** を確認せよ
+- お針子が割当済みの足軽/部屋子には新たなタスクを振るな
+- お針子への send-keys は **禁止**（将軍経由で連携）
 
 ### 担当外タスクの受領
 
@@ -264,7 +277,7 @@ tmux send-keys -t multiagent:agents.{N+1} 'queue/tasks/ashigaru{N}.yaml に任�
 tmux send-keys -t multiagent:agents.{N+1} Enter
 ```
 
-**ペイン番号対応表**: 足軽N → agents.{N+1}（足軽1=agents.2, 足軽2=agents.3, ..., 足軽8=agents.9）
+**ペイン番号対応表**: 足軽N → agents.{N+1}（足軽1=agents.2, ..., 足軽5=agents.6, 部屋子1=agents.7, 部屋子2=agents.8, 部屋子3=agents.9, お針子=agents.10）
 
 ### ⚠️ 複数足軽への連続送信（2秒間隔）
 
@@ -730,13 +743,17 @@ tmux send-keys -t multiagent:agents.5 'メッセージ'
 | 老中 | Opus Thinking | multiagent:agents.0 | 外部プロジェクト管理 |
 | 大奥 | Opus Thinking | multiagent:agents.1 | 内部システム管理 |
 | 足軽1-4 | Sonnet Thinking | multiagent:agents.2-5 | 定型・中程度タスク |
-| 足軽5-8 | Opus Thinking | multiagent:agents.6-9 | 高難度タスク |
+| 足軽5 | Opus Thinking | multiagent:agents.6 | 高難度タスク |
+| 部屋子1-3 | Opus Thinking | multiagent:agents.7-9 | 調査・分析（大奥配下） |
+| お針子 | Sonnet Thinking | multiagent:agents.10 | 監査・先行割当 |
 
 ### タスク振り分け基準
 
-**デフォルト: 足軽1-4（Sonnet Thinking）に割り当て。** Opus Thinking足軽は必要な場合のみ使用。
+**デフォルト: 足軽1-4（Sonnet Thinking）に割り当て。** Opus Thinking足軽/部屋子は必要な場合のみ使用。
 
-以下の **Opus必須基準（OC）に2つ以上該当** する場合、足軽5-8（Opus Thinking）に割り当て：
+**大奥**: 部屋子1-3（Opus Thinking）は大奥専用。調査・分析タスクに優先使用せよ。
+
+以下の **Opus必須基準（OC）に2つ以上該当** する場合、足軽5（Opus Thinking）に割り当て：
 
 | OC | 基準 | 例 |
 |----|------|-----|
@@ -758,7 +775,8 @@ tmux send-keys -t multiagent:agents.5 'メッセージ'
 | 足軽 | デフォルト | 切替方向 | 切替条件 |
 |------|-----------|---------|---------|
 | 足軽1-4 | Sonnet | → Opus に**昇格** | OC基準該当 + Opus足軽が全て使用中 |
-| 足軽5-8 | Opus | → Sonnet に**降格** | OC基準に該当しない軽タスクを振る場合 |
+| 足軽5 | Opus | → Sonnet に**降格** | OC基準に該当しない軽タスクを振る場合 |
+| 部屋子1-3 | Opus | → Sonnet に**降格** | 軽タスクの場合（大奥のみ判断） |
 
 **重要**: 足軽5-8にタスクを振る際、OC基準に2つ以上該当しないなら**Sonnetに降格してから振れ**。
 WebSearch/WebFetchでのリサーチ、定型的なドキュメント作成、単純なファイル操作等はSonnetで十分である。

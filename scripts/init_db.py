@@ -38,7 +38,7 @@ TABLES_SQL = {
             project TEXT,                       -- e.g. "arsprout", "rotation-planner", "shogun"
             priority TEXT DEFAULT 'medium',     -- critical / high / medium / low
             status TEXT DEFAULT 'pending',      -- pending / acknowledged / in_progress / done / cancelled
-            assigned_karo TEXT,                 -- "roju" or "ooku"
+            assigned_karo TEXT,                 -- "roju" or "midaidokoro"
             details TEXT,                       -- full task description
             created_at TEXT NOT NULL,
             completed_at TEXT
@@ -55,6 +55,8 @@ TABLES_SQL = {
             status TEXT DEFAULT 'pending',      -- pending / assigned / in_progress / done / blocked / cancelled
             wave INTEGER DEFAULT 1,            -- Wave number (1, 2, 3)
             notes TEXT,                        -- additional context
+            needs_audit INTEGER DEFAULT 0,  -- 1=お針子監査対象
+            audit_status TEXT DEFAULT NULL, -- NULL/pending/in_progress/done
             assigned_at TEXT,
             completed_at TEXT,
             FOREIGN KEY (parent_cmd) REFERENCES commands(id)
@@ -81,9 +83,9 @@ TABLES_SQL = {
     """,
     "agents": """
         CREATE TABLE IF NOT EXISTS agents (
-            id TEXT PRIMARY KEY,               -- e.g. "shogun", "roju", "ooku", "ashigaru1"
+            id TEXT PRIMARY KEY,               -- e.g. "shogun", "roju", "midaidokoro", "ashigaru1"
             role TEXT NOT NULL,                 -- "shogun" / "karo" / "ashigaru"
-            display_name TEXT,                  -- e.g. "老中", "大奥", "足軽1号"
+            display_name TEXT,                  -- e.g. "老中", "御台所", "足軽1号"
             model TEXT,                         -- e.g. "opus", "sonnet"
             status TEXT DEFAULT 'idle',         -- idle / busy / error / offline
             current_task_id TEXT,
@@ -123,18 +125,18 @@ INDEXES_SQL = [
 
 DEFAULT_AGENTS = [
     # (id, role, display_name, model, status, current_task_id, pane_target)
-    ("shogun", "shogun", "将軍", "opus", "idle", None, "shogun:0.0"),
+    ("shogun", "shogun", "将軍", "opus", "idle", None, "shogun:main"),
     ("roju", "karo", "老中", "opus", "idle", None, "multiagent:agents.0"),
-    ("ooku", "karo", "大奥", "opus", "idle", None, "multiagent:agents.1"),
-    ("ashigaru1", "ashigaru", "足軽1号", "sonnet", "idle", None, "multiagent:agents.2"),
-    ("ashigaru2", "ashigaru", "足軽2号", "sonnet", "idle", None, "multiagent:agents.3"),
-    ("ashigaru3", "ashigaru", "足軽3号", "sonnet", "idle", None, "multiagent:agents.4"),
-    ("ashigaru4", "ashigaru", "足軽4号", "sonnet", "idle", None, "multiagent:agents.5"),
-    ("ashigaru5", "ashigaru", "足軽5号", "sonnet", "idle", None, "multiagent:agents.6"),
-    ("ashigaru6", "heyago", "部屋子1号", "sonnet", "idle", None, "multiagent:agents.7"),
-    ("ashigaru7", "heyago", "部屋子2号", "sonnet", "idle", None, "multiagent:agents.8"),
-    ("ashigaru8", "heyago", "部屋子3号", "sonnet", "idle", None, "multiagent:agents.9"),
-    ("ohariko", "ohariko", "お針子", "sonnet", "idle", None, "multiagent:agents.10"),
+    ("midaidokoro", "karo", "御台所", "opus", "idle", None, "ooku:agents.0"),
+    ("ashigaru1", "ashigaru", "足軽1号", "sonnet", "idle", None, "multiagent:agents.1"),
+    ("ashigaru2", "ashigaru", "足軽2号", "sonnet", "idle", None, "multiagent:agents.2"),
+    ("ashigaru3", "ashigaru", "足軽3号", "sonnet", "idle", None, "multiagent:agents.3"),
+    ("ashigaru4", "ashigaru", "足軽4号", "sonnet", "idle", None, "multiagent:agents.4"),
+    ("ashigaru5", "ashigaru", "足軽5号", "sonnet", "idle", None, "multiagent:agents.5"),
+    ("ashigaru6", "heyago", "部屋子1号", "sonnet", "idle", None, "ooku:agents.1"),
+    ("ashigaru7", "heyago", "部屋子2号", "sonnet", "idle", None, "ooku:agents.2"),
+    ("ashigaru8", "heyago", "部屋子3号", "sonnet", "idle", None, "ooku:agents.3"),
+    ("ohariko", "ohariko", "お針子", "sonnet", "idle", None, "ooku:agents.4"),
 ]
 
 DEFAULT_COUNTERS = [

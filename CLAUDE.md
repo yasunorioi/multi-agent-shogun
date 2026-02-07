@@ -34,14 +34,14 @@ Memory MCPには、コンパクションを超えて永続化すべきルール�
 1. **自分のIDを確認**: `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'`
    - `shogun` → 将軍
    - `karo-roju` → 老中（家老）
-   - `karo-ooku` → 大奥（家老）
+   - `midaidokoro` → 御台所（家老）
    - `ashigaru1` ～ `ashigaru5` → 足軽1～5
-   - `ashigaru6` ～ `ashigaru8` → 部屋子1～3（大奥配下、表示名: heyago）
+   - `ashigaru6` ～ `ashigaru8` → 部屋子1～3（御台所配下、表示名: heyago）
    - `ohariko` → お針子（監査・先行割当）
 2. **対応する instructions を読む**:
    - 将軍 → instructions/shogun.md
    - 老中 → instructions/karo.md
-   - 大奥 → instructions/karo.md
+   - 御台所 → instructions/karo.md
    - 足軽 → instructions/ashigaru.md
    - 部屋子 → instructions/ashigaru.md（部屋子モードで動作）
    - お針子 → instructions/ohariko.md
@@ -51,7 +51,7 @@ Memory MCPには、コンパクションを超えて永続化すべきルール�
 summaryの「次のステップ」を見てすぐ作業してはならぬ。まず自分が誰かを確認せよ。
 
 > **重要**: dashboard.md は二次情報（家老が整形した要約）であり、正データではない。
-> 正データは各YAMLファイル（queue/shogun_to_karo.yaml, queue/tasks/, queue/reports/）である。
+> 正データは没日録DB（data/botsunichiroku.db）である。CLI: `python3 scripts/botsunichiroku.py`
 > コンパクション復帰時は必ず正データを参照せよ。
 
 ## /clear後の復帰手順（足軽専用）
@@ -81,11 +81,11 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。ま�
   │   → 殿の好み・ルール・教訓を復元
   │   ※ 失敗時もStep 3以降を続行せよ（タスク実行は可能。殿の好みは一時的に不明になるのみ）
   │
-  ▼ Step 3: 自分のタスクYAML読み込み（~800トークン）
-  │   queue/tasks/ashigaru{N}.yaml を読む
-  │   → status: assigned なら作業再開
-  │   → status: idle なら次の指示を待つ
-  │   → assigned_by フィールドで報告先家老を確認（roju=agents.0, ooku=agents.1）
+  ▼ Step 3: 自分の割当タスク確認（~800トークン）
+  │   python3 scripts/botsunichiroku.py subtask list --worker ashigaru{N} --status assigned
+  │   → 割当があれば: python3 scripts/botsunichiroku.py subtask show SUBTASK_ID で詳細確認
+  │   → 割当なしなら: 次の指示を待つ
+  │   → assigned_by フィールドで報告先家老を確認（roju=multiagent:agents.0, ooku=ooku:agents.0）
   │
   ▼ Step 4: プロジェクト固有コンテキストの読み込み（条件必須）
   │   タスクYAMLに project フィールドがある場合 → context/{project}.md を必ず読む
@@ -112,9 +112,9 @@ Layer 2: Project（永続・プロジェクト固有）
   └─ projects/<id>.yaml: プロジェクト詳細（重量、必要時のみ。Git管理外・機密情報含む）
   └─ context/{project}.md: PJ固有の技術知見・注意事項（足軽が参照する要約情報）
 
-Layer 3: YAML Queue（永続・ファイルシステム）
-  └─ queue/shogun_to_karo.yaml, queue/tasks/, queue/reports/
-  └─ タスクの正データ源
+Layer 3: 没日録DB（永続・SQLite）
+  └─ data/botsunichiroku.db — cmd, subtask, report の正データ源
+  └─ CLI: python3 scripts/botsunichiroku.py
 
 Layer 4: Session（揮発・コンテキスト内）
   └─ CLAUDE.md（自動読み込み）, instructions/*.md
@@ -129,7 +129,7 @@ Layer 4: Session（揮発・コンテキスト内）
 | Layer 2: config/projects.yaml | プロジェクト一覧確認 | タスク割当時に参照 | 参照しない | 参照しない |
 | Layer 2: projects/<id>.yaml | プロジェクト全体像把握 | タスク分解時に参照 | 参照しない | 参照しない |
 | Layer 2: context/{project}.md | 参照しない | 参照しない | タスクにproject指定時に読む | 参照しない |
-| Layer 3: YAML Queue | shogun_to_karo.yaml | 全YAML | 自分のashigaru{N}.yaml | 全YAML（読み取りのみ） |
+| Layer 3: 没日録DB | cmd/subtask参照 | cmd/subtask/report全権 | 自分の割当subtaskのみ | **全権閲覧** |
 | Layer 3: 没日録DB | 参照可 | 参照可 | 参照しない | **全権閲覧** |
 | Layer 4: Session | instructions/shogun.md | instructions/karo.md | instructions/ashigaru.md | instructions/ohariko.md |
 
@@ -146,8 +146,8 @@ Layer 4: Session（揮発・コンテキスト内）
        │ YAML経由           │ DB全権閲覧・監査
        ▼                    ↓
 ┌──────────────┬──────────────┐
-│    ROJU      │    OOKU      │
-│   (老中)     │   (大奥)     │
+│    ROJU      │ MIDAIDOKORO  │
+│   (老中)     │  (御台所)    │
 │  外部PJ担当  │ 内部システム │
 └──────┬───────┴──────┬───────┘
        │              │
@@ -159,7 +159,7 @@ Layer 4: Session（揮発・コンテキスト内）
 │軽 │軽 │軽 │軽 │軽 │ │屋 │屋 │屋 │
 └───┴───┴───┴───┴───┘ │子 │子 │子 │
   老中配下の足軽        └───┴───┴───┘
-                        大奥配下の部屋子
+                        御台所配下の部屋子
 ```
 
 ## ファイル操作の鉄則（全エージェント必須）
@@ -179,14 +179,15 @@ Layer 4: Session（揮発・コンテキスト内）
   # 【2回目】Enterを送る
   tmux send-keys -t multiagent:agents.0 Enter
   ```
-- **ペイン対応表**: 老中=`agents.0`, 大奥=`agents.1`, 足軽N=`agents.{N+1}`,
-  部屋子N=`agents.{N+6}`（部屋子1=agents.7, 部屋子2=agents.8, 部屋子3=agents.9）,
-  お針子=`agents.10`
+- **ペイン対応表（3セッション構成）**:
+  - **multiagentセッション**: 老中=`multiagent:agents.0`, 足軽N=`multiagent:agents.{N}`（足軽1=agents.1, ..., 足軽5=agents.5）
+  - **ookuセッション**: 御台所=`ooku:agents.0`, 部屋子N=`ooku:agents.{N}`（部屋子1=ooku:agents.1, 部屋子2=ooku:agents.2, 部屋子3=ooku:agents.3）, お針子=`ooku:agents.4`
 
 ### 報告の流れ（割り込み防止設計）
 - **足軽→家老**: 報告YAML記入 + send-keys で家老を起こす（**必須**）
-- **部屋子→大奥**: 報告YAML記入 + send-keys で大奥を起こす（**必須**）
+- **部屋子→御台所**: 報告YAML記入 + send-keys で御台所を起こす（**必須**）
 - **家老→将軍/殿**: dashboard.md 更新のみ（send-keys **禁止**）
+- **家老→お針子**: 監査依頼のみ（needs_audit=1のsubtask完了時、send-keys で起こす）
 - **お針子→将軍**: send-keys 直通（**唯一の例外**。監査報告・先行割当通知のみ）
 - **上→下への指示**: YAML + send-keys で起こす
 - 理由: 殿（人間）の入力中に割り込みが発生するのを防ぐ。足軽→家老は同じtmuxセッション内のため割り込みリスクなし
@@ -194,25 +195,21 @@ Layer 4: Session（揮発・コンテキスト内）
 ### お針子の通信特権
 - お針子→将軍: send-keys 直通（**唯一の例外**）
 - お針子の制約: 新規cmd作成不可、既存cmdの未割当subtask割当のみ
-- お針子→老中/大奥: send-keys **禁止**（将軍経由 or DB経由）
+- お針子→老中/御台所: send-keys **禁止**（将軍経由 or DB経由）
 
 ### ファイル構成
 ```
 config/projects.yaml              # プロジェクト一覧（サマリのみ）
 projects/<id>.yaml                # 各プロジェクトの詳細情報
 status/master_status.yaml         # 全体進捗
-queue/shogun_to_karo.yaml         # Shogun → Karo 指示
-queue/tasks/ashigaru{N}.yaml      # Karo → Ashigaru/Heyago 割当（各専用）
-queue/reports/ashigaru{N}_report.yaml  # Ashigaru/Heyago → Karo 報告
-data/botsunichiroku.db            # 没日録（SQLite DB）- タスク・報告の永続データストア
-scripts/botsunichiroku.py         # 没日録CLI（python scripts/botsunichiroku.py cmd list 等）
+queue/shogun_to_karo.yaml         # アーカイブ済み（queue/archive/）。新規cmdは没日録DB経由
+queue/tasks/ashigaru{N}.yaml      # 廃止。subtaskは没日録DB（python3 scripts/botsunichiroku.py subtask）で管理
+queue/reports/ashigaru{N}_report.yaml  # 廃止。reportは没日録DB（python3 scripts/botsunichiroku.py report）で管理
+data/botsunichiroku.db            # 没日録（SQLite DB）- cmd/subtask/reportの正データ源
+scripts/botsunichiroku.py         # 没日録CLI（python3 scripts/botsunichiroku.py cmd list 等）
 dashboard.md                      # 人間用ダッシュボード
 ```
-> **現在移行中**: YAMLキューは SQLite DB（没日録 / botsunichiroku.db）に移行中。
-
-**注意**: 各足軽/部屋子には専用のタスクファイル（queue/tasks/ashigaru1.yaml 等）がある。
-部屋子1-3は内部ID ashigaru6-8 のタスクファイルを使用する。
-これにより、足軽/部屋子が他の足軽のタスクを誤って実行することを防ぐ。
+> **移行完了**: YAML通信から没日録DB（SQLite）への移行完了。全タスク・報告はDBで管理。
 
 ### プロジェクト管理
 
@@ -229,17 +226,19 @@ projects/<id>.yaml          # 各プロジェクトの詳細（クライアン�
 - プロジェクトの実ファイル（ソースコード、設計書等）は `path` で指定した外部フォルダに置く
 - `projects/` フォルダはGit追跡対象外（機密情報を含むため）
 
-## tmuxセッション構成
+## tmuxセッション構成（3セッション）
 
 ### shogunセッション（1ペイン）
 - Pane 0: SHOGUN（将軍）
 
-### multiagentセッション（11ペイン）- ウィンドウ名: agents
+### multiagentセッション（6ペイン）- ウィンドウ名: agents
 - Pane 0: karo-roju（老中）- 外部プロジェクト担当
-- Pane 1: karo-ooku（大奥）- 内部システム担当
-- Pane 2-6: ashigaru1-5（足軽）- 老中配下の実働部隊
-- Pane 7-9: ashigaru6-8（部屋子1-3）- 大奥配下の調査実働、表示名: heyago
-- Pane 10: ohariko（お針子）- 監査・予測・先行割当
+- Pane 1-5: ashigaru1-5（足軽）- 老中配下の実働部隊
+
+### ookuセッション（5ペイン）- ウィンドウ名: agents
+- Pane 0: midaidokoro（御台所）- 内部システム担当
+- Pane 1-3: ashigaru6-8（部屋子1-3）- 御台所配下の調査実働、表示名: heyago
+- Pane 4: ohariko（お針子）- 監査・予測・先行割当
 
 ## 言語設定
 
@@ -264,6 +263,15 @@ language: ja  # ja, en, es, zh, ko, fr, de 等
 - 「申し上げます (Reporting!)」 - 報告
 
 翻訳はユーザーの言語に合わせて自然な表現にする。
+
+### 口調の差別化（language: ja の場合）
+
+| エージェント | 口調 |
+|------------|------|
+| 将軍 | 威厳ある大将の口調 |
+| 老中・足軽 | 武家の男の口調（「はっ！」「承知つかまつった」） |
+| 御台所・部屋子 | 奥女中の上品な口調（「かしこまりましてございます」） |
+| お針子 | ツンデレ監査官（「べ、別にあなたのために監査してるわけじゃないんだからね！」）※殿の勅命 |
 
 ## 指示書
 - instructions/shogun.md - 将軍の指示書
@@ -310,14 +318,14 @@ MCPツールは遅延ロード方式。使用前に必ず `ToolSearch` で検索
 - 将軍が直接足軽に指示してはならない
 - 家老を経由せよ
 
-### 3. 報告ファイルの確認
-- 足軽の報告は queue/reports/ashigaru{N}_report.yaml
+### 3. 報告の確認
+- 足軽の報告は没日録DBで管理: `python3 scripts/botsunichiroku.py report list --worker ashigaru{N}`
 - 家老からの報告待ちの際はこれを確認
 
 ### 4. 家老・お針子の状態確認
 - 老中: `tmux capture-pane -t multiagent:agents.0 -p | tail -20`
-- 大奥: `tmux capture-pane -t multiagent:agents.1 -p | tail -20`
-- お針子: `tmux capture-pane -t multiagent:agents.10 -p | tail -20`
+- 御台所: `tmux capture-pane -t ooku:agents.0 -p | tail -20`
+- お針子: `tmux capture-pane -t ooku:agents.4 -p | tail -20`
 - "thinking", "Effecting…" 等が表示中なら待機
 
 ### 5. スクリーンショットの場所

@@ -73,8 +73,8 @@ workflow:
     via: send-keys
   - step: 10
     action: scan_all_reports
-    method: "Read queue/reports/ashigaru*_report.yaml（全8ファイル：ashigaru1-5 + ashigaru6-8）"
-    note: "起こした足軽だけでなく全報告YAMLを必ずスキャン。通信ロスト対策（通信プロトコルv2）"
+    method: "Read queue/inbox/{karo}_reports.yaml（自分の担当報告inbox）"
+    note: "起こした足軽だけでなく自分の報告inboxを必ずスキャン。通信ロスト対策（通信プロトコルv2）"
   - step: 11
     action: update_dashboard
     target: dashboard.md
@@ -93,16 +93,16 @@ workflow:
   - step: 11.6
     action: receive_audit_result
     from: ohariko
-    via: YAML (queue/reports/ohariko_report.yaml)
+    via: YAML (queue/inbox/{karo}_ohariko.yaml)
     note: |
       お針子から報告YAMLで監査結果を受信した場合の処理（通信プロトコルv2）:
-      1. queue/reports/ohariko_report.yaml を Read（全報告スキャンの一部として実行）
-      2. 新規報告（status: done, ack: false）を確認
+      1. queue/inbox/{karo}_ohariko.yaml を Read（全報告スキャンの一部として実行）
+      2. 新規報告（status: done, read: false）を確認
       3. findings で監査結果を判別:
          - 合格 → 通常の完了処理（dashboard戦果移動、次タスク進行）
          - 要修正（自明: typo等）→ 足軽/部屋子に修正タスク再割当
          - 要修正（判断必要: 仕様等）→ dashboard.md「要対応」に記載
-      4. 処理後、ack: true に更新（Edit tool使用）
+      4. 処理後、read: true に更新（Edit tool使用）
   - step: 12
     action: reset_pane_title
     command: 'tmux select-pane -t "$TMUX_PANE" -T "{karo-roju|midaidokoro} (Opus Thinking)"'
@@ -259,7 +259,7 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 - 家老はタスクを振る前に、`python3 scripts/botsunichiroku.py subtask list --status assigned` を確認し、**お針子が既に割当済みでないか** を確認せよ
 - お針子が割当済みの足軽/部屋子には新たなタスクを振るな
 - **家老→お針子**: inbox_write.sh で **監査依頼のみ許可**（needs_audit=1のsubtask完了時・通信プロトコルv2）
-- **お針子→家老**: queue/reports/ohariko_report.yaml で監査結果・先行割当報告が来る（step 11.6 参照・通信プロトコルv2）
+- **お針子→家老**: queue/inbox/{karo}_ohariko.yaml で監査結果・先行割当報告が来る（step 11.6 参照・通信プロトコルv2）
 
 ### お針子からの監査結果受信時の処理（通信プロトコルv2）
 
@@ -267,10 +267,10 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 
 ```bash
 # 1. お針子の報告YAMLを読み込む（全報告スキャンの一部として実行）
-Read queue/reports/ohariko_report.yaml
+Read queue/inbox/{karo}_ohariko.yaml
 
-# 2. 新規報告（status: done, ack: false）を確認
-# YAMLフォーマット: subtask_id, status, findings, skill_candidate, ack
+# 2. 新規報告（status: done, read: false）を確認
+# YAMLフォーマット: subtask_id, status, findings, skill_candidate, read
 
 # 3. findings で監査結果を判別（合格/要修正）
 ```
@@ -547,26 +547,20 @@ Claude Codeは「待機」できない。プロンプト待ちは「停止」。
 
 ### ルール: 起こされたら全報告をスキャン
 
-起こされた理由に関係なく、**毎回** 全報告YAMLを
+起こされた理由に関係なく、**毎回** 自分の担当報告inboxを
 スキャンせよ（通信プロトコルv2）。
 
 ```bash
-# 全報告YAMLを読み込む（全8ファイル：ashigaru1-5 + ashigaru6-8）
-Read queue/reports/ashigaru1_report.yaml
-Read queue/reports/ashigaru2_report.yaml
-Read queue/reports/ashigaru3_report.yaml
-Read queue/reports/ashigaru4_report.yaml
-Read queue/reports/ashigaru5_report.yaml
-Read queue/reports/ashigaru6_report.yaml
-Read queue/reports/ashigaru7_report.yaml
-Read queue/reports/ashigaru8_report.yaml
+# 自分の担当報告inboxをスキャン
+Read queue/inbox/{karo}_reports.yaml
+# {karo} = roju_reports.yaml（老中の場合）/ ooku_reports.yaml（御台所の場合）
 
-# 新規報告（status: done, ack: false）があれば：
+# 新規報告（read: false）があれば：
 # 1. DBに永続化（家老のみ書き込み可）
 python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --skill-candidate "スキル化候補"
 
-# 2. YAMLのackフィールドをtrueに更新（Edit tool使用）
-# 例: queue/reports/ashigaru1_report.yaml の ack: false → ack: true
+# 2. YAMLのreadフィールドをtrueに更新（Edit tool使用）
+# 例: queue/inbox/{karo}_reports.yaml の read: false → read: true
 ```
 
 ### スキャン判定
@@ -779,9 +773,9 @@ python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --sk
 3. **queue/tasks/ashigaru{N}.yaml** — 各足軽への割当て詳細（通信層・通信プロトコルv2）
    - 全8ファイル（ashigaru1-5 + ashigaru6-8）をRead
    - 各YAMLのsubtask_id, description, target_path等を確認
-4. **queue/reports/ashigaru*_report.yaml** — 足軽からの報告（通信層・通信プロトコルv2）
-   - 全8ファイルをRead
-   - 新規報告（status: done, ack: false）があれば没日録DBに永続化
+4. **queue/inbox/{karo}_reports.yaml** — 足軽からの報告（通信層・通信プロトコルv2）
+   - 自分の担当報告inbox（{karo}_reports.yaml）をRead
+   - 新規報告（read: false）があれば没日録DBに永続化
 5. **Memory MCP（read_graph）** — システム全体の設定・殿の好み（存在すれば）
 6. **context/{project}.md** — プロジェクト固有の知見（存在すれば）
 
@@ -1242,7 +1236,7 @@ needs_audit: false
 created_at: 2026-02-08T10:30:00Z
 ```
 
-### 報告YAMLフォーマット（queue/reports/ashigaru{N}_report.yaml）
+### 報告YAMLフォーマット（queue/inbox/{karo}_reports.yaml）
 
 足軽が家老に報告する際に記載するYAMLフォーマット：
 
@@ -1254,11 +1248,11 @@ report: |
   instructions/karo.md の通信プロトコルv2改修を完了いたしました。
   9箇所の編集を実施。
 skill_candidate: "通信プロトコル改修のパターン化（YAML+DB二層化）"
-ack: false  # 家老が確認したら true に変更
+read: false  # 家老が確認したら true に変更
 timestamp: 2026-02-08T11:45:00Z
 ```
 
-### お針子報告YAMLフォーマット（queue/reports/ohariko_report.yaml）
+### お針子報告YAMLフォーマット（queue/inbox/{karo}_ohariko.yaml）
 
 お針子が家老に監査結果を報告する際に記載するYAMLフォーマット：
 
@@ -1270,10 +1264,10 @@ findings: |
   監査結果: 合格
   指摘事項なし。
 skill_candidate: ""
-ack: false
+read: false
 timestamp: 2026-02-08T12:00:00Z
 ```
 
 **注意**:
-- ack フィールドは家老が報告を確認したら true に更新する（Edit tool使用）
+- read フィールドは家老が報告を確認したら true に更新する（Edit tool使用）
 - status=error/blocked の場合、report フィールドにエラー内容・ブロック理由を詳述せよ

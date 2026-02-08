@@ -1,0 +1,57 @@
+reports:
+  - subtask_id: subtask_313
+    worker: ashigaru6
+    status: done
+    timestamp: "2026-02-08T23:03:54"
+    summary: |
+      通信プロトコルv2 報告経路の構造的不備修正を完了いたしました。
+
+      【修正内容 4点】
+
+      ■ 1. queue/inbox/ooku_reports.yaml を新規作成
+        roju_reports.yaml と同じフォーマットで空テンプレートを作成。reports: [] の状態。
+
+      ■ 2. queue/inbox/ooku_ohariko.yaml を新規作成
+        roju_ohariko.yaml と同じフォーマットで空テンプレートを作成。
+        audit_reports: [] と preemptive_assignments: [] の状態。
+
+      ■ 3. instructions/karo.md の旧パスを全てv2方式に修正（16箇所→0箇所）
+        修正対象:
+        (a) 足軽報告スキャン先（行76, 550-570, 782）:
+            queue/reports/ashigaru*_report.yaml → queue/inbox/{karo}_reports.yaml
+            全8ファイル個別Readリスト → 担当報告inbox 1行に集約
+            ack → read に用語統一
+        (b) お針子報告スキャン先（行96, 99, 262, 270）:
+            queue/reports/ohariko_report.yaml → queue/inbox/{karo}_ohariko.yaml
+        (c) 報告YAMLフォーマット（行1245）:
+            queue/reports/ashigaru{N}_report.yaml → queue/inbox/{karo}_reports.yaml
+        (d) お針子報告YAMLフォーマット（行1261）:
+            queue/reports/ohariko_report.yaml → queue/inbox/{karo}_ohariko.yaml
+
+      ■ 4. 検証結果（3点全て合格）
+        (a) grep 'queue/reports/' instructions/karo.md → 0件 ✅
+        (b) ashigaru.md の報告先とkaro.mdのスキャン先が一致 ✅
+        (c) CLAUDE.md に queue/reports/ への参照なし ✅
+    skill_candidate: null
+    read: true
+
+  - subtask_id: subtask_314
+    worker: ashigaru6
+    status: done
+    timestamp: "2026-02-08T23:09:17"
+    summary: |
+      karo.md 内の ack フィールド参照を read に統一する修正を完了いたしました。
+
+      【修正箇所（7箇所）】
+      行100: "ack: false" → "read: false"（お針子報告受信フロー）
+      行105: "ack: true" → "read: true"（お針子報告受信フロー）
+      行272: "ack: false" → "read: false"（お針子報告コードブロック）
+      行273: "ack" → "read"（YAMLフォーマット説明内）
+      行1251: "ack: false" → "read: false"（足軽報告YAMLフォーマット例）
+      行1267: "ack: false" → "read: false"（お針子報告YAMLフォーマット例）
+      行1272: "ack フィールド" → "read フィールド"（注意書き）
+
+      【検証】
+      grep '\back\b' instructions/karo.md → 0件 ✅
+    skill_candidate: null
+    read: true

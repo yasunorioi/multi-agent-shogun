@@ -1,0 +1,21 @@
+audit_reports:
+  - id: audit_report_007
+    subtask_id: subtask_313
+    timestamp: "2026-02-08T23:07:39"
+    result: rejected_trivial
+    summary: |
+      監査完了。主要な改修点（ooku_reports.yaml/ooku_ohariko.yaml作成、karo.md旧パス削除）は正しく実装されている。
+      ただし、5箇所で ack/read の用語統一が漏れている修正漏れを検出。
+
+      修正内容は自明で、技術的な判断を必要としない単純な置換。
+      なお、subtask_314として既に修正タスクが割当済みであることを確認済み。
+    findings:
+      - "行100: お針子報告受信フロー内の「ack: false」→「read: false」に修正が必要"
+      - "行105: お針子報告受信フロー内の「ack: true」→「read: true」に修正が必要"
+      - "行272: お針子報告処理コメント内の「ack」→「read」に修正が必要"
+      - "行1251: 報告YAMLフォーマット例の「ack: false」→「read: false」に修正が必要（コメント含む）"
+      - "行1267: お針子報告YAMLフォーマット例の「ack: false」→「read: false」に修正が必要"
+      - "【補足】subtask_314として既に修正タスクが割当済み（ashigaru6, assigned状態）"
+    read: true
+
+preemptive_assignments: []

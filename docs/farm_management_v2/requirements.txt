@@ -1,0 +1,28 @@
+# 農業管理アプリ v2.0 - 依存パッケージ
+# =====================================
+# インストール: pip install -r requirements.txt
+
+# Web フレームワーク
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# データベース
+sqlalchemy>=2.0.0
+
+# 認証・セキュリティ
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# データ検証
+pydantic>=2.5.0
+pydantic[email]
+
+# 地理空間計算
+shapely>=2.0.0
+pyproj>=3.6.0
+
+# HTTP クライアント（ジオコーディング用）
+requests>=2.31.0
+
+# フォームデータ処理（OAuth2ログインで必須）
+python-multipart>=0.0.6

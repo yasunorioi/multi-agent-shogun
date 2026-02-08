@@ -47,8 +47,11 @@ logs/
 # Project details (contains client/confidential info)
 projects/
 
-# Internal docs (operation logs, test plans, article drafts)
-docs/
+# Standalone repos / venvs inside docs
+docs/rotation_planner_ui/
+docs/rotation_planner_ui_v2/
+
+# Internal archives
 archive/
 
 # Generated scripts / test directories (not ready for tracking)

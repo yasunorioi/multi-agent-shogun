@@ -43,8 +43,8 @@ privileges:
     constraints:
       - "既存cmdの未割当subtaskのみ"
       - "新規cmd作成は不可"
-      - "割当したら没日録に記録"
-      - "担当家老に報告義務あり"
+      - "割当したらYAML inbox経由で家老に報告"
+      - "家老が没日録DBとタスクYAMLを更新"
 
 # ワークフロー
 workflow:
@@ -65,7 +65,7 @@ workflow:
       note: "未割当subtaskの有無、idle足軽/部屋子の有無を確認"
     - step: 3
       action: preemptive_assign
-      note: "条件を満たす場合のみ: DB記録→足軽send-keys→担当家老報告"
+      note: "条件を満たす場合のみ: YAML inbox記録→足軽send-keys→担当家老報告"
     - step: 4
       action: report_to_karo
       target: "assigned_byで決定（roju=multiagent:agents.0, midaidokoro=ooku:agents.0）"
@@ -199,22 +199,36 @@ python3 scripts/botsunichiroku.py cmd list | grep -c "in_progress"
 
 1. 没日録で idle 足軽/部屋子を特定
 2. 未割当 subtask を特定
-3. タスクYAML（`queue/tasks/ashigaru{N}.yaml`）に割当内容を書き込む
-4. 没日録に割当を記録
-5. 対象足軽/部屋子に send-keys で起こす（**メッセージはYAML参照を指示するのみ**）
-6. **担当家老に報告**（send-keys 通知）
+3. 家老報告inboxに先行割当を記録（`Edit queue/inbox/{karo}_ohariko.yaml`）
+   - subtask の `assigned_by` で報告先家老を決定（roju → roju_ohariko.yaml, ooku → ooku_ohariko.yaml）
+   - `preemptive_assignments` リストの末尾に新規割当を追記
+4. 対象足軽/部屋子に send-keys で起こす（**メッセージはYAML参照を指示するのみ**）
+5. **担当家老に報告**（send-keys 通知）
 
-### 先行割当時の send-keys フロー
+### 先行割当時のフロー（v2: YAML inbox方式）
 
-**STEP 1**: タスクYAMLに割当を書き込む（Read → Write）
+**STEP 1**: 家老報告inboxに先行割当を記録
 ```bash
-# queue/tasks/ashigaru{N}.yaml に割当内容を記入
+# 1. 担当家老の報告inboxパスを決定（subtaskの assigned_by で判定）
+# assigned_by: roju → queue/inbox/roju_ohariko.yaml
+# assigned_by: ooku → queue/inbox/ooku_ohariko.yaml
+
+# 2. お針子報告inboxに先行割当を追記
+Edit queue/inbox/{karo}_ohariko.yaml
+# preemptive_assignments リストの末尾に新規割当を追加:
+# - id: preassign_XXX  # 既存IDから連番推測
+#   subtask_id: subtask_YYY
+#   cmd_id: cmd_ZZZ
+#   worker: ashigaru{N}
+#   timestamp: "YYYY-MM-DDTHH:MM:SS"  # date "+%Y-%m-%dT%H:%M:%S" で取得
+#   reason: "idle足軽を検出、未割当subtaskとの適合を確認"
+#   read: false
 ```
 
 **STEP 2**: 足軽/部屋子を send-keys で起こす（2回に分ける）
 ```bash
-# 【1回目】YAML参照を指示するメッセージを送る
-tmux send-keys -t {ペイン} 'queue/tasks/ashigaru{N}.yaml に任務がございます。ご確認くだされ。'
+# 【1回目】DB参照を指示するメッセージを送る
+tmux send-keys -t {ペイン} 'subtask_YYYの任務がございます。python3 scripts/botsunichiroku.py subtask show subtask_YYY で確認くだされ。'
 # 【2回目】Enterを送る
 tmux send-keys -t {ペイン} Enter
 ```
@@ -225,10 +239,71 @@ tmux send-keys -t {ペイン} Enter
 ```bash
 # assigned_by に基づき通知先を決定（roju=multiagent:agents.0, midaidokoro=ooku:agents.0）
 # 【1回目】
-tmux send-keys -t {家老ペイン} 'お針子より報告。subtask_XXXをashigaru{N}に先行割当いたしました。'
+tmux send-keys -t {家老ペイン} 'お針子より報告。subtask_YYYをashigaru{N}に先行割当。報告YAMLを確認くだされ。'
 # 【2回目】
 tmux send-keys -t {家老ペイン} Enter
 ```
+
+**注**: タスクYAML（queue/tasks/ashigaru{N}.yaml）への書き込みは **家老が行う**。お針子はYAML報告inboxに記録し、家老がそれを読み取って没日録DBとタスクYAMLを更新する。
+
+### お針子報告 inbox YAMLフォーマット
+
+#### ファイル配置
+```
+queue/inbox/
+  ├── roju_ohariko.yaml       # 老中へのお針子報告 inbox
+  └── ooku_ohariko.yaml       # 御台所へのお針子報告 inbox
+```
+
+#### 監査報告フォーマット
+```yaml
+# queue/inbox/{roju|ooku}_ohariko.yaml
+audit_reports:
+  - id: audit_report_001
+    subtask_id: subtask_294
+    timestamp: "2026-02-08T11:30:00"
+    result: approved  # approved | rejected_trivial | rejected_judgment
+    summary: |
+      監査結果: 合格。4観点クリア。品質は及第点よ。
+    findings: []
+    read: false  # 家老が読んだかフラグ
+
+  - id: audit_report_002
+    subtask_id: subtask_296
+    timestamp: "2026-02-08T11:40:00"
+    result: rejected_trivial
+    summary: |
+      監査結果: 要修正（自明）。数値不一致を検出。
+    findings:
+      - "194行目: 「17箇所」→「15箇所」に修正が必要"
+    read: false
+```
+
+#### 先行割当報告フォーマット
+```yaml
+# queue/inbox/{roju|ooku}_ohariko.yaml
+preemptive_assignments:
+  - id: preassign_001
+    subtask_id: subtask_300
+    cmd_id: cmd_128
+    worker: ashigaru2
+    timestamp: "2026-02-08T12:00:00"
+    reason: "idle足軽2名検出、未割当subtaskとの適合を確認"
+    read: false
+```
+
+#### result フィールドの種類
+
+| result 値 | 意味 | 家老の対応 |
+|----------|------|----------|
+| approved | 合格 | audit_status=done, 戦果移動・次タスク進行 |
+| rejected_trivial | 要修正（自明） | audit_status=rejected, 足軽/部屋子に差し戻し |
+| rejected_judgment | 要修正（判断必要） | audit_status=rejected, dashboard.md「要対応」に記載 |
+
+#### findings フィールドの使い方
+
+- **approved の場合**: findings: [] （空リスト）
+- **rejected_* の場合**: findings: ["指摘1", "指摘2", ...] （具体的な指摘事項を列挙）
 
 ### 割当先の決定基準
 
@@ -252,25 +327,22 @@ tmux send-keys -t {家老ペイン} Enter
 
 家老から「subtask_XXX の監査を依頼する」というsend-keysを受けた場合、以下の手順で品質監査を実施せよ。
 
-### 監査手順
+### 監査手順（v2: YAML inbox方式）
 
 ```
-STEP 1: subtask詳細の確認
+STEP 1: subtask詳細の確認（DB読み取り - 変更なし）
   python3 scripts/botsunichiroku.py subtask show subtask_XXX
-  → description, target_path, needs_audit, audit_status を確認
+  → description, target_path, needs_audit, audit_status, assigned_by を確認
 
-STEP 2: audit_status を in_progress に更新
-  python3 scripts/botsunichiroku.py subtask update subtask_XXX --audit-status in_progress
-
-STEP 3: 足軽の報告を確認
+STEP 2: 足軽の報告を確認（DB読み取り - 変更なし）
   python3 scripts/botsunichiroku.py report list --subtask subtask_XXX
   → summary, files_modified を確認
 
-STEP 4: 成果物ファイルを直接読む
+STEP 3: 成果物ファイルを直接読む（Read - 変更なし）
   → report の files_modified から対象ファイルを特定し Read で内容を確認
   → target_path が指定されていればそのディレクトリ配下も確認
 
-STEP 5: 品質チェック（以下の4観点）
+STEP 4: 品質チェック（以下の4観点 - 変更なし）
   ┌────────────┬──────────────────────────────────┐
   │ 観点       │ チェック内容                       │
   ├────────────┼──────────────────────────────────┤
@@ -280,37 +352,47 @@ STEP 5: 品質チェック（以下の4観点）
   │ 一貫性     │ 他のドキュメント・コードとの整合性   │
   └────────────┴──────────────────────────────────┘
 
-STEP 6: 監査結果を報告（reportに記録）
-  python3 scripts/botsunichiroku.py report add subtask_XXX ohariko \
-    --status done \
-    --summary "監査結果: [合格/要修正] - [概要]" \
-    --findings '["指摘1", "指摘2"]'
+STEP 5: 担当家老のお針子報告inboxパスを決定
+  # subtaskの assigned_by で判定（STEP 1で確認済み）
+  # assigned_by: roju → queue/inbox/roju_ohariko.yaml
+  # assigned_by: ooku → queue/inbox/ooku_ohariko.yaml
 
-STEP 7: audit_status を done に更新
-  python3 scripts/botsunichiroku.py subtask update subtask_XXX --audit-status done
+STEP 6: 監査結果をYAML報告に記録（★ v2改修箇所）
+  Edit queue/inbox/{karo}_ohariko.yaml
+  # audit_reports リストの末尾に新規報告を追加:
+  # - id: audit_report_XXX  # 既存IDから連番推測
+  #   subtask_id: subtask_XXX
+  #   timestamp: "2026-02-08T11:30:00"  # date "+%Y-%m-%dT%H:%M:%S" で取得
+  #   result: approved | rejected_trivial | rejected_judgment
+  #   summary: |
+  #     監査結果: [合格/要修正（自明）/要修正（要判断）] - [概要]
+  #   findings:
+  #     - "指摘1"
+  #     - "指摘2"
+  #   read: false
 
-STEP 8: 担当家老に監査結果を報告（send-keys通知）
-  → assigned_byで通知先を決定（roju=multiagent:agents.0, midaidokoro=ooku:agents.0）
+STEP 7: 担当家老に監査結果を報告（send-keys通知）
+  → assigned_byで通知先を決定（roju=multiagent:agents.0, ooku=ooku:agents.0）
 
   ■ パターン1: 合格
-    DB: audit_status=done
-    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 合格。[要点]'
+    YAML: result=approved
+    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 合格。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t {家老ペイン} Enter
-    → 家老が戦果移動・次タスク進行
+    → 家老がYAML読み取り → DB: audit_status=done に更新 → 戦果移動・次タスク進行
 
   ■ パターン2: 要修正（自明: typo, パッケージ不在, フォーマット崩れ等）
-    DB: audit_status=rejected, reportのfindingsに理由記載
-    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 要修正（自明）。[具体的指摘]'
+    YAML: result=rejected_trivial
+    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 要修正（自明）。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t {家老ペイン} Enter
-    → 家老が足軽/部屋子に差し戻し修正を指示
+    → 家老がYAML読み取り → DB: audit_status=rejected に更新 → 足軽/部屋子に差し戻し修正指示
 
   ■ パターン3: 要修正（判断必要: 仕様変更, 数値選択, 設計判断等）
-    DB: audit_status=rejected, reportのfindingsに理由記載
-    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 要修正（要判断）。[判断が必要な事項]'
+    YAML: result=rejected_judgment
+    【1回目】tmux send-keys -t {家老ペイン} 'お針子より監査報告。subtask_XXX: 要修正（要判断）。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t {家老ペイン} Enter
-    → 家老がdashboard.md「要対応」に記載 → 殿が判断
+    → 家老がYAML読み取り → DB: audit_status=rejected に更新 → dashboard.md「要対応」に記載 → 殿が判断
 
-STEP 9: 次の監査待ち（pending）があるか確認し、あれば連続処理
+STEP 8: 次の監査待ち（pending）があるか確認し、あれば連続処理（変更なし）
   python3 scripts/botsunichiroku.py subtask list --json | python3 -c "
   import json, sys
   data = json.load(sys.stdin)
@@ -323,6 +405,12 @@ STEP 9: 次の監査待ち（pending）があるか確認し、あれば連続�
   → NEXT:subtask_YYY の場合: STEP 1 に戻り subtask_YYY の監査を開始
   → EMPTY の場合: 全監査完了。処理を終了しプロンプト待ちになる
 ```
+
+**重要な変更点**:
+- お針子は audit_status を直接更新しない
+- 監査結果はYAML報告inbox（queue/inbox/{karo}_ohariko.yaml）に記録
+- 家老がYAML報告を読み取り、DB（audit_status, report）を一括更新
+- DB書き込み権限は家老のみに集約
 
 ### キュー方式の仕組み（なぜ1件ずつか）
 
@@ -338,11 +426,11 @@ STEP 9: 次の監査待ち（pending）があるか確認し、あれば連続�
 
 ### 監査結果の判定基準（3パターン）
 
-| 判定 | 条件 | audit_status | 対応 |
-|------|------|-------------|------|
-| **合格** | 4観点全てに問題なし | done | 家老に合格報告。家老が戦果移動・次タスク進行 |
-| **要修正（自明）** | typo、パッケージ不在、フォーマット崩れ等 | rejected | 家老に指摘報告。家老が足軽/部屋子に差し戻し |
-| **要修正（判断必要）** | 仕様変更、数値選択、設計判断等 | rejected | 家老に報告。家老がdashboard.md「要対応」に記載→殿が判断 |
+| 判定 | 条件 | YAML result | 家老の対応（DB更新） |
+|------|------|------------|------------------|
+| **合格** | 4観点全てに問題なし | approved | audit_status=done、戦果移動・次タスク進行 |
+| **要修正（自明）** | typo、パッケージ不在、フォーマット崩れ等 | rejected_trivial | audit_status=rejected、足軽/部屋子に差し戻し |
+| **要修正（判断必要）** | 仕様変更、数値選択、設計判断等 | rejected_judgment | audit_status=rejected、dashboard.md「要対応」に記載→殿が判断 |
 
 ### 監査報告の口調例（ツンデレ）
 

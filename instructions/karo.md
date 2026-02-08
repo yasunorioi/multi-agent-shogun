@@ -52,13 +52,13 @@ workflow:
     action: decompose_tasks
   - step: 6
     action: create_subtasks
-    method: "python3 scripts/botsunichiroku.py subtask add CMD_ID \"説明\" --worker ashigaru{N} --project PROJECT --target-path PATH [--needs-audit]"
-    note: "没日録DBに登録。テキスト成果物（ドキュメント・手順書・設計書等）は --needs-audit を付与"
+    method_db: "python3 scripts/botsunichiroku.py subtask add CMD_ID \"説明\" --worker ashigaru{N} --project PROJECT --target-path PATH [--needs-audit]"
+    method_yaml: "Write queue/tasks/ashigaru{N}.yaml（YAML形式でタスク内容を記載。フォーマットは第5章参照）"
+    note: "没日録DBに登録（家老のみ書き込み可） + タスクYAMLに書き込み（通信プロトコルv2）。テキスト成果物は --needs-audit 付与"
   - step: 7
-    action: send_keys
-    target: "足軽: multiagent:agents.{N}, 部屋子: ooku:agents.{N-5}"
-    method: two_bash_calls
-    message: "python3 scripts/botsunichiroku.py subtask show SUBTASK_ID で任務を確認し実行せよ。"
+    action: notify_worker
+    method: "bash scripts/inbox_write.sh ashigaru{N} 'タスクYAMLを確認し実行せよ。' task_assigned {karo_id}"
+    note: "inbox方式で通知（通信プロトコルv2）。{karo_id} = roju | ooku（自分のID）。send-keysは廃止"
   - step: 8
     action: check_pending
     note: |
@@ -73,8 +73,8 @@ workflow:
     via: send-keys
   - step: 10
     action: scan_all_reports
-    method: "python3 scripts/botsunichiroku.py report list"
-    note: "起こした足軽だけでなく全報告を必ずスキャン（直近20件）。通信ロスト対策"
+    method: "Read queue/reports/ashigaru*_report.yaml（全8ファイル：ashigaru1-5 + ashigaru6-8）"
+    note: "起こした足軽だけでなく全報告YAMLを必ずスキャン。通信ロスト対策（通信プロトコルv2）"
   - step: 11
     action: update_dashboard
     target: dashboard.md
@@ -89,19 +89,20 @@ workflow:
       2. お針子が空いているか確認（audit_status=in_progress のsubtaskがないか）
       3. IDLEの場合のみ: send-keys でお針子（ooku:agents.4）に監査依頼（2回に分ける）
          BUSYの場合: send-keysは送らない（pendingのまま。お針子が完了時に次を拾う）
-  # === お針子からの監査結果受信フェーズ ===
+  # === お針子からの監査結果受信フェーズ（通信プロトコルv2） ===
   - step: 11.6
     action: receive_audit_result
     from: ohariko
-    via: send-keys
+    via: YAML (queue/reports/ohariko_report.yaml)
     note: |
-      お針子からsend-keysで監査結果を受信した場合の処理:
-      1. 該当subtaskの audit_status を確認:
-         python3 scripts/botsunichiroku.py subtask show SUBTASK_ID
-      2. audit_status=done（合格）→ 通常の完了処理（dashboard戦果移動、次タスク進行）
-      3. audit_status=rejected（要修正・自明: typo等）→ 足軽/部屋子に修正タスク再割当
-      4. audit_status=rejected（要修正・判断必要: 仕様等）→ dashboard.md「要対応」に記載
-      判別方法: お針子のreportを確認し、findingsの内容から自明/判断必要を判別
+      お針子から報告YAMLで監査結果を受信した場合の処理（通信プロトコルv2）:
+      1. queue/reports/ohariko_report.yaml を Read（全報告スキャンの一部として実行）
+      2. 新規報告（status: done, ack: false）を確認
+      3. findings で監査結果を判別:
+         - 合格 → 通常の完了処理（dashboard戦果移動、次タスク進行）
+         - 要修正（自明: typo等）→ 足軽/部屋子に修正タスク再割当
+         - 要修正（判断必要: 仕様等）→ dashboard.md「要対応」に記載
+      4. 処理後、ack: true に更新（Edit tool使用）
   - step: 12
     action: reset_pane_title
     command: 'tmux select-pane -t "$TMUX_PANE" -T "{karo-roju|midaidokoro} (Opus Thinking)"'
@@ -257,19 +258,21 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 - お針子は idle 足軽/部屋子を検出し、未割当 subtask を割り当てる
 - 家老はタスクを振る前に、`python3 scripts/botsunichiroku.py subtask list --status assigned` を確認し、**お針子が既に割当済みでないか** を確認せよ
 - お針子が割当済みの足軽/部屋子には新たなタスクを振るな
-- **家老→お針子**: send-keys は **監査依頼のみ許可**（needs_audit=1のsubtask完了時）
-- **お針子→家老**: send-keys で監査結果・先行割当報告が来る（step 11.6 参照）
+- **家老→お針子**: inbox_write.sh で **監査依頼のみ許可**（needs_audit=1のsubtask完了時・通信プロトコルv2）
+- **お針子→家老**: queue/reports/ohariko_report.yaml で監査結果・先行割当報告が来る（step 11.6 参照・通信プロトコルv2）
 
-### お針子からの監査結果受信時の処理
+### お針子からの監査結果受信時の処理（通信プロトコルv2）
 
-お針子から send-keys で監査結果の報告を受けた場合、以下の手順で処理せよ：
+お針子から報告YAMLで監査結果を受信した場合、以下の手順で処理せよ：
 
 ```bash
-# 1. 該当subtaskの詳細確認
-python3 scripts/botsunichiroku.py subtask show SUBTASK_ID
+# 1. お針子の報告YAMLを読み込む（全報告スキャンの一部として実行）
+Read queue/reports/ohariko_report.yaml
 
-# 2. お針子のreportを確認（findingsで判別）
-python3 scripts/botsunichiroku.py report list --subtask SUBTASK_ID
+# 2. 新規報告（status: done, ack: false）を確認
+# YAMLフォーマット: subtask_id, status, findings, skill_candidate, ack
+
+# 3. findings で監査結果を判別（合格/要修正）
 ```
 
 | 監査結果 | audit_status | 家老の対応 |
@@ -477,16 +480,14 @@ print('BUSY' if busy else 'IDLE')
 "
 
 # STEP 3: 判定
-#   → IDLE の場合: お針子にsend-keysで監査依頼を送る
-#   → BUSY の場合: send-keysは送らない（pendingのまま待機。お針子が自分で次を拾う）
+#   → IDLE の場合: inbox_write.sh でお針子に監査依頼を送る（通信プロトコルv2）
+#   → BUSY の場合: 通知は送らない（pendingのまま待機。お針子が自分で次を拾う）
 ```
 
-**IDLEの場合のみ** お針子にsend-keysを送れ：
+**IDLEの場合のみ** お針子に通知を送れ：
 ```bash
-# 【1回目】
-tmux send-keys -t ooku:agents.4 'subtask_XXX の監査を依頼する。python3 scripts/botsunichiroku.py subtask show subtask_XXX で確認せよ。'
-# 【2回目】
-tmux send-keys -t ooku:agents.4 Enter
+bash scripts/inbox_write.sh ohariko 'subtask_XXX の監査を依頼する。python3 scripts/botsunichiroku.py subtask show subtask_XXX で確認せよ。' audit_request {karo_id}
+# {karo_id} = roju | ooku（自分のID）
 ```
 
 **注意**:
@@ -546,18 +547,26 @@ Claude Codeは「待機」できない。プロンプト待ちは「停止」。
 
 ### ルール: 起こされたら全報告をスキャン
 
-起こされた理由に関係なく、**毎回** 没日録DBから
-全報告をスキャンせよ。
+起こされた理由に関係なく、**毎回** 全報告YAMLを
+スキャンせよ（通信プロトコルv2）。
 
 ```bash
-# 直近20件の報告を取得（フィルタなし）
-python3 scripts/botsunichiroku.py report list
+# 全報告YAMLを読み込む（全8ファイル：ashigaru1-5 + ashigaru6-8）
+Read queue/reports/ashigaru1_report.yaml
+Read queue/reports/ashigaru2_report.yaml
+Read queue/reports/ashigaru3_report.yaml
+Read queue/reports/ashigaru4_report.yaml
+Read queue/reports/ashigaru5_report.yaml
+Read queue/reports/ashigaru6_report.yaml
+Read queue/reports/ashigaru7_report.yaml
+Read queue/reports/ashigaru8_report.yaml
 
-# 特定ステータスの報告を確認
-python3 scripts/botsunichiroku.py report list --status done
+# 新規報告（status: done, ack: false）があれば：
+# 1. DBに永続化（家老のみ書き込み可）
+python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --skill-candidate "スキル化候補"
 
-# 特定足軽の報告を確認
-python3 scripts/botsunichiroku.py report list --worker ashigaru1
+# 2. YAMLのackフィールドをtrueに更新（Edit tool使用）
+# 例: queue/reports/ashigaru1_report.yaml の ack: false → ack: true
 ```
 
 ### スキャン判定
@@ -763,15 +772,18 @@ python3 scripts/botsunichiroku.py report list --worker ashigaru1
 1. **queue/shogun_to_karo.yaml** — 将軍からの指示キュー
    - 各 cmd の status を確認（pending/done）
    - 最新の pending が現在の指令
-2. **没日録DB（subtask list）** — 各足軽への割当て状況
+2. **没日録DB（subtask list）** — 各足軽への割当て状況（永続層）
    - `python3 scripts/botsunichiroku.py subtask list --status assigned`
    - status が assigned/in_progress なら作業中
    - status が done なら完了
-3. **没日録DB（report list）** — 足軽からの報告
-   - `python3 scripts/botsunichiroku.py report list`
-   - dashboard.md に未反映の報告がないか確認
-4. **Memory MCP（read_graph）** — システム全体の設定・殿の好み（存在すれば）
-5. **context/{project}.md** — プロジェクト固有の知見（存在すれば）
+3. **queue/tasks/ashigaru{N}.yaml** — 各足軽への割当て詳細（通信層・通信プロトコルv2）
+   - 全8ファイル（ashigaru1-5 + ashigaru6-8）をRead
+   - 各YAMLのsubtask_id, description, target_path等を確認
+4. **queue/reports/ashigaru*_report.yaml** — 足軽からの報告（通信層・通信プロトコルv2）
+   - 全8ファイルをRead
+   - 新規報告（status: done, ack: false）があれば没日録DBに永続化
+5. **Memory MCP（read_graph）** — システム全体の設定・殿の好み（存在すれば）
+6. **context/{project}.md** — プロジェクト固有の知見（存在すれば）
 
 ### 二次情報（参考のみ）
 - **dashboard.md** — 自分が更新した戦況要約。概要把握には便利だが、
@@ -937,6 +949,10 @@ STEP 2: 次タスクをDBに先行登録（DB先行登録原則）
   └→ /clear後に足軽がDBからすぐ読めるようにするため、先に登録しておく
   └→ （または subtask update SUBTASK_ID --status assigned --worker ashigaru{N} で既存サブタスクを割当）
 
+STEP 2.5: タスクYAMLを作成（通信プロトコルv2）
+  └→ Write queue/tasks/ashigaru{N}.yaml（タスク詳細を記載。フォーマットは第5章参照）
+  └→ YAMLには subtask_id, description, project, target_path, wave 等を記載
+
 STEP 3: ペインタイトルをデフォルトに戻す（足軽アイドル確認後に実行）
   └→ 足軽が処理中はClaude Codeがタイトルを上書きするため、アイドル（❯表示）を確認してから実行
   └→ 足軽: tmux select-pane -t multiagent:agents.{N} -T "ashigaru{N} (モデル名)"
@@ -955,14 +971,13 @@ STEP 5: 足軽の /clear 完了を確認
   └→ プロンプト（❯）が表示されていれば完了
   └→ 表示されていなければ 5秒待って再確認（最大3回）
 
-STEP 6: タスク読み込み指示を send-keys で送る（2回に分ける）
-  【1回目】（足軽の例）
-  tmux send-keys -t multiagent:agents.{N} 'python3 scripts/botsunichiroku.py subtask show SUBTASK_ID で任務を確認し実行せよ。'
-  【2回目】
-  tmux send-keys -t multiagent:agents.{N} Enter
+STEP 6: タスクYAMLを確認させる通知を送る（通信プロトコルv2）
+  bash scripts/inbox_write.sh ashigaru{N} 'タスクYAMLを確認し実行せよ。' task_assigned {karo_id}
+  └→ {karo_id} = roju | ooku（自分のID）
+  └→ inbox_write.sh が inboxファイルに書き込み、足軽のinbox_watcher.shが自動起動
 ```
 
-**注意**: SUBTASK_ID は STEP 2 で作成/割当したサブタスクのIDに置き換えること。
+**注意**: SUBTASK_ID は STEP 2 で作成/割当したサブタスクのIDに置き換えること（YAML内に記載）。
 
 ### /clear をスキップする場合（skip_clear）
 
@@ -1206,3 +1221,59 @@ tmux set-option -p -t ooku:agents.1 @model_name 'Sonnet Thinking'
 - 足軽の報告が想定時間を大幅に超えたら → ペインを確認して状況把握
 - dashboard.md の内容に矛盾を発見したら → 正データ（YAML）と突合して修正
 - 自身のコンテキストが20%を切ったら → 将軍にdashboard.md経由で報告し、現在のタスクを完了させてから/clearを受ける準備をする
+
+---
+
+## 🔴 第5章 タスクYAML・報告YAMLフォーマット（通信プロトコルv2）
+
+### タスクYAMLフォーマット（queue/tasks/ashigaru{N}.yaml）
+
+家老が足軽にタスクを割り当てる際に記載するYAMLフォーマット：
+
+```yaml
+subtask_id: subtask_123
+cmd_id: cmd_45
+description: "instructions/karo.md の通信プロトコルv2改修を実施せよ。通信=YAML、永続=DB（家老のみ書き込み）の二層化を適用。"
+project: multiagent  # 必要なら context/{project}.md を読め
+target_path: instructions/karo.md
+wave: 2
+assigned_by: roju  # roju | ooku
+needs_audit: false
+created_at: 2026-02-08T10:30:00Z
+```
+
+### 報告YAMLフォーマット（queue/reports/ashigaru{N}_report.yaml）
+
+足軽が家老に報告する際に記載するYAMLフォーマット：
+
+```yaml
+subtask_id: subtask_123
+worker_id: ashigaru2
+status: done  # done | error | blocked
+report: |
+  instructions/karo.md の通信プロトコルv2改修を完了いたしました。
+  9箇所の編集を実施。
+skill_candidate: "通信プロトコル改修のパターン化（YAML+DB二層化）"
+ack: false  # 家老が確認したら true に変更
+timestamp: 2026-02-08T11:45:00Z
+```
+
+### お針子報告YAMLフォーマット（queue/reports/ohariko_report.yaml）
+
+お針子が家老に監査結果を報告する際に記載するYAMLフォーマット：
+
+```yaml
+subtask_id: subtask_123
+worker_id: ohariko
+status: done  # done (合格) | rejected (要修正)
+findings: |
+  監査結果: 合格
+  指摘事項なし。
+skill_candidate: ""
+ack: false
+timestamp: 2026-02-08T12:00:00Z
+```
+
+**注意**:
+- ack フィールドは家老が報告を確認したら true に更新する（Edit tool使用）
+- status=error/blocked の場合、report フィールドにエラー内容・ブロック理由を詳述せよ

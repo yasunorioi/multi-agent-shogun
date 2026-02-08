@@ -1,0 +1,100 @@
+audit_reports:
+  - id: audit_report_001
+    subtask_id: subtask_298
+    timestamp: "2026-02-08T20:28:45"
+    result: rejected_judgment
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+      ただし、将軍の補足指示「DB書き込み権限は家老のみに集約」の解釈に曖昧性あり。
+      claude_md_changes.md 補足セクション（行760-835）で足軽の報告フローもYAML inbox方式に変更しているが、
+      これが指示の範囲内（広義の解釈: 足軽・お針子両方DB廃止）か、
+      過剰実装（狭義の解釈: お針子のみDB廃止）か判断が必要。
+
+      技術的品質は高く、両方の解釈に対応できる設計案を提示している点は評価できる。
+    findings:
+      - "claude_md_changes.md:760-766 の権限マトリクスで足軽・お針子両方を「DB書き込み不可」に設定。将軍の補足指示は「お針子のDB廃止」を明示しているが、足軽も含むかは不明確。"
+      - "claude_md_changes.md:775-835 で足軽の報告フローをYAML inbox方式に変更（queue/inbox/roju_reports.yaml使用）。これが指示の範囲内か、過剰実装か確認が必要。"
+      - "「DB書き込み権限は家老のみに集約」の解釈: 狭義（お針子のみDB廃止、足軽は現状維持）か広義（足軽・お針子両方DB廃止）か明確化が必要。subtask_299の文脈では「お針子DB廃止」が主眼だったため、狭義の解釈が妥当の可能性あり。"
+    read: false
+
+  - id: audit_report_002
+    subtask_id: subtask_308
+    timestamp: "2026-02-08T21:37:05"
+    result: rejected_trivial
+    summary: |
+      監査完了。主要な改修点（Inbox YAML操作、Workflow、報告の書き方、復帰フローなど）は正しく実装されている。
+      ただし、2箇所で古いプロトコル（DB CLI）の記述が残っている修正漏れを検出。
+      修正内容は自明で、技術的な判断を必要としない単純な修正。
+    findings:
+      - "行234-285「報告通知プロトコル」セクション: 行236「報告をDBに記録した後」、行242「報告先はDBの assigned_by で決定」、行261「報告は既にDBに記録されているので」、行284「報告は既にDBに記録されているので」の4箇所で古いプロトコル（DB記録）の記述が残っている。通信プロトコルv2では「YAML inbox」が正しい。"
+      - "行496「/clear復帰フロー比較表」: 「タスク確認 | DBから確認 | DBから確認 | DBから確認」（3箇所）が古いプロトコルのまま。通信プロトコルv2では「Inbox YAMLから確認」が正しい。"
+      - "修正方法: (1)行236,242,261,284の「DB」を「YAML inbox」に置換 (2)行496の「DBから確認」を「Inbox YAMLから確認」に置換"
+    read: false
+
+  - id: audit_report_003
+    subtask_id: subtask_310
+    timestamp: "2026-02-08T21:39:07"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。品質は及第点よ。
+
+      主要な改修点（先行割当手順、お針子報告inboxフォーマット、成果物監査ワークフロー、DB書き込み権限の廃止）は全て正しく実装されている。
+      DB書き込み（report add, subtask update --audit-status）の参照は完全に削除され、YAML inbox方式に移行済み。
+      DB読み取り（subtask show/list, report list）は適切に保持されている。
+
+      subtask_308（ashigaru1）で見つかったような修正漏れは一切なし。ashigaru3は丁寧な仕事をした。
+      べ、別に褒めてるわけじゃないんだからね！
+    findings: []
+    read: false
+
+  - id: audit_report_004
+    subtask_id: subtask_309
+    timestamp: "2026-02-08T21:44:28"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      主要な改修点（タスク割当フロー、報告受信フロー、お針子統合、/clearプロトコル）は全て正しく実装されている。
+      広義の解釈（足軽・お針子両方のDB書き込み廃止）を採用し、家老がDB書き込みを集約する設計が正確に実装されている。
+
+      行554-570の報告YAML読込→DB永続化フロー、行1227-1280のYAMLフォーマット定義など、
+      全ての箇所で通信プロトコルv2の用語が統一されており、古いプロトコル（DB直接書込）の記述は完全に削除されている。
+
+      subtask_308（ashigaru.md）で見つかった古いプロトコル記述の修正漏れは、本ファイルでは一切なし。
+      ashigaru2は堅実な実装をしたわね。
+    findings: []
+    read: false
+
+  - id: audit_report_005
+    subtask_id: subtask_311
+    timestamp: "2026-02-08T12:48:38"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      全ての改修箇所（/clear復帰フロー、コンテキスト四層モデル、DB書き込み権限の集約、ファイル構成、将軍の必須行動）が正確に実装されている。
+      古いプロトコル（DB CLI直接使用）の記述は完全に削除されており、DB CLIへの言及は全て正しい文脈（家老による永続化）のみ。
+      通信プロトコルv2の用語（YAML inbox, 報告YAML, Layer 3a/3b）が全体で統一されている。
+
+      queue/inbox/ ディレクトリも.gitkeep付きで作成済み。
+      ashigaru4は手堅い実装をしたわね。
+    findings: []
+    read: false
+
+  - id: audit_report_006
+    subtask_id: subtask_312
+    timestamp: "2026-02-08T12:50:15"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      audit_report_002で指摘した7箇所全てが正確に修正されている。
+      行236, 242, 261, 284の「DB」→「YAML inbox」への置換（4箇所）✅
+      行496の「DBから確認」→「Inbox YAMLから確認」への置換（3箇所）✅
+
+      単純な修正タスクだったが、指摘箇所を漏れなく修正しており、通信プロトコルv2の用語に完全移行済み。
+      ashigaru1は指摘を正確に理解して対応したわね。
+    findings: []
+    read: false
+
+preemptive_assignments: []

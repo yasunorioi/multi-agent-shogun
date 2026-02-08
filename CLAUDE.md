@@ -60,7 +60,7 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。ま�
 この手順は CLAUDE.md（自動読み込み）のみで完結する。instructions/ashigaru.md は初回復帰時には読まなくてよい（2タスク目以降で必要なら読む）。
 
 > **セッション開始・コンパクション復帰との違い**:
-> - **セッション開始**: 白紙状態。Memory MCP + instructions + YAML を全て読む（フルロード）
+> - **セッション開始**: 白紙状態。Memory MCP + instructions + inbox YAML を全て読む（フルロード）
 > - **コンパクション復帰**: summaryが残っている。正データから再確認
 > - **/clear後**: 白紙状態だが、最小限の読み込みで復帰可能（ライトロード）
 
@@ -81,15 +81,16 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。ま�
   │   → 殿の好み・ルール・教訓を復元
   │   ※ 失敗時もStep 3以降を続行せよ（タスク実行は可能。殿の好みは一時的に不明になるのみ）
   │
-  ▼ Step 3: 自分の割当タスク確認（~800トークン）
-  │   python3 scripts/botsunichiroku.py subtask list --worker ashigaru{N} --status assigned
-  │   → 割当があれば: python3 scripts/botsunichiroku.py subtask show SUBTASK_ID で詳細確認
+  ▼ Step 3: 自分の割当タスク確認（~600トークン）
+  │   Read queue/inbox/ashigaru{N}.yaml
+  │   → tasks リストの中から status: assigned を探す
+  │   → 割当があれば: 同じYAML内の description, notes, target_path, project, assigned_by を確認
   │   → 割当なしなら: 次の指示を待つ
-  │   → assigned_by フィールドで報告先家老を確認（roju=multiagent:agents.0, ooku=ooku:agents.0）
+  │   → assigned_by フィールドで報告先家老を確認（roju=roju_reports.yaml, ooku=ooku_reports.yaml）
   │
   ▼ Step 4: プロジェクト固有コンテキストの読み込み（条件必須）
-  │   タスクYAMLに project フィールドがある場合 → context/{project}.md を必ず読む
-  │   タスクYAMLに target_path がある場合 → 対象ファイルを読む
+  │   inbox YAMLの該当エントリに project フィールドがある場合 → context/{project}.md を必ず読む
+  │   inbox YAMLの該当エントリに target_path がある場合 → 対象ファイルを読む
   │   ※ projectフィールドがなければスキップ可
   │
   ▼ 作業開始
@@ -98,9 +99,9 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。ま�
 ### /clear復帰の禁止事項
 - instructions/ashigaru.md を読む必要はない（コスト節約。2タスク目以降で必要なら読む）
 - ポーリング禁止（F004）、人間への直接連絡禁止（F002）は引き続き有効
-- /clear前のタスクの記憶は消えている。タスクYAMLだけを信頼せよ
+- /clear前のタスクの記憶は消えている。inbox YAML だけを信頼せよ
 
-## コンテキスト保持の四層モデル
+## コンテキスト保持の四層モデル（通信プロトコルv2）
 
 ```
 Layer 1: Memory MCP（永続・セッション跨ぎ）
@@ -112,26 +113,42 @@ Layer 2: Project（永続・プロジェクト固有）
   └─ projects/<id>.yaml: プロジェクト詳細（重量、必要時のみ。Git管理外・機密情報含む）
   └─ context/{project}.md: PJ固有の技術知見・注意事項（足軽が参照する要約情報）
 
-Layer 3: 没日録DB（永続・SQLite）
-  └─ data/botsunichiroku.db — cmd, subtask, report の正データ源
+Layer 3a: YAML通信（揮発・進行中タスク）
+  └─ queue/inbox/*.yaml: タスク割当キュー（家老→足軽/部屋子/お針子）
+  └─ queue/inbox/*_reports.yaml: 報告キュー（足軽/部屋子→家老）
+  └─ queue/inbox/*_ohariko.yaml: お針子報告キュー（お針子→家老）
+  └─ queue/shogun_to_karo.yaml: 将軍→家老の指示キュー
+  └─ 進行中タスクのみ保持、完了後はLayer 3bにアーカイブされる
+
+Layer 3b: 没日録DB（永続・完了済みタスク）
+  └─ data/botsunichiroku.db — 完了済みcmd, subtask, report の永続ストレージ
   └─ CLI: python3 scripts/botsunichiroku.py
+  └─ 家老がLayer 3aから手動でアーカイブ
 
 Layer 4: Session（揮発・コンテキスト内）
   └─ CLAUDE.md（自動読み込み）, instructions/*.md
   └─ /clearで全消失、コンパクションでsummary化
 ```
 
-### 各レイヤーの参照者
+> **重要**: 通信プロトコルv2では、**進行中タスクはLayer 3a（YAML通信）**、**完了済みタスクはLayer 3b（没日録DB）** で管理される二層構造となる。
+
+### 各レイヤーの参照者（通信プロトコルv2）
 
 | レイヤー | 将軍 | 家老 | 足軽/部屋子 | お針子 |
 |---------|------|------|------------|--------|
 | Layer 1: Memory MCP | read_graph | read_graph | read_graph（セッション開始時・/clear復帰時） | read_graph |
 | Layer 2: config/projects.yaml | プロジェクト一覧確認 | タスク割当時に参照 | 参照しない | 参照しない |
 | Layer 2: projects/<id>.yaml | プロジェクト全体像把握 | タスク分解時に参照 | 参照しない | 参照しない |
-| Layer 2: context/{project}.md | 参照しない | 参照しない | タスクにproject指定時に読む | 参照しない |
-| Layer 3: 没日録DB | cmd/subtask参照 | cmd/subtask/report全権 | 自分の割当subtaskのみ | **全権閲覧** |
-| Layer 3: 没日録DB | 参照可 | 参照可 | 参照しない | **全権閲覧** |
+| Layer 2: context/{project}.md | 参照しない | 参照しない | inbox YAMLのproject指定時に読む | 参照しない |
+| **Layer 3a: inbox YAML** | 参照可 | **読み書き全権** | **自分のinboxのみ読み込み** | **inbox読み込み・報告書き込み** |
+| **Layer 3a: 報告YAML** | 参照可 | **読み込み全権（全スキャン）** | **自分の報告のみ書き込み** | **報告書き込み** |
+| Layer 3b: 没日録DB | cmd/subtask参照 | **アーカイブ全権** | 参照しない | **全権閲覧** |
 | Layer 4: Session | instructions/shogun.md | instructions/karo.md | instructions/ashigaru.md | instructions/ohariko.md |
+
+**注意**:
+- 足軽/部屋子は **自分の inbox YAML のみ** 読み込み可能、**自分の報告 YAML のみ** 書き込み可能
+- 家老は **全 inbox/報告 YAML** を読み書き可能
+- お針子は **全 inbox YAML** を閲覧可能（先行割当のため）、**報告 YAML** を書き込み可能
 
 ## 階層構造
 
@@ -203,19 +220,48 @@ Layer 4: Session（揮発・コンテキスト内）
   - [要修正(自明)] → 家老に通知 → 家老が差し戻し
   - [要修正(判断必要)] → 家老に通知 → 家老がdashboard要対応記載 → 殿判断
 
+## DB書き込み権限の集約
+
+### 設計原則
+
+```
+┌─────────────────────────────────────────┐
+│ DB書き込み権限は家老のみ               │
+│ お針子: DB読み取りのみ                 │
+│ 足軽・部屋子: DB権限なし               │
+└─────────────────────────────────────────┘
+```
+
+### エージェント別の権限
+
+| エージェント | DB読み取り | DB書き込み | YAML inbox操作 |
+|------------|----------|----------|--------------|
+| 将軍 | 可（cmd list等） | 可（cmd add） | 可（cmd指示） |
+| 家老 | 可（全権） | **可（全権）** | 可（全権） |
+| 足軽/部屋子 | 不可 | **不可** | 可（自分のタスク + 報告） |
+| お針子 | 可（全権閲覧） | **不可** | 可（監査結果・先行割当報告） |
+
+### 理由
+
+1. **データ整合性の確保**: 複数エージェントがDB直接書き込みを行うと、競合・不整合のリスクが高まる
+2. **権限分離の明確化**: 家老のみがDB管理責任を負い、他エージェントは通信プロトコル経由で連携
+3. **監査トレーサビリティ**: YAML inboxに報告が残るため、誰が何を報告したか追跡可能
+4. **エラー回避**: DB CLI実行エラー（パス間違い、引数ミス等）を足軽・お針子で発生させない
+
 ### ファイル構成
 ```
 config/projects.yaml              # プロジェクト一覧（サマリのみ）
 projects/<id>.yaml                # 各プロジェクトの詳細情報
 status/master_status.yaml         # 全体進捗
 queue/shogun_to_karo.yaml         # アーカイブ済み（queue/archive/）。新規cmdは没日録DB経由
-queue/tasks/ashigaru{N}.yaml      # 廃止。subtaskは没日録DB（python3 scripts/botsunichiroku.py subtask）で管理
-queue/reports/ashigaru{N}_report.yaml  # 廃止。reportは没日録DB（python3 scripts/botsunichiroku.py report）で管理
-data/botsunichiroku.db            # 没日録（SQLite DB）- cmd/subtask/reportの正データ源
+queue/inbox/ashigaru{N}.yaml      # 足軽/部屋子のタスク inbox（家老→足軽の指示）
+queue/inbox/{karo}_reports.yaml   # 家老への足軽報告 inbox（足軽→家老の報告）
+queue/inbox/{karo}_ohariko.yaml   # 家老へのお針子報告 inbox（お針子→家老の監査結果・先行割当報告）
+data/botsunichiroku.db            # 没日録（SQLite DB）- cmd/subtask/reportの正データ源（家老のみ書き込み可）
 scripts/botsunichiroku.py         # 没日録CLI（python3 scripts/botsunichiroku.py cmd list 等）
 dashboard.md                      # 人間用ダッシュボード
 ```
-> **移行完了**: YAML通信から没日録DB（SQLite）への移行完了。全タスク・報告はDBで管理。
+> **通信プロトコルv2**: 進行中タスクは inbox YAML で通信、完了済みタスクは没日録DBに永続化。DB書き込み権限は家老のみ。
 
 ### プロジェクト管理
 
@@ -325,8 +371,9 @@ MCPツールは遅延ロード方式。使用前に必ず `ToolSearch` で検索
 - 家老を経由せよ
 
 ### 3. 報告の確認
-- 足軽の報告は没日録DBで管理: `python3 scripts/botsunichiroku.py report list --worker ashigaru{N}`
-- 家老からの報告待ちの際はこれを確認
+- 足軽の報告は家老が処理（queue/inbox/{karo}_reports.yaml → DB記録）
+- 家老からの報告待ちの際は dashboard.md または没日録DB（`python3 scripts/botsunichiroku.py report list --worker ashigaru{N}`）を確認
+- お針子の監査報告も家老が処理（queue/inbox/{karo}_ohariko.yaml → DB記録）
 
 ### 4. 家老・お針子の状態確認
 - 老中: `tmux capture-pane -t multiagent:agents.0 -p | tail -20`

@@ -46,11 +46,11 @@ Raspberry Pi
 ### ~~W5500 Ethernet再接続ロジック未実装~~ → cmd_145(≒DB cmd_144)で対応中
 殿の方針: Picoは消耗品、リブートで十分。watchdog reboot方式で対応中（足軽1号に割当済み）。
 
-### LINE Messaging API残タスク【YAML provisioning済み・反映テストのみ】
-Wave2完了: curlテスト送信HTTP 200成功✅ + Grafana環境変数設定・Contact Point解決確認済み✅
-subtask_329でAlert Rules 6種+Contact Point LINE Custom PayloadをYAML provisioning化済み✅
-**残件（小物）**:
-1. **🟡 反映テスト**: `docker compose restart grafana` → Alert Rules反映確認 → LINE送信テスト
+### ~~LINE Messaging API残タスク~~ → 全完了✅（2026-02-11）
+- ✅ `docker compose restart grafana` → Alert Rules 6件反映確認
+- ✅ Contact Point「LINE」Custom Payload反映確認
+- ✅ 実アラート（通信断）がLINEに到達確認
+- ✅ curl直接送信もHTTP 200 + sentMessages確認
 
 ### ~~スキル化候補 10件~~ → 殿裁定: 4件採用・6件却下（2026-02-11）
 **採用4件**（スキル作成済み）:

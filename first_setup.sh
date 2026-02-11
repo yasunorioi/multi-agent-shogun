@@ -57,6 +57,8 @@ echo ""
 echo "  このスクリプトは初回セットアップ用です。"
 echo "  依存関係の確認とディレクトリ構造の作成を行います。"
 echo ""
+echo "  体制: 将軍1 + 老中1 + 足軽3 + 部屋子2 + お針子1 + 鯰(Docker)"
+echo ""
 echo "  インストール先: $SCRIPT_DIR"
 echo ""
 
@@ -334,11 +336,15 @@ log_step "STEP 6: ディレクトリ構造作成"
 DIRECTORIES=(
     "queue/tasks"
     "queue/reports"
+    "queue/inbox"
     "config"
     "status"
     "instructions"
     "logs"
-    "demo_output"
+    "data"
+    "scripts"
+    "tools/botsunichiroku-search"
+    "context"
     "skills"
     "memory"
 )
@@ -451,8 +457,8 @@ RESULTS+=("設定ファイル: OK")
 # ============================================================
 log_step "STEP 8: キューファイル初期化"
 
-# 足軽用タスクファイル作成
-for i in {1..8}; do
+# 足軽用タスクファイル作成（足軽1-3）
+for i in {1..3}; do
     TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
     if [ ! -f "$TASK_FILE" ]; then
         cat > "$TASK_FILE" << EOF
@@ -467,10 +473,28 @@ task:
 EOF
     fi
 done
-log_info "足軽タスクファイル (1-8) を確認/作成しました"
+log_info "足軽タスクファイル (1-3) を確認/作成しました"
 
-# 足軽用レポートファイル作成
-for i in {1..8}; do
+# 部屋子用タスクファイル作成（部屋子1-2 = ashigaru6-7）
+for i in 6 7; do
+    TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
+    if [ ! -f "$TASK_FILE" ]; then
+        cat > "$TASK_FILE" << EOF
+# 部屋子$((i-5))（ashigaru${i}）専用タスクファイル
+task:
+  task_id: null
+  parent_cmd: null
+  description: null
+  target_path: null
+  status: idle
+  timestamp: ""
+EOF
+    fi
+done
+log_info "部屋子タスクファイル (6-7) を確認/作成しました"
+
+# 足軽・部屋子用レポートファイル作成
+for i in 1 2 3 6 7; do
     REPORT_FILE="$SCRIPT_DIR/queue/reports/ashigaru${i}_report.yaml"
     if [ ! -f "$REPORT_FILE" ]; then
         cat > "$REPORT_FILE" << EOF
@@ -482,7 +506,39 @@ result: null
 EOF
     fi
 done
-log_info "足軽レポートファイル (1-8) を確認/作成しました"
+log_info "足軽・部屋子レポートファイル (1-3, 6-7) を確認/作成しました"
+
+# inbox YAMLファイル作成（通信プロトコルv2）
+for i in 1 2 3 6 7; do
+    INBOX_FILE="$SCRIPT_DIR/queue/inbox/ashigaru${i}.yaml"
+    if [ ! -f "$INBOX_FILE" ]; then
+        cat > "$INBOX_FILE" << EOF
+# ashigaru${i} inbox（家老→足軽/部屋子の指示キュー）
+tasks: []
+EOF
+    fi
+done
+log_info "足軽・部屋子 inbox YAML (1-3, 6-7) を確認/作成しました"
+
+# 家老用報告・お針子報告inbox作成
+for karo in roju ooku; do
+    REPORT_INBOX="$SCRIPT_DIR/queue/inbox/${karo}_reports.yaml"
+    if [ ! -f "$REPORT_INBOX" ]; then
+        cat > "$REPORT_INBOX" << EOF
+# ${karo}への報告inbox（足軽/部屋子→家老）
+reports: []
+EOF
+    fi
+
+    OHARIKO_INBOX="$SCRIPT_DIR/queue/inbox/${karo}_ohariko.yaml"
+    if [ ! -f "$OHARIKO_INBOX" ]; then
+        cat > "$OHARIKO_INBOX" << EOF
+# ${karo}へのお針子報告inbox（お針子→家老）
+reports: []
+EOF
+    fi
+done
+log_info "家老用報告inbox (roju/ooku) を確認/作成しました"
 
 RESULTS+=("キューファイル: OK")
 
@@ -558,6 +614,23 @@ if [ -f "$BASHRC_FILE" ]; then
         ALIAS_ADDED=true
     else
         log_info "alias csm は既に正しく設定されています"
+    fi
+
+    # cso alias (部屋子・お針子・鯰ウィンドウの起動)
+    EXPECTED_CSO="alias cso='tmux attach-session -t ooku'"
+    if ! grep -q "alias cso=" "$BASHRC_FILE" 2>/dev/null; then
+        echo "$EXPECTED_CSO" >> "$BASHRC_FILE"
+        log_info "alias cso を追加しました（部屋子・お針子・鯰ウィンドウの起動）"
+        ALIAS_ADDED=true
+    elif ! grep -qF "$EXPECTED_CSO" "$BASHRC_FILE" 2>/dev/null; then
+        if sed -i "s|alias cso=.*|$EXPECTED_CSO|" "$BASHRC_FILE" 2>/dev/null; then
+            log_info "alias cso を更新しました（パス変更検出）"
+        else
+            log_warn "alias cso の更新に失敗しました"
+        fi
+        ALIAS_ADDED=true
+    else
+        log_info "alias cso は既に正しく設定されています"
     fi
 else
     log_warn "$BASHRC_FILE が見つかりません"
@@ -656,6 +729,44 @@ else
 fi
 
 # ============================================================
+# STEP 12: Docker チェック（鯰コンテナ用）
+# ============================================================
+log_step "STEP 12: Docker チェック（鯰コンテナ用）"
+
+if command -v docker &> /dev/null; then
+    DOCKER_VERSION=$(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',')
+    log_success "Docker がインストール済みです (v$DOCKER_VERSION)"
+
+    # Docker Compose チェック
+    if docker compose version &> /dev/null; then
+        COMPOSE_VERSION=$(docker compose version --short 2>/dev/null)
+        log_success "Docker Compose が利用可能です (v$COMPOSE_VERSION)"
+        RESULTS+=("Docker: OK (v$DOCKER_VERSION, Compose v$COMPOSE_VERSION)")
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_VERSION=$(docker-compose version --short 2>/dev/null)
+        log_success "docker-compose が利用可能です (v$COMPOSE_VERSION)"
+        log_warn "Docker Compose V2 (docker compose) への移行を推奨します"
+        RESULTS+=("Docker: OK (v$DOCKER_VERSION, docker-compose v$COMPOSE_VERSION)")
+    else
+        log_warn "Docker Compose が見つかりません"
+        RESULTS+=("Docker: OK (v$DOCKER_VERSION, Compose未検出)")
+    fi
+
+    # Docker デーモンが起動しているか確認
+    if docker info &> /dev/null; then
+        log_success "Docker デーモンは起動中です"
+    else
+        log_warn "Docker デーモンが起動していません（鯰コンテナ起動時に必要）"
+        log_info "起動コマンド: sudo systemctl start docker"
+    fi
+else
+    log_warn "Docker がインストールされていません"
+    log_info "鯰（FTS5+MeCab検索API）コンテナの利用に Docker が必要です"
+    log_info "インストール: https://docs.docker.com/engine/install/"
+    RESULTS+=("Docker: 未インストール（鯰コンテナに必要）")
+fi
+
+# ============================================================
 # 結果サマリー
 # ============================================================
 echo ""
@@ -702,6 +813,11 @@ echo "     ./shutsujin_departure.sh -s            # セットアップのみ（C
 echo "     ./shutsujin_departure.sh -t            # Windows Terminalタブ展開"
 echo "     ./shutsujin_departure.sh -shell bash   # bash用プロンプトで起動"
 echo "     ./shutsujin_departure.sh -shell zsh    # zsh用プロンプトで起動"
+echo ""
+echo "  tmuxセッション接続:"
+echo "     css   # 将軍セッション (tmux attach-session -t shogun)"
+echo "     csm   # 老中・足軽セッション (tmux attach-session -t multiagent)"
+echo "     cso   # 部屋子・お針子・鯰セッション (tmux attach-session -t ooku)"
 echo ""
 echo "  ※ シェル設定は config/settings.yaml の shell: でも変更可能です"
 echo ""

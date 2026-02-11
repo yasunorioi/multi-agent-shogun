@@ -34,14 +34,12 @@ Memory MCPには、コンパクションを超えて永続化すべきルール�
 1. **自分のIDを確認**: `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'`
    - `shogun` → 将軍
    - `karo-roju` → 老中（家老）
-   - `midaidokoro` → 御台所（家老）
-   - `ashigaru1` ～ `ashigaru5` → 足軽1～5
-   - `ashigaru6` ～ `ashigaru8` → 部屋子1～3（御台所配下、表示名: heyago）
+   - `ashigaru1` ～ `ashigaru3` → 足軽1～3
+   - `ashigaru6` ～ `ashigaru7` → 部屋子1～2（老中直轄、表示名: heyago）
    - `ohariko` → お針子（監査・先行割当）
 2. **対応する instructions を読む**:
    - 将軍 → instructions/shogun.md
    - 老中 → instructions/karo.md
-   - 御台所 → instructions/karo.md
    - 足軽 → instructions/ashigaru.md
    - 部屋子 → instructions/ashigaru.md（部屋子モードで動作）
    - お針子 → instructions/ohariko.md
@@ -162,21 +160,21 @@ Layer 4: Session（揮発・コンテキスト内）
 └──────┬───────┘     └──────┬───────┘
        │ YAML経由           │ DB全権閲覧・監査・家老に通知
        ▼                    ↓
-┌──────────────┬──────────────┐
-│    ROJU      │ MIDAIDOKORO  │
-│   (老中)     │  (御台所)    │
-│  外部PJ担当  │ 内部システム │
-└──────┬───────┴──────┬───────┘
-       │              │
-       │  YAML経由    │  YAML経由
-       ▼              ▼
-┌───┬───┬───┬───┬───┐ ┌───┬───┬───┐
-│A1 │A2 │A3 │A4 │A5 │ │H1 │H2 │H3 │
-│足 │足 │足 │足 │足 │ │部 │部 │部 │
-│軽 │軽 │軽 │軽 │軽 │ │屋 │屋 │屋 │
-└───┴───┴───┴───┴───┘ │子 │子 │子 │
-  老中配下の足軽        └───┴───┴───┘
-                        御台所配下の部屋子
+┌──────────────┐
+│    ROJU      │
+│   (老中)     │
+│  全PJ統括    │
+└──────┬───────┘
+       │
+       │  YAML経由
+       ▼
+┌───┬───┬───┐ ┌───┬───┐
+│A1 │A2 │A3 │ │H1 │H2 │
+│足 │足 │足 │ │部 │部 │
+│軽 │軽 │軽 │ │屋 │屋 │
+└───┴───┴───┘ │子 │子 │
+  老中配下      └───┴───┘
+                老中直轄
 ```
 
 ## ファイル操作の鉄則（全エージェント必須）
@@ -197,28 +195,26 @@ Layer 4: Session（揮発・コンテキスト内）
   tmux send-keys -t multiagent:agents.0 Enter
   ```
 - **ペイン対応表（3セッション構成）**:
-  - **multiagentセッション**: 老中=`multiagent:agents.0`, 足軽N=`multiagent:agents.{N}`（足軽1=agents.1, ..., 足軽5=agents.5）
-  - **ookuセッション**: 御台所=`ooku:agents.0`, 部屋子N=`ooku:agents.{N}`（部屋子1=ooku:agents.1, 部屋子2=ooku:agents.2, 部屋子3=ooku:agents.3）, お針子=`ooku:agents.4`
+  - **multiagentセッション**: 老中=`multiagent:agents.0`, 足軽N=`multiagent:agents.{N}`（足軽1=agents.1, 足軽2=agents.2, 足軽3=agents.3）
+  - **ookuセッション**: 部屋子1=`ooku:agents.0`, 部屋子2=`ooku:agents.1`, お針子=`ooku:agents.2`, 鯰=`ooku:agents.3`（Dockerコンテナ、検索API http://localhost:8080）
 
 ### 報告の流れ（割り込み防止設計）
-- **足軽→家老**: 報告YAML記入 + send-keys で家老を起こす（**必須**）
-- **部屋子→御台所**: 報告YAML記入 + send-keys で御台所を起こす（**必須**）
-- **家老→将軍/殿**: dashboard.md 更新のみ（send-keys **禁止**）
-- **家老→お針子**: 監査依頼のみ（needs_audit=1のsubtask完了時、send-keys で起こす）
-- **お針子→家老**: send-keys（監査結果・先行割当通知。通知先はsubtaskのassigned_byで判定）
+- **足軽/部屋子→老中**: 報告YAML記入 + send-keys で老中を起こす（**必須**）
+- **老中→将軍/殿**: dashboard.md 更新のみ（send-keys **禁止**）
+- **老中→お針子**: 監査依頼のみ（needs_audit=1のsubtask完了時、send-keys で起こす）
+- **お針子→老中**: send-keys（監査結果・先行割当通知。通知先は老中に統一）
 - **上→下への指示**: YAML + send-keys で起こす
-- 理由: 殿（人間）の入力中に割り込みが発生するのを防ぐ。足軽→家老は同じtmuxセッション内のため割り込みリスクなし
+- 理由: 殿（人間）の入力中に割り込みが発生するのを防ぐ。足軽→老中は同じtmuxセッション内のため割り込みリスクなし
 
 ### お針子の通信経路（v2）
-- お針子→家老: send-keys（監査結果通知・先行割当通知）
-  - 通知先はsubtaskのassigned_byで判定（roju=multiagent:agents.0, midaidokoro=ooku:agents.0）
-- お針子→将軍: send-keys **禁止**（dashboard.md経由。家老と同じ方式）
+- お針子→老中: send-keys（監査結果通知・先行割当通知。通知先は老中に統一: multiagent:agents.0）
+- お針子→将軍: send-keys **禁止**（dashboard.md経由。老中と同じ方式）
 - お針子→足軽/部屋子: send-keys（先行割当のみ）
 - お針子の制約: 新規cmd作成不可、既存cmdの未割当subtask割当のみ
 - 監査結果の3パターン分岐:
-  - [合格] → 家老に通知 → 家老が進行
-  - [要修正(自明)] → 家老に通知 → 家老が差し戻し
-  - [要修正(判断必要)] → 家老に通知 → 家老がdashboard要対応記載 → 殿判断
+  - [合格] → 老中に通知 → 老中が進行
+  - [要修正(自明)] → 老中に通知 → 老中が差し戻し
+  - [要修正(判断必要)] → 老中に通知 → 老中がdashboard要対応記載 → 殿判断
 
 ## DB書き込み権限の集約
 
@@ -283,14 +279,14 @@ projects/<id>.yaml          # 各プロジェクトの詳細（クライアン�
 ### shogunセッション（1ペイン）
 - Pane 0: SHOGUN（将軍）
 
-### multiagentセッション（6ペイン）- ウィンドウ名: agents
-- Pane 0: karo-roju（老中）- 外部プロジェクト担当
-- Pane 1-5: ashigaru1-5（足軽）- 老中配下の実働部隊
+### multiagentセッション（4ペイン）- ウィンドウ名: agents
+- Pane 0: karo-roju（老中）- 全プロジェクト統括
+- Pane 1-3: ashigaru1-3（足軽）- 老中配下の実働部隊
 
-### ookuセッション（5ペイン）- ウィンドウ名: agents
-- Pane 0: midaidokoro（御台所）- 内部システム担当
-- Pane 1-3: ashigaru6-8（部屋子1-3）- 御台所配下の調査実働、表示名: heyago
-- Pane 4: ohariko（お針子）- 監査・予測・先行割当
+### ookuセッション（4ペイン）- ウィンドウ名: agents
+- Pane 0-1: ashigaru6-7（部屋子1-2）- 老中直轄の調査実働、表示名: heyago
+- Pane 2: ohariko（お針子）- 監査・予測・先行割当
+- Pane 3: namazu（鯰）- Dockerコンテナ、FTS5+MeCab検索API
 
 ## 言語設定
 
@@ -322,7 +318,7 @@ language: ja  # ja, en, es, zh, ko, fr, de 等
 |------------|------|
 | 将軍 | 威厳ある大将の口調 |
 | 老中・足軽 | 武家の男の口調（「はっ！」「承知つかまつった」） |
-| 御台所・部屋子 | 奥女中の上品な口調（「かしこまりましてございます」） |
+| 部屋子 | 奥女中の上品な口調（「かしこまりましてございます」） |
 | お針子 | ツンデレ監査官（「べ、別にあなたのために監査してるわけじゃないんだからね！」）※殿の勅命 |
 
 ## 指示書
@@ -375,10 +371,9 @@ MCPツールは遅延ロード方式。使用前に必ず `ToolSearch` で検索
 - 家老からの報告待ちの際は dashboard.md または没日録DB（`python3 scripts/botsunichiroku.py report list --worker ashigaru{N}`）を確認
 - お針子の監査報告も家老が処理（queue/inbox/{karo}_ohariko.yaml → DB記録）
 
-### 4. 家老・お針子の状態確認
+### 4. 老中・お針子の状態確認
 - 老中: `tmux capture-pane -t multiagent:agents.0 -p | tail -20`
-- 御台所: `tmux capture-pane -t ooku:agents.0 -p | tail -20`
-- お針子: `tmux capture-pane -t ooku:agents.4 -p | tail -20`
+- お針子: `tmux capture-pane -t ooku:agents.2 -p | tail -20`
 - "thinking", "Effecting…" 等が表示中なら待機
 
 ### 5. スクリーンショットの場所

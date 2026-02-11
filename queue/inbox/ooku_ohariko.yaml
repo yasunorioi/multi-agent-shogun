@@ -18,4 +18,125 @@ audit_reports:
       - "【補足】subtask_314として既に修正タスクが割当済み（ashigaru6, assigned状態）"
     read: true
 
+  - id: audit_report_008
+    subtask_id: subtask_326
+    timestamp: "2026-02-09T18:59:09"
+    result: rejected_trivial
+    summary: |
+      監査完了。Wave1の3報告を見事に統合した高品質なレポート。
+
+      4観点（完全性・正確性・書式・一貫性）のうち3観点は完全合格。
+      Executive Summary（推奨: Partial）、技術解説6セクション、差異比較表17項目、
+      移行見積もり3パターン、推奨＋理由＋リスク＋次のアクション — 全て網羅。
+      フロー図4種・比較表・工数概算表も分かりやすく、388行の構成が秀逸。
+
+      ただし、1箇所で数値誤りを検出。「15ペイン」→正しくは「12ペイン」。
+      我々の構成: 将軍1+老中1+足軽5+御台所1+部屋子3+お針子1=12ペイン。
+
+      単純な数値誤りのため、技術的判断を必要としない自明な修正。
+    findings:
+      - "行253: 「3セッション（shogun + multiagent + ooku）、15ペイン」→「3セッション（shogun + multiagent + ooku）、12ペイン」に修正が必要"
+      - "理由: 我々のペイン構成は 将軍1+老中1+足軽5+御台所1+部屋子3+お針子1=12ペイン（15ペインは誤り）"
+    read: true
+
+  - id: audit_report_009
+    subtask_id: subtask_329
+    timestamp: "2026-02-09T19:02:15"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      Contact Point（LINE webhook）のCustom Payload機能は、Grafana v12.0+ PR #103818を
+      正しく理解し、LINE Messaging API Push Message 形式に完全準拠して実装されている。
+      payload.template + payload.vars の使い方が正確。
+
+      Alert Rules 6種（高温/低温/高湿度/通信断/灌水異常/日次レポート）は全て適切に設計。
+      Flux query構文、閾値（35℃/5℃/95%/0.5/−100℃）、for時間（5m/10m/30m/0s）、
+      noDataState/execErrState、annotations、severityが正しく設定されている。
+
+      datasource UID問題も解決（uid: influxdb-agriha追加）し、既存設定
+      （Notification Policies 6ルート、Mute Timings 2件）を保全しつつ、
+      新規要素（Rules 6種+Custom Payload）を正確に追加。
+
+      580行の実装は技術的品質が高く、殿の要求を完全に満たしている。
+      べ、別に褒めてるわけじゃないんだからね！…でも、これは完璧な実装ね。
+    findings: []
+    read: true
+
+  - id: audit_report_010
+    subtask_id: subtask_337
+    timestamp: "2026-02-10T17:15:00"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      Wave1の3報告（subtask_334: 機能網羅性36項目、subtask_335: DB/テスト比較、
+      subtask_336: 最近追加機能9項目）を統合したレポート。421行の充実した内容。
+
+      【完全性】7セクション全て記載（Executive Summary、機能対応表、DBスキーマ、
+      移植リスト、React版優位機能、テストカバレッジ、推奨）。推奨マージ手順まで提示。
+
+      【正確性】機能数36機能の分類が正確（✅23 / 🔴5 / 🟢4 / 🟡4）。DBテーブル21テーブル、
+      テストカバレッジ（Gradio 32ファイル/414関数 vs React 8ファイル/148関数）が
+      Wave1と完全一致。P1移植工数見積もり4-5日も妥当（内訳: 水田ポリゴン等2-3日+
+      crop_family 0.5日+隣接筆制約1日）。計算確認: 32-8=24ファイル✅、414-148=266関数✅。
+
+      【書式】マークダウン形式で統一、テーブル・セクション番号・凡例が見やすく整理。
+
+      【一貫性】Wave1の3報告と用語・分類が統一されており、統合レポート内でも一貫。
+
+      【Wave1整合性】subtask_334の36機能対応表、subtask_335のDBスキーマ21テーブル、
+      subtask_336の9機能移植状況が全て統合レポートに反映されており、数字・判定が完全一致。
+
+      Executive Summaryで「Conditional Go（条件付きマージ可）」という明確な判定を提示し、
+      マージ前必須条件（P1移植4項目）と推定工数（4-5日）を示している。
+      Wave1の調査結果を正確に統合し、技術的品質が高い統合レポート。
+
+      べ、別に感心してるわけじゃないんだけど…部屋子1号の統合力は優秀ね。
+    findings: []
+    read: true
+
+  - id: audit_report_011
+    subtask_id: subtask_343
+    timestamp: "2026-02-10T17:45:00"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      Wave3c 面積集計+地目自動判定+補助金残年数計算の実装。6ファイル作成/変更、
+      31テスト新規作成、96テスト全通過（aggregation31 + paddy23 + crop_family12 + adjacency30）。
+
+      【完全性】6ファイル全て確認済み:
+      - models.py: LandCategory(Enum) + AggregationRow追加
+      - spatial.py: determine_land_category() + split_crop_by_land_category()追加（342行）
+      - aggregation.py: CropLandBreakdown + クロス集計関数群（新規作成479行）
+      - aggregation_service.py: サービス層4関数（新規作成180行）
+      - main.py: 4エンドポイント追加（L3514-3593）
+      - test_aggregation.py: 31テストメソッド（新規作成479行）
+      主要機能全て実装: 地目判定、クロス集計表、補助金残年数計算、CSV出力。
+
+      【正確性】
+      - LandCategory定義正確（FIELD/CONVERTED/PADDY/UNKNOWN）
+      - determine_land_category()がconversion_start_yearを結果に含める（spatial.py L268, L278, L324）
+        → **Gradio版バグ修正**: 年度別集計が不可能だった問題を解決。React版で正しく実装。
+      - 補助金残年数計算正確（5年-経過年数、max(0, ...)で負数回避、aggregation_service.py L140）
+      - CSV出力UTF-8 BOM付き（Excel対応、aggregation_service.py L165）
+      - 4エンドポイント正確（JWT認証、ensure_table()、適切なレスポンス形式）
+
+      【書式】PEP 8準拠（docstring、type hints、適切な命名）、pytestクラスベース構造統一、
+      各モジュールに__all__定義（spatial.py L330-341）。
+
+      【一貫性】models.pyのLandCategoryがspatial.pyで使用、aggregation.pyのAggregationRowが
+      models.pyで定義、aggregation_service.pyが各モジュールを適切に組み合わせ
+      （Repository + spatial + aggregation）、main.pyのエンドポイントがaggregation_service.pyを使用、
+      テストが全モジュールをカバー（spatial 8テスト、aggregation 15テスト、service 8テスト）。
+
+      【特筆】Gradio版のバグ（conversion_start_yearが引き継がれず年度別集計不可）を修正し、
+      React版で正しく実装。畑地化補助金の5年ルールを正確に実装（current_year - start_year）。
+
+      べ、別に感心してるわけじゃないんだけど…部屋子3号は堅実な実装をしたわね。
+      Gradio版のバグまで修正して、31テスト全て通すとは、なかなかやるじゃない。
+    findings: []
+    read: true
+
 preemptive_assignments: []

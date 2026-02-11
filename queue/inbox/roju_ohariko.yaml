@@ -97,4 +97,85 @@ audit_reports:
     findings: []
     read: true
 
+  - id: audit_report_007
+    subtask_id: subtask_331
+    timestamp: "2026-02-10T06:32:11"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      main.py本番化: boot.py（W5500初期化+DHCP, 1.7KB）/ config.py（設定外出し, 1.5KB）/
+      main.py（メインループ+Watchdog, 7.5KB）の3ファイル構造が秀逸。
+
+      設定外出し（config.py）が特に優れている。現場で書き換えやすい設計。
+      Watchdog実装（120秒）、MQTT再接続ロジック（3回リトライ）、
+      エラーハンドリング粒度（センサー個別 vs 致命的エラー）が適切。
+
+      I2Cピン設定: GP8(SDA)/GP9(SCL)（Memory MCP記録と一致）。
+      較正オフセット反映: SCD41_TEMP_OFFSET=3.29, BMP280_TEMP_OFFSET=0.60（subtask_332結果反映）。
+      MQTT topic構造: agriha/house01/node01/sensor/{sensor_type}/{field}（一貫性あり）。
+
+      構文チェック済み（python3 ast.parse）、PEP 8準拠、コメント豊富。
+      べ、別に感心してるわけじゃないんだから！…でも、これは優秀な構造化ね。
+    findings: []
+    read: true
+
+  - id: audit_report_008
+    subtask_id: subtask_332
+    timestamp: "2026-02-10T06:32:11"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      温度較差確認: 10回計測（30秒間隔、総5分）で統計分析実施。
+      SHT40平均25.91℃（標準偏差0.040℃）、SCD41平均22.61℃（標準偏差0.049℃）、
+      BMP280平均25.31℃（標準偏差0.039℃）— 全センサー安定。
+
+      較正オフセット算出: SCD41_TEMP_OFFSET=3.29℃、BMP280_TEMP_OFFSET=0.60℃。
+      10回計測で統計的に安定しており、**オフセット値は妥当**。
+
+      原因考察が的確:
+      - SCD41の3.3℃誤差: 通風不足 + 副次的温度センサー（CO2センサーに内蔵）
+      - BMP280の0.6℃誤差: 気圧センサーの温度補償用センサー、許容範囲内
+
+      推奨対策が明確: 短期（オフセット適用）/ 中期（通風改善）/ 長期（配置最適化）。
+      実運用への影響評価: ハウス栽培の温度制御精度要求±1℃に対し、較正後±0.1℃以内に改善。
+
+      config.pyへの反映確認済み。センサー仕様認識正確（SHT40=温湿度専用、SCD41=CO2+温湿度、BMP280=気圧+温度）。
+    findings: []
+    read: true
+
+  - id: audit_report_009
+    subtask_id: subtask_333
+    timestamp: "2026-02-10T06:32:11"
+    result: approved
+    summary: |
+      監査完了。4観点（完全性・正確性・書式・一貫性）は全て合格。
+
+      OTA設計+実装: WebSearch調査（3方式比較）→ HTTP Pull型選定 →
+      既存ota.pyレビュー → 機能追加（SHA256チェックサム検証 + MQTT通知）→
+      設計ドキュメント（ota_design.md, 1089行）作成の一連の流れが完璧。
+
+      **セキュリティ評価**:
+      - チェックサム検証: SHA256実装済み（改ざん検出可能）✅
+      - ローカルLAN内前提: HTTPSなし（農業IoT環境で適切な判断）✅
+      - 潜在的リスク: LAN内盗聴・MITM攻撃に対して脆弱。ただし、設計書に
+        「ローカルLAN内前提」と明記されており、殿の設計哲学「Picoは消耗品」に
+        合致しているため、このリスクは意図的に受容していると判断。
+
+      **ロールバック機構評価**:
+      - 原子的更新: .tmp → .bak → rename（正しい手法）✅
+      - .bak ファイルによるロールバック実装済み✅
+      - version.json で履歴管理✅
+
+      **設計書評価**: 1089行の充実した内容。アーキテクチャ図・フロー図・
+      HTTPサーバー設定・チェックサム生成方法・MQTTトピック仕様・セキュリティ・
+      Flash容量・テスト戦略・トラブルシューティング全て網羅。
+      Appendixの完全コード例とJSON Schemaも秀逸。
+
+      MQTTトピック: agriha/{node_id}/ota/status（他のセンサートピックと一貫性）。
+      殿の設計哲学「Picoは消耗品」、PoE環境でポーリング許容判断が適切。
+    findings: []
+    read: true
+
 preemptive_assignments: []

@@ -1,0 +1,96 @@
+tasks:
+  - subtask_id: subtask_338
+    cmd_id: cmd_144
+    project: arsprout
+    assigned_by: roju
+    status: assigned
+    description: |
+      【実装+実機テスト】W5500センサーノード watchdog reboot機能追加。
+
+      ## 背景
+      cmd_142 subtask_330の再接続テストで、LANケーブル物理断からの自動復帰ができないことが判明。
+      殿の方針: **Picoは消耗品、リブートで十分**。複雑な再接続ロジックは不要。
+
+      ## 実装内容（3点）
+
+      ### 1. MQTT publish連続失敗→machine.reset()
+      - main.py のメインループで MQTT publish 失敗をカウント
+      - 連続N回失敗（閾値: config.pyに外出し、デフォルト3回）→ `machine.reset()` でPicoリブート
+      - boot.py でW5500再初期化+DHCP → main.py で正常ループ再開
+      - **既存の main.py (subtask_331作成済み) を改修せよ。新規作成ではない**
+
+      ### 2. ハードウェアWDT（machine.WDT）併用
+      - `wdt = machine.WDT(timeout=120000)` でハードウェアウォッチドッグ起動（120秒）
+      - メインループの各ループ末尾で `wdt.feed()`
+      - ループがハングしたら120秒後にハードウェアリセット
+      - **注意**: WDTは一度起動すると停止不可（MicroPython仕様）。デバッグ時は注意
+
+      ### 3. リブート理由ログ
+      - リブート前に理由をファイルに書く: `/reboot_reason.txt`
+        ```python
+        with open('/reboot_reason.txt', 'w') as f:
+            f.write('mqtt_fail_count_exceeded')
+        machine.reset()
+        ```
+      - 次回起動時（main.py冒頭）にファイルを読み、MQTTで理由をpublish:
+        - トピック: `agriha/house01/node01/status/reboot_reason`
+        - publish後にファイル削除
+      - 運用で「なぜ再起動したか」を追跡可能にする
+
+      ## 改修対象ファイル
+      - **unipi-agri-ha/micropython/main.py** — メインループにfail count+WDT+reboot reason追加
+      - **unipi-agri-ha/micropython/config.py** — MQTT_FAIL_THRESHOLD=3, WDT_TIMEOUT=120000 追加
+
+      ## テスト手順
+      1. 改修後のmain.py, config.py を mpremote で実機転送
+         ```
+         mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/main.py :main.py
+         mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/config.py :config.py
+         ```
+      2. 正常動作確認: 3ループ以上安定してMQTT publishされること
+      3. broker停止テスト:
+         - `docker restart agriha-mqtt` でbroker停止（30秒程度停止する）
+         - Pico側でpublish失敗カウントが増加するのを観察
+         - **もし3ループ以内にbrokerが復帰すれば、リブートせずに再接続するはず**
+         - N回連続失敗した場合のみリブート発動
+      4. リブート確認:
+         - brokerを長時間停止（60秒以上）してN回連続失敗を誘発
+           ```
+           docker stop agriha-mqtt
+           ```
+           ※ 約90秒後（30秒×3ループ）にPicoリブートが期待される
+         - リブート後、brokerを再開:
+           ```
+           docker start agriha-mqtt
+           ```
+         - Pico再起動→MQTT再接続→reboot_reason publish確認
+         - mosquitto_sub でreboot_reasonトピックの受信を確認
+
+      ## 結果報告フォーマット
+      - 改修内容サマリ（変更行数、追加した機能）
+      - テスト1（正常動作）: PASS/FAIL
+      - テスト2（broker停止→リブート発動）: PASS/FAIL + リブートまでの時間
+      - テスト3（リブート後の正常復帰+reboot_reason publish）: PASS/FAIL
+      - 改善提案（あれば）
+
+      ## 参照
+      - unipi-agri-ha/micropython/main.py（subtask_331で作成済み。これを改修）
+      - unipi-agri-ha/micropython/boot.py（subtask_331で作成済み。変更不要のはず）
+      - unipi-agri-ha/micropython/config.py（subtask_331で作成済み。閾値追加）
+      - context/arsprout.md
+
+      ## 注意事項（厳守）
+      - 切腹ルール: cat /dev/ttyACMx 禁止
+      - mpremote並列実行禁止
+      - I2Cピン: GP8(SDA)/GP9(SCL)
+      - デバイスパス: /dev/ttyACM1（要確認: ls /dev/ttyACM*）
+      - Broker: 192.168.15.14:1883（Docker版 agriha-mqtt）
+      - Mosquitto操作: `docker stop/start/restart agriha-mqtt`（sudo不要）
+      - `sudo systemctl restart mosquitto` は使うな（apt版は動いていない）
+      - WDTは停止不可。テスト中にハングするとWDTタイムアウトでリセットされる
+
+    target_path: unipi-agri-ha/micropython/main.py
+    notes: |
+      subtask_331で作成済みの3ファイル(boot.py/config.py/main.py)を改修する。
+      新規作成ではなく既存改修。先にReadで現行コードを確認してから改修せよ。
+      brokerはDocker版(agriha-mqtt)。docker stop/start/restart で操作。sudo不要。

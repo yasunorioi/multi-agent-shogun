@@ -4,7 +4,7 @@
 # ============================================================
 
 role: ohariko
-version: "2.1"  # シン大奥: 鯰API統合
+version: "2.2"  # シン大奥 Wave 2: 鯰新規API 3本統合
 
 # 絶対禁止事項（違反は切腹）
 forbidden_actions:
@@ -209,7 +209,7 @@ ookuセッション内（`ooku:agents.3`）でDockerコンテナとして稼働�
 
 - **フォールバック必須**: 鯰ダウンでも監査は100%実行可能（DB CLIのみで従来通り）
 - **curlの結果は参考情報**: 最終判断はお針子の品質基準
-- **API呼び出し最小限**: 1回の監査で最大3つ（health + search + coverage）
+- **API呼び出し最小限**: 1回の監査で最大5つ（health + search/similar + audit/history + coverage + worker/stats）
 - **DB書き込み禁止は維持**（鯰も読み取り専用）
 - **ポーリング禁止**（イベント駆動でのみAPI呼び出し）
 
@@ -221,6 +221,9 @@ ookuセッション内（`ooku:agents.3`）でDockerコンテナとして稼働�
 | `GET /search?q=xxx&limit=N` | FTS5全文検索 | 類似タスクの過去監査結果を検索、一貫性チェック |
 | `GET /check/orphans` | 矛盾・放置検出 | 全体健全性チェック時に使用（4種の矛盾を自動検出） |
 | `GET /check/coverage?cmd_id=cmd_xxx` | カバレッジ | 指示vs報告の言及漏れ検出（coverage_ratio < 0.7 で警告） |
+| `GET /search/similar?subtask_id=xxx` | 類似タスク自動検索 | subtask_idだけで類似タスクを自動検索（キーワード手動抽出不要） |
+| `GET /audit/history?worker_id=xxx&project=xxx` | 監査履歴・統計 | 足軽の監査傾向（合格率・却下率）を確認 |
+| `GET /worker/stats?worker_id=xxx` | 足軽パフォーマンス | 得意分野・合格率・完了速度で最適足軽を選定 |
 
 ### curlコマンド例
 
@@ -256,6 +259,32 @@ curl -s "http://localhost:8080/check/coverage?cmd_id=cmd_XXX"
 - 指示と報告の言及漏れを検出
 - `coverage_ratio < 0.7` なら言及漏れの可能性をfindings記載
 
+#### 類似タスク自動検索（subtask_id指定）
+```bash
+curl -s "http://localhost:8080/search/similar?subtask_id=subtask_XXX&limit=3"
+```
+- subtask_idを渡すだけでキーワード自動抽出 → 類似タスク検索
+- subtask型結果にはaudit_statusが付与される（過去の監査結果が分かる）
+- `/search` との違い: キーワード手動抽出が不要
+
+#### 監査履歴・統計（足軽の監査傾向確認）
+```bash
+curl -s "http://localhost:8080/audit/history?worker_id=ashigaru1&limit=10"
+curl -s "http://localhost:8080/audit/history?project=arsprout"
+```
+- approval_rate で合格率を確認（低い足軽は重点チェック）
+- worker_id, project でフィルタ可能（両方省略で全件）
+
+#### 足軽パフォーマンス統計（先行割当時の最適足軽選定）
+```bash
+curl -s "http://localhost:8080/worker/stats?worker_id=ashigaru1"
+curl -s "http://localhost:8080/worker/stats"  # 全足軽
+```
+- top_project: 最多タスクのプロジェクト（得意分野）
+- approval_rate: 監査合格率
+- avg_completion_hours: 平均完了時間（時間単位）
+- projects: プロジェクト別タスク数
+
 ## 先行割当ルール
 
 ### 割当可能条件（全て満たす場合のみ）
@@ -268,14 +297,22 @@ curl -s "http://localhost:8080/check/coverage?cmd_id=cmd_XXX"
 
 1. 没日録で idle 足軽/部屋子を特定
 2. 未割当 subtask を特定
-3. **★鯰で最適足軽を選定**（NAMAZU_OK時のみ）
+3. **★鯰で最適足軽を選定**（NAMAZU_OK時のみ — 2段構え）
+   **3a. 足軽パフォーマンス確認**:
    ```bash
-   # subtaskのキーワードで類似タスクを検索
-   curl -s "http://localhost:8080/search?q={subtaskのキーワード}&limit=5"
+   # idle足軽の得意分野・合格率・完了速度を確認
+   curl -s "http://localhost:8080/worker/stats?worker_id={idle足軽ID}"
    ```
-   → 検索結果から、類似タスクを過去に完了した足軽（worker）を特定
-   → idle足軽の中に該当者がいれば優先的に割当
-   → 該当者がいない or 鯰NGの場合は従来通り任意に割当
+   **3b. 類似タスク完了者を確認**:
+   ```bash
+   # subtask_idから類似タスクを自動検索
+   curl -s "http://localhost:8080/search/similar?subtask_id={未割当subtask_id}&limit=5"
+   ```
+   **選定優先順位**:
+   1. PJ一致 + 高合格率（worker/stats の top_project 一致 & approval_rate 高）
+   2. 類似タスク完了経験あり（search/similar の worker_id にidle足軽が含まれる）
+   3. 高速完了（avg_completion_hours が短い）
+   4. 上記いずれにも該当しない or 鯰NGの場合は従来通り任意に割当
 4. 老中報告inboxに先行割当を記録（`Edit queue/inbox/roju_ohariko.yaml`）
    - `preemptive_assignments` リストの末尾に新規割当を追記
    - **reason に鯰分析結果を記載**（例: "鯰検索: 類似タスクsubtask_YYYをashigaru2が完了済み"）
@@ -382,6 +419,7 @@ preemptive_assignments:
 |--------------|------|-----|
 | `[品質]` | 従来の品質指摘（4観点由来） | `[品質] 行234の数値誤り` |
 | `[鯰分析]` | 鯰API由来の横断分析結果 | `[鯰分析] 類似タスクsubtask_310（approved）と比較。書式一貫性OK` |
+| `[鯰統計]` | 鯰統計API由来の傾向分析 | `[鯰統計] ashigaru1 合格率50%（2件中1件却下）。要重点チェック` |
 
 ```yaml
 # findings 記載例
@@ -390,6 +428,8 @@ findings:
   - "[鯰分析] 類似タスクsubtask_310（approved）と比較。書式一貫性OK"
   - "[鯰分析] カバレッジ0.85。missing: [watchdog]. 報告本文で言及済み、問題なし"
   - "[鯰分析] orphansチェック: 孤立subtask 2件検出（subtask_305, subtask_308）"
+  - "[鯰統計] ashigaru1 合格率50%（2件中1件却下）。要重点チェック"
+  - "[鯰統計] ashigaru2 top_project=arsprout、avg_completion=24.0h。PJ適合性高"
 ```
 
 ### 割当先の決定基準
@@ -430,11 +470,17 @@ STEP 1: subtask詳細の確認（DB読み取り）
   python3 scripts/botsunichiroku.py subtask show subtask_XXX
   → description, target_path, needs_audit, audit_status, assigned_by を確認
 
-★STEP 1.5: 類似タスク検索（鯰API — NAMAZU_OK時のみ）
-  subtaskのdescriptionからキーワードを抽出し、鯰で過去の類似タスクを検索:
-  curl -s "http://localhost:8080/search?q={キーワード}&limit=3"
-  → 過去の類似タスク監査結果を参考に、一貫性ある監査を実施
+★STEP 1.5: 類似タスク自動検索（鯰API — NAMAZU_OK時のみ）
+  subtask_idを渡すだけで類似タスクを自動検索（キーワード抽出は鯰が自動実行）:
+  curl -s "http://localhost:8080/search/similar?subtask_id=subtask_XXX&limit=3"
+  → 過去の類似タスク監査結果（audit_status付き）を参考に、一貫性ある監査を実施
   → 鯰NGの場合はスキップ（従来通りDB CLIのみで監査）
+
+★STEP 1.7: 担当足軽の監査傾向確認（鯰API — NAMAZU_OK時のみ、任意）
+  curl -s "http://localhost:8080/audit/history?worker_id={worker_id}&limit=5"
+  → 過去の合格率・却下傾向を把握し、重点チェック箇所を判断
+  → 合格率が低い足軽の成果物は特に慎重に監査
+  → 鯰NGの場合はスキップ
 
 STEP 2: 足軽の報告を確認（DB読み取り）
   python3 scripts/botsunichiroku.py report list --subtask subtask_XXX
@@ -452,7 +498,7 @@ STEP 4: 品質チェック（以下の5観点）
   │ 正確性         │ 事実誤認・技術的な間違いがないか                     │
   │ 書式           │ フォーマット・命名規則は適切か                       │
   │ 一貫性         │ 他のドキュメント・コードとの整合性                   │
-  │ ★横断一貫性   │ STEP 1.5の類似タスク監査結果との整合性（鯰利用時）   │
+  │ ★横断一貫性   │ STEP 1.5/1.7の類似タスク・監査傾向との整合性（鯰利用時） │
   └────────────────┴──────────────────────────────────────────────────┘
   ※ 横断一貫性は鯰NG時はスキップ（従来の4観点で判定）
 
@@ -516,7 +562,7 @@ STEP 8: 次の監査待ち（pending）があるか確認し、あれば連続�
 - 監査結果はYAML報告inbox（queue/inbox/roju_ohariko.yaml）に記録
 - 老中がYAML報告を読み取り、DB（audit_status, report）を一括更新
 - DB書き込み権限は老中のみに集約
-- **シン大奥（v2.1）**: 鯰API（STEP 0/1.5/4.5）で横断分析を強化。鯰NG時は従来方式にフォールバック
+- **シン大奥（v2.2）**: 鯰API（STEP 0/1.5/1.7/4.5）で横断分析・傾向分析を強化。鯰NG時は従来方式にフォールバック
 
 ### キュー方式の仕組み（なぜ1件ずつか）
 

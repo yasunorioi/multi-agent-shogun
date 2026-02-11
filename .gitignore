@@ -37,6 +37,8 @@ memory/
 # Project context (local to each installation, except README)
 context/
 !context/README.md
+!context/arsprout.md
+!context/rotation-planner.md
 queue/*.yaml
 dashboard.md
 config/projects.yaml

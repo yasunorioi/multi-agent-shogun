@@ -94,13 +94,13 @@ Grove Shield for Pi Pico は国内での入手性が悪化している。
      GND ─┤ 3               38 ├─ GND
      GP2 ─┤ 4               37 ├─ 3V3_EN
      GP3 ─┤ 5               36 ├─ 3V3(OUT)
-     GP4 ─┤ 6  [I2C0 SDA]   35 ├─ ADC_VREF
-     GP5 ─┤ 7  [I2C0 SCL]   34 ├─ GP28 [ADC2]
+     GP4 ─┤ 6               35 ├─ ADC_VREF
+     GP5 ─┤ 7               34 ├─ GP28 [ADC2]
      GND ─┤ 8               33 ├─ GND
      GP6 ─┤ 9  [I2C1 SDA]   32 ├─ GP27 [ADC1]
      GP7 ─┤ 10 [I2C1 SCL]   31 ├─ GP26 [ADC0]
-     GP8 ─┤ 11              30 ├─ RUN
-     GP9 ─┤ 12              29 ├─ GP22
+     GP8 ─┤ 11 [I2C0 SDA]   30 ├─ RUN
+     GP9 ─┤ 12 [I2C0 SCL]   29 ├─ GP22
      GND ─┤ 13              28 ├─ GND
     GP10 ─┤ 14              27 ├─ GP21
     GP11 ─┤ 15              26 ├─ GP20
@@ -116,7 +116,7 @@ Grove Shield for Pi Pico は国内での入手性が悪化している。
 
 | ポート種別 | Grove端子 | GPIO | 用途 |
 |-----------|----------|------|------|
-| **I2C0** | I2C | GP4 (SDA), GP5 (SCL) | センサー接続メイン |
+| **I2C0** | I2C | GP8 (SDA), GP9 (SCL) | センサー接続メイン |
 | **I2C1** | I2C | GP6 (SDA), GP7 (SCL) | センサー接続サブ |
 | **UART0** | UART | GP0 (TX), GP1 (RX) | シリアル通信 |
 | **UART1** | UART | GP8 (TX), GP9 (RX) | シリアル通信 |
@@ -439,7 +439,7 @@ def read_filtered():
 |-------|------|------|
 | **W5500 SPI** | GP16, GP17, GP18, GP19 | - |
 | **W5500 制御** | GP20 (RST), GP21 (INT) | - |
-| **Grove I2C0** | GP4 (SDA), GP5 (SCL) | なし |
+| **Grove I2C0** | GP8 (SDA), GP9 (SCL) | なし |
 | **Grove I2C1** | GP6 (SDA), GP7 (SCL) | なし |
 | **Grove UART0** | GP0 (TX), GP1 (RX) | なし |
 | **Grove ADC** | GP26, GP27, GP28 | なし |

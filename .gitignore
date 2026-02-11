@@ -10,8 +10,8 @@ claude-shogun-orders.md
 # Test outputs (generated during testing)
 test_output/
 
-# Generated skills (local development)
-skills/
+# Generated skills (local development, top-level only)
+/skills/
 
 # Python
 __pycache__/
@@ -40,7 +40,7 @@ context/
 !context/arsprout.md
 !context/rotation-planner.md
 queue/*.yaml
-dashboard.md
+# dashboard.md — privateリポジトリのため追跡対象（2026-02-11 殿裁定）
 config/projects.yaml
 status/
 config/settings.yaml

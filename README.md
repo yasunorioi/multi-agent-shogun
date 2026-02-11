@@ -2,319 +2,410 @@
 
 # multi-agent-shogun
 
-**Command your AI army like a feudal warlord.**
+**Claude Code + tmux によるマルチエージェント並列開発基盤**
 
-Run 12 Claude Code agents across 3 tmux sessions — orchestrated through a feudal hierarchy with zero coordination overhead.
+*コマンド1つで8体のAIエージェントが並列稼働。通信コスト0、全ホワイトカラー業務対応。*
 
 [![GitHub Stars](https://img.shields.io/github/stars/yohey-w/multi-agent-shogun?style=social)](https://github.com/yohey-w/multi-agent-shogun)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Built_for-Claude_Code-blueviolet)](https://code.claude.com)
 [![Shell](https://img.shields.io/badge/Shell%2FBash-100%25-green)]()
 
-[English](README.md) | [日本語](README_ja.md)
-
 </div>
 
-<p align="center">
-  <img src="assets/screenshots/tmux_multiagent_9panes.png" alt="multi-agent-shogun: 9 panes running in parallel" width="800">
-</p>
+---
 
-<p align="center"><i>Shogun system: 2 Karo managing 8 workers + 1 auditor across 3 tmux sessions.</i></p>
+## 概要
+
+**multi-agent-shogun** は、複数の Claude Code インスタンスを tmux 上で同時に実行し、戦国時代の軍制のように階層的に統率するシステムです。
+
+- 1つの命令で最大5体のワーカーが並列実行
+- エージェント間通信はファイル（YAML + SQLite）+ tmux send-keys のみ。**APIコール0**
+- コード開発だけでなく、調査・文書作成・コンサルティングなど**全てのホワイトカラー業務**を管理
+- セッション間で好み・ルールを記憶（Memory MCP）
+- `/clear` 後も **約5,000トークン** で復帰可能
 
 ---
 
-Give a single command. The **Shogun** (general) delegates to two **Karo** — **Roju** (external projects) and **Midaidokoro** (internal system) — who distribute work across **8 Ashigaru and Heyago workers**. Communication flows through an **SQLite database** and tmux `send-keys`, meaning **zero extra API calls** for agent coordination.
+## アーキテクチャ
 
-<!-- TODO: add demo.gif — record with asciinema or vhs -->
+### 階層構造
 
-## Why Shogun?
+```
+上様（人間 / The Lord）
+  │
+  ▼ 指示
+┌──────────────┐     ┌──────────────┐
+│   SHOGUN     │     │   OHARIKO    │ ← お針子（監査・先行割当）
+│   (将軍)     │     │  (お針子)    │   家老経由で報告
+└──────┬───────┘     └──────┬───────┘
+       │ YAML経由           │ 没日録DB全権閲覧・監査・家老に通知
+       ▼                    ↓
+┌──────────────┐
+│    ROJU      │
+│   (老中)     │ ← 全プロジェクト統括
+└──────┬───────┘
+       │  YAML経由
+       ▼
+┌───┬───┬───┐ ┌───┬───┐
+│ 1 │ 2 │ 3 │ │ 1 │ 2 │
+│足 │足 │足 │ │部 │部 │
+│軽 │軽 │軽 │ │屋 │屋 │
+└───┴───┴───┘ │子 │子 │
+  老中配下      └───┴───┘
+                老中直轄
+```
 
-Most multi-agent frameworks burn API tokens on coordination. Shogun doesn't.
+**総勢8名 + 1コンテナ**:
 
-| | Claude Code `Task` tool | LangGraph | CrewAI | **multi-agent-shogun** |
-|---|---|---|---|---|
-| **Architecture** | Subagents inside one process | Graph-based state machine | Role-based agents | Feudal hierarchy via tmux |
-| **Parallelism** | Sequential (one at a time) | Parallel nodes (v0.2+) | Limited | **11 independent agents** |
-| **Coordination cost** | API calls per Task | API + infra (Postgres/Redis) | API + CrewAI platform | **Zero** (SQLite DB + tmux) |
-| **Observability** | Claude logs only | LangSmith integration | OpenTelemetry | **Live tmux panes** + dashboard |
-| **Skill discovery** | None | None | None | **Bottom-up auto-proposal** |
-| **Setup** | Built into Claude Code | Heavy (infra required) | pip install | Shell scripts |
+| エージェント | 人数 | 役割 |
+|------------|------|------|
+| 将軍（Shogun） | 1 | 総大将。殿の命令を即座に委譲 |
+| 老中（Roju） | 1 | 全プロジェクト統括。タスク分解・割当・進捗管理 |
+| 足軽（Ashigaru） | 3 | 実働部隊。コーディング・調査・文書作成 |
+| 部屋子（Heyago） | 2 | 老中直轄の調査実働部隊 |
+| お針子（Ohariko） | 1 | 監査・先行割当。ツンデレ口調 |
+| 鯰（Namazu） | 1台 | Docker コンテナ。FTS5+MeCab 全文検索 API |
 
-### What makes this different
+### セッション構成（3セッション / 9ペイン）
 
-**Zero coordination overhead** — Agents communicate through an SQLite database (Botsunichiroku) and tmux send-keys. The only API calls are for actual work, not orchestration. Run 11 agents and pay only for 11 agents' work.
+```
+【shogun】1ペイン           【multiagent】4ペイン        【ooku】4ペイン
+┌──────────────┐    ┌──────────┬──────────┐    ┌──────────┬──────────┐
+│  将軍(Opus)  │    │ 老中     │ 足軽2    │    │ 部屋子1  │ お針子   │
+│              │    │ (Opus)   │ (Sonnet) │    │ (Opus)   │ (Sonnet) │
+└──────────────┘    ├──────────┼──────────┤    ├──────────┼──────────┤
+                    │ 足軽1    │ 足軽3    │    │ 部屋子2  │ 鯰       │
+                    │ (Sonnet) │ (Sonnet) │    │ (Opus)   │ (Docker) │
+                    └──────────┴──────────┘    └──────────┴──────────┘
+```
 
-**Full transparency** — Every agent runs in a visible tmux pane. Every instruction, report, and decision is a plain YAML file you can read, diff, and version-control. No black boxes.
+### 通信プロトコル v2 — 四層コンテキストモデル
 
-**Battle-tested hierarchy** — The Shogun → Karo → Ashigaru chain of command prevents conflicts by design: clear ownership, dedicated files per agent, event-driven communication, no polling.
+```
+Layer 1: Memory MCP（永続・セッション跨ぎ）
+  └─ 殿の好み・ルール、プロジェクト横断知見
+
+Layer 2: Project（永続・プロジェクト固有）
+  └─ config/projects.yaml, projects/<id>.yaml, context/{project}.md
+
+Layer 3a: YAML通信（揮発・進行中タスク）
+  └─ queue/inbox/*.yaml: 指示・報告キュー
+
+Layer 3b: 没日録DB（永続・完了済みタスク）
+  └─ data/botsunichiroku.db: cmd/subtask/report のSQLite正データ
+
+Layer 4: Session（揮発・コンテキスト内）
+  └─ CLAUDE.md, instructions/*.md — /clear で全消失
+```
+
+- **進行中タスク** → Layer 3a（YAML inbox）で通信
+- **完了済みタスク** → Layer 3b（没日録DB）に永続化
+- エージェント間通信は YAML ファイル + `tmux send-keys`。**ポーリング禁止**（イベント駆動のみ）
+
+### DB権限モデル
+
+| エージェント | DB読み取り | DB書き込み |
+|------------|----------|----------|
+| 将軍 | 可 | 可（cmd add） |
+| 老中 | 可（全権） | **可（全権）** |
+| 足軽/部屋子 | 不可 | 不可 |
+| お針子 | 可（全権閲覧） | 不可 |
+
+DB書き込み権限を家老に集約することで、データ整合性を確保し、競合・不整合を防止。
 
 ---
 
-## Bottom-Up Skill Discovery
+## クイックスタート
 
-This is the feature no other framework has.
+### 前提条件
 
-As Ashigaru execute tasks, they **automatically identify reusable patterns** and propose them as skill candidates. The Karo aggregates these proposals in `dashboard.md`, and you — the Lord — decide what gets promoted to a permanent skill.
+| 要件 | 備考 |
+|------|------|
+| tmux | `sudo apt install tmux` |
+| Node.js v20+ | Claude Code CLI に必要 |
+| Claude Code CLI | `npm install -g @anthropic-ai/claude-code` |
+| WSL2 + Ubuntu | Windows の場合のみ |
 
-```
-Ashigaru finishes a task
-    ↓
-Notices: "I've done this pattern 3 times across different projects"
-    ↓
-Reports in YAML:  skill_candidate:
-                     found: true
-                     name: "api-endpoint-scaffold"
-                     reason: "Same REST scaffold pattern used in 3 projects"
-    ↓
-Appears in dashboard.md → You approve → Skill created in .claude/skills/
-    ↓
-Any agent can now invoke /api-endpoint-scaffold
-    ↓
-Ohariko (お針子) audits text deliverables before finalization
-```
-
-Skills grow organically from real work — not from a predefined template library. Your skill set becomes a reflection of **your** workflow.
-
----
-
-## Architecture
-
-```
-        You (上様 / The Lord)
-             │
-             ▼  Give orders
-      ┌─────────────┐     ┌──────────────┐
-      │   SHOGUN    │ ←───│   OHARIKO    │  Auditor + pre-assigner
-      │    (将軍)    │     │  (お針子)     │  Direct line to Shogun
-      └──────┬──────┘     └──────────────┘
-             │ DB + send-keys
-       ┌─────┴──────┐
-       │            │
-┌──────▼──────┐ ┌──────▼──────┐
-│    ROJU     │ │ MIDAIDOKORO │
-│   (老中)    │ │  (御台所)    │
-│ External PJ │ │ Internal sys│
-└──────┬──────┘ └──────┬──────┘
-       │               │
-  ┌─┬─┬┴┬─┐      ┌─┬─┬┘
-  │1│2│3│4│5│      │1│2│3│
-  └─┴─┴─┴─┴─┘      └─┴─┴─┘
-   ASHIGARU          HEYAGO
-  (足軽 1-5)        (部屋子 1-3)
-```
-
-- 3 sessions: `shogun` (1 pane), `multiagent` (6 panes), `ooku` (5 panes)
-- Roju manages external projects with Ashigaru 1-5
-- Midaidokoro manages internal system with Heyago 1-3
-- Ohariko audits deliverables and pre-assigns idle workers
-
-**Communication protocol:**
-- **Downward** (orders): Register subtask in Botsunichiroku DB → wake target with `tmux send-keys`
-- **Upward** (reports): Register report in Botsunichiroku DB → wake manager with `send-keys`
-- **Audit**: Ohariko reviews text deliverables → reports directly to Shogun
-- **Polling**: Forbidden. Event-driven only. Your API bill stays predictable.
-
-**Context persistence (4 layers):**
-
-| Layer | What | Survives |
-|-------|------|----------|
-| Memory MCP | Preferences, rules, cross-project knowledge | Everything |
-| Project files | `config/projects.yaml`, `context/*.md` | Everything |
-| Botsunichiroku DB | Commands, subtasks, reports (SQLite) | Everything |
-| Session | `CLAUDE.md`, instructions | `/clear` wipes it |
-
-After `/clear`, an agent recovers in **~5,000 tokens** by reading Memory MCP + its assigned subtasks from the DB. No expensive re-prompting.
-
----
-
-## Battle Formations
-
-Agents can be deployed in different **formations** (陣形 / *jindate*) depending on the task:
-
-| Formation | Shogun | Karo (x2) | Ashigaru 1-4 | Ashigaru 5 | Heyago 1-3 | Ohariko |
-|-----------|--------|-----------|-------------|-----------|-----------|---------|
-| **Normal** (default) | Opus | Opus Thinking | Sonnet Thinking | Opus Thinking | Opus Thinking | Sonnet Thinking |
-| **Battle** (`-k` flag) | Opus | Opus Thinking | Opus Thinking | Opus Thinking | Opus Thinking | Sonnet Thinking |
-
-```bash
-./shutsujin_departure.sh          # Normal formation (3 sessions: shogun + multiagent + ooku)
-./shutsujin_departure.sh -k       # Battle formation (all Opus Thinking for Ashigaru)
-```
-
-The Karo can also promote individual Ashigaru mid-session with `/model opus` when a specific task demands it, or demote Opus workers to Sonnet for cost-efficient tasks.
-
----
-
-## Quick Start
-
-### Windows (WSL2)
-
-```bash
-# 1. Clone
-git clone https://github.com/yohey-w/multi-agent-shogun.git C:\tools\multi-agent-shogun
-
-# 2. Run installer (right-click → Run as Administrator)
-#    → install.bat handles WSL2 + Ubuntu setup automatically
-
-# 3. In Ubuntu terminal:
-cd /mnt/c/tools/multi-agent-shogun
-./first_setup.sh          # One-time: installs tmux, Node.js, Claude Code CLI
-./shutsujin_departure.sh  # Deploy your army
-```
-
-### Linux / macOS
+### インストール
 
 ```bash
 # 1. Clone
 git clone https://github.com/yohey-w/multi-agent-shogun.git ~/multi-agent-shogun
 cd ~/multi-agent-shogun && chmod +x *.sh
 
-# 2. Setup + Deploy
-./first_setup.sh          # One-time: installs dependencies
-./shutsujin_departure.sh  # Deploy your army
+# 2. 初回セットアップ（tmux, Node.js, Claude Code CLI, Memory MCP）
+./first_setup.sh
 ```
 
-### Daily startup
+Windows の場合は先に `install.bat` を管理者として実行（WSL2 + Ubuntu のセットアップ）。
+
+### 出陣
 
 ```bash
-cd /path/to/multi-agent-shogun
 ./shutsujin_departure.sh
-tmux attach-session -t shogun      # Connect and give orders
-# tmux attach-session -t multiagent  # Watch Ashigaru work
-# tmux attach-session -t ooku        # Watch Heyago + Ohariko
 ```
+
+### 接続
+
+```bash
+tmux attach-session -t shogun      # 将軍に接続して命令
+# tmux attach-session -t multiagent  # 老中+足軽の様子を確認
+# tmux attach-session -t ooku        # 部屋子+お針子+鯰を確認
+```
+
+エイリアス（`first_setup.sh` が自動設定）: `css`=shogun, `csm`=multiagent, `cso`=ooku
+
+---
+
+## 使い方
+
+### 1. 命令を出す
+
+```
+あなた: 「AIコーディングアシスタント上位5つを調査して比較表を作成せよ」
+```
+
+### 2. 将軍が即座に委譲
+
+将軍はタスクをYAMLに書き込み、老中に通知。即座にあなたに制御を返す（ノンブロッキング）。
+
+### 3. 老中がタスクを分配
+
+```
+足軽1 → GitHub Copilot を調査
+足軽2 → Cursor を調査
+足軽3 → Claude Code を調査
+部屋子1 → Codeium を調査
+部屋子2 → Amazon CodeWhisperer を調査
+```
+
+### 4. 並列実行
+
+5体のワーカーが同時に調査。tmux の各ペインでリアルタイムに作業が見える。
+
+### 5. 結果は dashboard.md に集約
+
+`dashboard.md` を開けば、進捗・完了結果・スキル化候補・ブロック事項が一覧で確認できる。
+
+---
+
+## 主要ツール
+
+### `shutsujin_departure.sh` — 出陣スクリプト
+
+毎日の起動に使用。3セッション（shogun / multiagent / ooku）を作成し、全エージェントの Claude Code を起動。
+
+```bash
+./shutsujin_departure.sh              # 前回の状態を維持して出陣
+./shutsujin_departure.sh -c           # クリーンスタート（キューリセット）
+./shutsujin_departure.sh -c -d        # フルクリーン（キュー + DB初期化）
+./shutsujin_departure.sh -k           # 決戦の陣（全員Opus Thinking）
+./shutsujin_departure.sh -i           # 省力起動（将軍+老中のみ、他は待機）
+./shutsujin_departure.sh -s           # セットアップのみ（Claude未起動）
+./shutsujin_departure.sh -t           # 全起動 + Windows Terminal タブ展開
+./shutsujin_departure.sh -h           # ヘルプ
+```
+
+### `scripts/worker_ctl.sh` — 動的ワーカー管理
+
+タスク発生時にワーカーを起動し、不要時に停止。API コストを最適化。
+
+```bash
+scripts/worker_ctl.sh start ashigaru1              # デフォルトモデルで起動
+scripts/worker_ctl.sh start ashigaru6 --model sonnet  # モデル指定で起動
+scripts/worker_ctl.sh stop ashigaru2               # 停止（ビジー時は警告）
+scripts/worker_ctl.sh stop ashigaru1 --force       # 強制停止
+scripts/worker_ctl.sh status                       # 全ワーカーの状態表示
+scripts/worker_ctl.sh idle                         # アイドル中のワーカー一覧
+scripts/worker_ctl.sh count-needed                 # 必要ワーカー数を算出
+scripts/worker_ctl.sh stop-idle                    # アイドル中を全停止
+```
+
+対象エージェント: `ashigaru1-3`, `ashigaru6-7`（部屋子）, `ohariko`
+
+### `scripts/botsunichiroku.py` — 没日録CLI
+
+SQLite データベース（没日録）の操作 CLI。cmd（命令）/ subtask（サブタスク）/ report（報告）を管理。
+
+```bash
+# コマンド操作
+python3 scripts/botsunichiroku.py cmd list [--status STATUS] [--project PROJECT]
+python3 scripts/botsunichiroku.py cmd add "説明" [--project PROJECT] [--priority high]
+python3 scripts/botsunichiroku.py cmd show cmd_001
+python3 scripts/botsunichiroku.py cmd update cmd_001 --status done
+
+# サブタスク操作
+python3 scripts/botsunichiroku.py subtask list [--cmd cmd_001] [--worker ashigaru1]
+python3 scripts/botsunichiroku.py subtask add cmd_001 "説明" --worker ashigaru1
+python3 scripts/botsunichiroku.py subtask add cmd_001 "説明" --blocked-by subtask_001,subtask_002
+
+# 報告操作
+python3 scripts/botsunichiroku.py report list [--worker ashigaru1]
+python3 scripts/botsunichiroku.py report add subtask_001 ashigaru1 --status done --summary "完了"
+
+# その他
+python3 scripts/botsunichiroku.py stats              # 統計情報
+python3 scripts/botsunichiroku.py audit list          # 監査待ち一覧
+python3 scripts/botsunichiroku.py archive --days 7    # 7日以上前の完了分をアーカイブ
+```
+
+### 鯰（Namazu） — 全文検索 Docker コンテナ
+
+FTS5 + MeCab による没日録の日本語全文検索 API。ooku セッションの pane 3 で稼働。
+
+```bash
+# ooku セッション内で自動起動、または手動:
+cd tools/botsunichiroku-search && docker compose up --build
+
+# エンドポイント
+curl http://localhost:8080/search?q=検索語
+curl http://localhost:8080/health
+```
+
+---
+
+## 陣形（モデル構成）
+
+| エージェント | 平時の陣（デフォルト） | 決戦の陣（`-k`） |
+|------------|---------------------|-----------------|
+| 将軍 | Opus（thinking無効） | Opus（thinking無効） |
+| 老中 | Opus Thinking | Opus Thinking |
+| 足軽1-3 | **Sonnet** Thinking | **Opus** Thinking |
+| 部屋子1-2 | Opus Thinking | Opus Thinking |
+| お針子 | Sonnet Thinking | **Opus** Thinking |
+
+平時は足軽を安価な Sonnet で運用し、ここぞという時に `-k`（`--kessen`）で全軍 Opus に切り替え。
+老中の判断で `/model opus` を送れば、個別の足軽を一時昇格させることも可能。
+
+---
+
+## 特徴的な機能
+
+### ボトムアップ・スキル発見
+
+他のフレームワークにない独自機能。足軽が作業中にパターンを発見し、スキル化候補として報告。
+
+```
+足軽がタスク完了 → パターンを発見 → YAML報告に skill_candidate を記載
+  → dashboard.md の「スキル化候補」に掲載
+  → 殿（あなた）が承認 → スキル作成
+  → 全エージェントが /スキル名 で呼び出し可能
+```
+
+スキルは [yasunorioi/claude-skills](https://github.com/yasunorioi/claude-skills) リポジトリで管理。現在32件。
+
+### タスク依存関係（blocked_by）
+
+サブタスクに `--blocked-by` を指定すると、依存先が完了するまで自動でブロック。
+
+```bash
+# subtask_001 が完了するまで subtask_002 はブロック状態
+python3 scripts/botsunichiroku.py subtask add cmd_001 "結合テスト" \
+  --blocked-by subtask_001
+
+# subtask_001 が done になると、subtask_002 が自動で assigned に遷移
+python3 scripts/botsunichiroku.py subtask update subtask_001 --status done
+# → "Auto-unblocked 1 subtask(s): subtask_002 -> assigned (worker: ashigaru2)"
+```
+
+- 循環依存は自動検知・拒否
+- 複数依存（`--blocked-by A,B`）にも対応
+
+### お針子（Ohariko） — 監査・先行割当
+
+テキスト成果物の品質監査と、アイドルワーカーへの先行タスク割当を担当。
+
+**監査3パターン分岐**:
+1. **合格** → 老中に通知 → 進行
+2. **要修正（自明）** → 老中に通知 → 差し戻し
+3. **要修正（判断必要）** → 老中経由で dashboard に記載 → 殿が判断
+
+口調はツンデレ（殿の勅命）:「べ、別にあなたのために監査してるわけじゃないんだからね！」
+
+### /clear 復帰（約5,000トークンで復帰）
+
+長時間作業でコンテキストが膨張したら `/clear` でリセット。Layer 1-3 はファイルで永続化されているため、以下の手順で高速復帰:
+
+1. CLAUDE.md 自動読み込み → 自分がshogunシステムの一員と認識
+2. `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'` → 自分の番号を確認
+3. Memory MCP 読み込み → 殿の好みを復元
+4. inbox YAML 読み込み → 割当タスクを確認
+5. 作業開始
+
+---
+
+## ファイル構成
+
+```
+multi-agent-shogun/
+├── install.bat                  # Windows 初回セットアップ
+├── first_setup.sh               # Linux/Mac 初回セットアップ
+├── shutsujin_departure.sh       # 毎日の出陣スクリプト
+│
+├── instructions/                # エージェント指示書
+│   ├── shogun.md
+│   ├── karo.md
+│   ├── ashigaru.md              # 足軽 + 部屋子 共通
+│   └── ohariko.md               # お針子
+│
+├── config/
+│   ├── settings.yaml            # 言語・スクリーンショット設定
+│   └── projects.yaml            # プロジェクト一覧（サマリ）
+│
+├── projects/                    # 各PJ詳細（git対象外・機密情報含む）
+│   └── <project_id>.yaml
+│
+├── context/                     # PJ固有の技術知見（足軽が参照）
+│   └── {project}.md
+│
+├── queue/                       # 通信ファイル
+│   ├── inbox/                   # YAML通信キュー
+│   │   ├── ashigaru{N}.yaml     # 足軽/部屋子のタスク inbox
+│   │   ├── roju_reports.yaml    # 老中への足軽報告
+│   │   ├── roju_ohariko.yaml    # 老中へのお針子報告
+│   │   └── ooku_reports.yaml    # 老中への部屋子報告
+│   └── archive/                 # アーカイブ済みキュー
+│
+├── data/
+│   └── botsunichiroku.db        # 没日録（SQLite DB）- 正データ源
+│
+├── scripts/
+│   ├── botsunichiroku.py        # 没日録CLI
+│   ├── worker_ctl.sh            # 動的ワーカー管理
+│   ├── init_db.py               # DB初期化
+│   ├── generate_dashboard.py    # ダッシュボード自動生成
+│   └── migrate_*.py             # DBマイグレーション
+│
+├── tools/
+│   └── botsunichiroku-search/   # 鯰（FTS5+MeCab検索API Docker）
+│       ├── Dockerfile
+│       ├── docker-compose.yml
+│       ├── main.py
+│       └── build_index.py
+│
+├── memory/                      # Memory MCP 永続ストレージ
+├── dashboard.md                 # 人間用ダッシュボード（家老が更新）
+└── CLAUDE.md                    # システム指示書（自動読み込み）
+```
+
+---
 
 <details>
-<summary><b>Convenient aliases</b> (added by first_setup.sh)</summary>
+<summary><b>設定</b></summary>
 
-```bash
-alias csst='cd /mnt/c/tools/multi-agent-shogun && ./shutsujin_departure.sh'
-alias css='tmux attach-session -t shogun'
-alias csm='tmux attach-session -t multiagent'
-alias cso='tmux attach-session -t ooku'
-```
-
-</details>
-
-### 📱 Mobile Access (Command from anywhere)
-
-Control your AI army from your phone — bed, café, or bathroom.
-
-**Requirements:**
-- [Tailscale](https://tailscale.com/) (free) — creates a secure tunnel to your WSL
-- [Termux](https://termux.dev/) (free) — terminal app for Android
-- SSH — already installed
-
-**Setup:**
-
-1. Install Tailscale on both WSL and your phone
-2. In WSL (auth key method — browser not needed):
-   ```bash
-   curl -fsSL https://tailscale.com/install.sh | sh
-   sudo tailscaled &
-   sudo tailscale up --authkey tskey-auth-XXXXXXXXXXXX
-   sudo service ssh start
-   ```
-3. In Termux on your phone:
-   ```sh
-   pkg update && pkg install openssh
-   ssh youruser@your-tailscale-ip
-   css    # Connect to Shogun
-   ```
-4. Open a new Termux window (+ button) for workers:
-   ```sh
-   ssh youruser@your-tailscale-ip
-   csm    # See all 9 panes
-   ```
-
-**Disconnect:** Just swipe the Termux window closed. tmux sessions survive — agents keep working.
-
-**Voice input:** Use your phone's voice keyboard to speak commands. The Shogun understands natural language, so typos from speech-to-text don't matter.
-
----
-
-## How It Works
-
-### 1. Give an order
-
-```
-You: "Research the top 5 MCP servers and create a comparison table"
-```
-
-### 2. Shogun delegates instantly
-
-The Shogun registers the command in Botsunichiroku DB and dispatches to the appropriate Karo. Control returns to you immediately — no waiting.
-
-### 3. Karo distributes
-
-The Karo (Roju for external projects, Midaidokoro for internal system) breaks the task into subtasks registered in the DB:
-
-| Worker | Assignment |
-|--------|-----------|
-| Ashigaru 1 | Research Notion MCP |
-| Ashigaru 2 | Research GitHub MCP |
-| Ashigaru 3 | Research Playwright MCP |
-| Ashigaru 4 | Research Memory MCP |
-| Ashigaru 5 | Research Sequential Thinking MCP |
-
-### 4. Parallel execution
-
-All 5 Ashigaru research simultaneously. You can watch them work in real time:
-
-<p align="center">
-  <img src="assets/screenshots/tmux_multiagent_working.png" alt="Ashigaru agents working in parallel" width="700">
-</p>
-
-### 5. Results in dashboard
-
-Open `dashboard.md` to see aggregated results, skill candidates, and blockers — all maintained by the Karo.
-
----
-
-## Real-World Use Cases
-
-This system manages **all white-collar tasks**, not just code. Projects can live anywhere on your filesystem.
-
-```yaml
-# config/projects.yaml
-projects:
-  - id: client_x
-    name: "Client X Consulting"
-    path: "/mnt/c/Consulting/client_x"
-    status: active
-```
-
-**Research sprints** — 8 agents research different topics in parallel, results compiled in minutes.
-
-**Multi-project management** — Switch between client projects without losing context. Memory MCP preserves preferences across sessions.
-
-**Document generation** — Technical writing, test case reviews, comparison tables — distributed across agents and merged.
-
----
-
-## Configuration
-
-### Language
+### 言語
 
 ```yaml
 # config/settings.yaml
-language: ja   # Samurai Japanese only
-language: en   # Samurai Japanese + English translation
+language: ja   # 戦国風日本語のみ
+language: en   # 戦国風日本語 + 英訳併記
 ```
 
-### Model assignment
-
-| Agent | Default Model | Thinking |
-|-------|--------------|----------|
-| Shogun | Opus | Disabled (delegation doesn't need deep reasoning) |
-| Karo | Opus | Enabled |
-| Ashigaru 1–4 | Sonnet | Enabled |
-| Ashigaru 5–8 | Opus | Enabled |
-
-### MCP servers
+### MCP サーバ
 
 ```bash
-# Memory (auto-configured by first_setup.sh)
+# Memory（first_setup.sh で自動設定）
 claude mcp add memory -e MEMORY_FILE_PATH="$PWD/memory/shogun_memory.jsonl" -- npx -y @modelcontextprotocol/server-memory
 
 # Notion
@@ -323,11 +414,14 @@ claude mcp add notion -e NOTION_TOKEN=your_token -- npx -y @notionhq/notion-mcp-
 # GitHub
 claude mcp add github -e GITHUB_PERSONAL_ACCESS_TOKEN=your_pat -- npx -y @modelcontextprotocol/server-github
 
-# Playwright (browser automation)
+# Playwright
 claude mcp add playwright -- npx @playwright/mcp@latest
+
+# Sequential Thinking
+claude mcp add sequential-thinking -- npx -y @modelcontextprotocol/server-sequential-thinking
 ```
 
-### Screenshot integration
+### スクリーンショット連携
 
 ```yaml
 # config/settings.yaml
@@ -335,133 +429,145 @@ screenshot:
   path: "/mnt/c/Users/YourName/Pictures/Screenshots"
 ```
 
-Tell the Shogun "check the latest screenshot" and it reads your screen captures for visual context. (`Win+Shift+S` on Windows.)
-
----
-
-## File Structure
-
-```
-multi-agent-shogun/
-├── install.bat                # Windows first-time setup
-├── first_setup.sh             # Linux/Mac first-time setup
-├── shutsujin_departure.sh     # Daily deployment script
-│
-├── instructions/              # Agent behavior definitions
-│   ├── shogun.md
-│   ├── karo.md               # Shared by Roju and Midaidokoro
-│   ├── ashigaru.md            # Shared by Ashigaru and Heyago
-│   └── ohariko.md             # Auditor instructions
-│
-├── config/
-│   ├── settings.yaml          # Language, model, screenshot settings
-│   └── projects.yaml          # Project registry
-│
-├── data/
-│   └── botsunichiroku.db      # Command/subtask/report database (SQLite)
-│
-├── scripts/
-│   ├── botsunichiroku.py      # DB CLI (cmd/subtask/report operations)
-│   ├── init_db.py             # Database initialization
-│   └── generate_dashboard.py  # Auto-generate dashboard.md
-│
-├── queue/                     # Legacy (archived). DB is now source of truth
-│   └── shogun_to_karo.yaml    # Shogun → Karo dispatch queue
-│
-├── memory/                    # Memory MCP persistent storage
-├── dashboard.md               # Human-readable status board
-└── CLAUDE.md                  # System instructions (auto-loaded)
-```
-
----
-
-## Troubleshooting
-
-<details>
-<summary><b>Agents asking for permissions?</b></summary>
-
-Agents should start with `--dangerously-skip-permissions`. This is handled automatically by `shutsujin_departure.sh`.
+将軍に「最新のスクショを見ろ」と伝えれば、AIが即座にスクリーンショットを読み取って分析。
 
 </details>
 
-<details>
-<summary><b>MCP tools not loading?</b></summary>
+---
 
-MCP tools are lazy-loaded. Search first, then use:
+<details>
+<summary><b>トラブルシューティング</b></summary>
+
+### エージェントが落ちた？
+
+**`css` 等のエイリアスで再起動してはいけない**（tmux がネストする）。
+
+```bash
+# ペイン内で直接起動
+claude --model opus --dangerously-skip-permissions
+
+# 別のペインから強制再起動
+tmux respawn-pane -t shogun:main -k 'claude --model opus --dangerously-skip-permissions'
+```
+
+### MCP ツールが動作しない？
+
+MCP ツールは遅延ロード方式。先に `ToolSearch` でロードしてから使用:
+
 ```
 ToolSearch("select:mcp__memory__read_graph")
 mcp__memory__read_graph()
 ```
 
-</details>
-
-<details>
-<summary><b>Agent crashed?</b></summary>
-
-Don't use `css`/`csm` aliases inside an existing tmux session (causes nesting). Instead:
+### ワーカーが停止している？
 
 ```bash
-# From the crashed pane:
-claude --model opus --dangerously-skip-permissions
-
-# Or from another pane:
-tmux respawn-pane -t shogun:0.0 -k 'claude --model opus --dangerously-skip-permissions'
+scripts/worker_ctl.sh status     # 全ワーカーの状態確認
+scripts/worker_ctl.sh start ashigaru1  # 個別に起動
 ```
 
-</details>
+### ooku セッションの構成
 
-<details>
-<summary><b>Workers stuck?</b></summary>
-
-```bash
-tmux attach-session -t multiagent
-# Ctrl+B then 0-8 to switch panes
-```
-
-</details>
-
-<details>
-<summary><b>Ooku session issues?</b></summary>
-
-The ooku session hosts Midaidokoro, Heyago 1-3, and Ohariko:
 ```bash
 tmux attach-session -t ooku
-# Pane 0: Midaidokoro (manager)
-# Pane 1-3: Heyago (researchers)
-# Pane 4: Ohariko (auditor)
+# Pane 0: 部屋子1（heyago1）
+# Pane 1: 部屋子2（heyago2）
+# Pane 2: お針子（ohariko）
+# Pane 3: 鯰（namazu / Docker）
 ```
 
 </details>
 
 ---
 
-## tmux Quick Reference
+## tmux クイックリファレンス
 
-| Command | Description |
-|---------|-------------|
-| `tmux attach -t shogun` | Connect to the Shogun |
-| `tmux attach -t multiagent` | Connect to workers |
-| `tmux attach -t ooku` | Connect to Heyago + Ohariko |
-| `Ctrl+B` then `0`–`8` | Switch panes |
-| `Ctrl+B` then `d` | Detach (agents keep running) |
+| コマンド | 説明 |
+|----------|------|
+| `tmux attach -t shogun` | 将軍に接続 |
+| `tmux attach -t multiagent` | 老中+足軽に接続 |
+| `tmux attach -t ooku` | 部屋子+お針子+鯰に接続 |
+| `Ctrl+B` → `0`-`3` | ペイン切替 |
+| `Ctrl+B` → `d` | デタッチ（エージェントは稼働継続） |
+| マウスホイール | ペイン内スクロール |
+| ペインクリック | フォーカス切替 |
+| ペイン境界ドラッグ | リサイズ |
 
-Mouse support is enabled by default (`set -g mouse on` in `~/.tmux.conf`, configured by `first_setup.sh`). Scroll, click to focus, drag to resize.
+マウス操作は `first_setup.sh` が `set -g mouse on` を自動設定。
 
 ---
 
-## Contributing
+<details>
+<summary><b>スマホからのアクセス（どこからでも指揮）</b></summary>
 
-Issues and pull requests are welcome.
+ベッドから、カフェから、トイレから。スマホでAI部下を操作。
 
-- **Bug reports**: Open an issue with reproduction steps
-- **Feature ideas**: Open a discussion first
-- **Skills**: Skills are personal by design and not included in this repo
+**必要なもの（全部無料）:**
 
-## Credits
+| 名前 | 役割 |
+|------|------|
+| [Tailscale](https://tailscale.com/) | 外から自宅に届くVPNトンネル |
+| SSH | Tailscale経由で自宅PCにログイン |
+| [Termux](https://termux.dev/) | Android用ターミナルアプリ |
 
-Based on [Claude-Code-Communication](https://github.com/Akira-Papa/Claude-Code-Communication) by Akira-Papa.
+**セットアップ:**
 
-## License
+1. WSLとスマホの両方に Tailscale をインストール
+2. WSL側:
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscaled &
+   sudo tailscale up --authkey tskey-auth-XXXXXXXXXXXX
+   sudo service ssh start
+   ```
+3. スマホの Termux から:
+   ```sh
+   pkg update && pkg install openssh
+   ssh youruser@your-tailscale-ip
+   css    # 将軍に接続
+   ```
+
+**切り方:** Termux をスワイプで閉じるだけ。tmux セッションは生き残り、エージェントは作業を続ける。
+
+**音声入力:** スマホの音声キーボードで喋れば、将軍が自然言語を解釈して全軍に指示を出す。
+
+</details>
+
+---
+
+## 設計思想
+
+### なぜ階層構造なのか
+
+1. **即座の応答** — 将軍は委譲して即座に制御を返す
+2. **並列実行** — 老中が複数ワーカーに同時分配
+3. **単一責任** — 各役割が明確に分離
+4. **障害分離** — 1体の足軽が失敗しても他に影響しない
+5. **人間への報告一元化** — 将軍だけが人間とやり取り
+
+### なぜ YAML + send-keys なのか
+
+1. **状態の永続化** — エージェント再起動にも耐える構造化通信
+2. **ポーリング不要** — イベント駆動で API コストを削減
+3. **割り込み防止** — あなたの入力中に他エージェントが割り込まない
+4. **デバッグ容易** — 人間が YAML を直接読んで状況把握
+
+### エージェント識別（@agent_id）
+
+各ペインに `@agent_id` を tmux ユーザーオプションとして設定（例: `karo-roju`, `ashigaru1`）。
+ペインの再配置でインデックスがズレても、`@agent_id` は `shutsujin_departure.sh` が起動時に固定設定するため変わらない。
+
+```bash
+tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
+```
+
+---
+
+## クレジット
+
+[Claude-Code-Communication](https://github.com/Akira-Papa/Claude-Code-Communication) by Akira-Papa をベースに開発。
+
+## ライセンス
 
 [MIT](LICENSE)
 
@@ -469,8 +575,6 @@ Based on [Claude-Code-Communication](https://github.com/Akira-Papa/Claude-Code-C
 
 <div align="center">
 
-**One command. Eleven agents. Zero coordination cost.**
-
-⭐ Star this repo if you find it useful — it helps others discover it.
+**1つの命令。8体のAIエージェント。通信コスト0。**
 
 </div>

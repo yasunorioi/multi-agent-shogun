@@ -1818,4 +1818,503 @@ reports:
 
     skill_candidate: なし
     skill_reason: instructions改修はプロジェクト固有の構成変更。汎用パターンではなくスキル化不要
-    read: false
+    read: true
+
+  - subtask_id: subtask_338
+    worker: ashigaru1
+    status: blocked
+    timestamp: "2026-02-11T21:28:55"
+    summary: |
+      【W5500センサーノード watchdog機能】コードレビュー完了、実機テスト準備完了、デバイス未接続によりブロック中。
+
+      ## コードレビュー結果
+
+      既存のmain.py, config.pyを精査した結果、**要求された3機能は全て実装済み**でした。改修不要と判断いたします。
+
+      ### ✅ 実装済み機能
+
+      **1. MQTT publish連続失敗→machine.reset()**
+      - main.py L81: mqtt_fail_count グローバル変数
+      - main.py L165-188: mqtt_publish() 関数内で失敗カウント・閾値チェック・reboot
+      - config.py L46: MQTT_FAIL_THRESHOLD = 3（デフォルト値）
+      - reboot前に /reboot_reason.txt に 'mqtt_fail_count_exceeded' を記録（L181-182）
+
+      **2. ハードウェアWDT（machine.WDT）**
+      - main.py L25-33: WDT初期化（timeout=WATCHDOG_TIMEOUT）
+      - config.py L42: WATCHDOG_TIMEOUT = 8000（8秒）
+      - main.py L202, 208, 217, 226, 237, 254: 各ループ要所で wdt.feed()
+      - sleep中もWDT feeding実装済み（L253-258、7秒チャンクで分割）
+
+      **3. リブート理由ログ**
+      - main.py L102-114: 起動時に /reboot_reason.txt 読み込み→MQTT publish→削除
+      - トピック: "status/reboot_reason"
+      - reboot前の書き込み実装済み（L181-182）
+
+      ## 実機テスト状況
+
+      **環境確認結果:**
+      - MQTTブローカー: ✅ 稼働中
+        - コンテナ名: agriha-mqtt
+        - 状態: Up About an hour (healthy)
+        - エンドポイント: 192.168.15.14:1883
+      - W5500-EVB-Pico-PoE: ❌ 未接続
+        - lsusb で Raspberry Pi Pico デバイス検出なし
+        - /dev/ttyACM* 不在
+        - mpremote 実行不可
+
+      **ブロック要因:** W5500-EVB-Pico-PoEのUSB接続が必要。実機テストを実施できず。
+
+      ## 次のアクション
+
+      1. 殿にW5500-EVB-Pico-PoEのUSB接続を依頼
+      2. 接続後に以下のテスト手順を実施:
+         - 正常動作確認（3ループ以上）
+         - broker停止テスト（docker restart agriha-mqtt）
+         - リブート確認テスト（docker stop → 90秒待機 → docker start）
+         - reboot_reason publish確認（mosquitto_sub）
+
+      ## 実機テスト手順書（準備完了）
+
+      ```bash
+      # 1. デバイスパス確認
+      ls /dev/ttyACM*
+
+      # 2. ファームウェア転送（最新版確認）
+      mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/main.py :main.py
+      mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/config.py :config.py
+
+      # 3. 正常動作確認（別ターミナルでmosquitto_sub起動）
+      mosquitto_sub -h 192.168.15.14 -t "agriha/house01/node01/#" -v
+
+      # 4. Broker停止テスト（約30秒停止）
+      docker restart agriha-mqtt
+
+      # 5. リブート確認テスト
+      docker stop agriha-mqtt
+      # 約90秒待機（30秒×3ループ）でPicoリブート
+      docker start agriha-mqtt
+      # リブート後、reboot_reasonトピック受信確認
+      ```
+
+      ## 技術的考察
+
+      **コード品質評価:**
+      - WDT feedingタイミング: 適切（sleep中も7秒チャンクで分割）
+      - エラーハンドリング: 適切（センサー初期化失敗時も継続）
+      - reboot_reason publish: 起動時に実行（mqtt_fail_count影響あるが、実用上問題なし）
+
+      **潜在的改善点（優先度低）:**
+      - reboot_reason publishが失敗してもmqtt_fail_countを増やさない専用ハンドリング
+      - ただし、起動直後にbrokerがダウンしているケースは稀なため、現状で実用十分
+
+    skill_candidate: null
+    read: true
+
+  - subtask_id: subtask_355
+    worker: ashigaru1
+    status: done
+    timestamp: "2026-02-11T21:33:10"
+    summary: |
+      【緊急任務】Picoテストスクリプト停止要請 → Pico未接続、MQTTデータ既に停止を確認。
+
+      ## 状況確認結果
+
+      **STEP 1: デバイス確認**
+      - `/dev/ttyACM*`: ❌ 不在
+      - `lsusb | grep pico/raspberry/2e8a`: ❌ 検出なし
+      - 結論: W5500-EVB-Pico2は物理的に未接続
+
+      **STEP 4: MQTTデータ確認（先行実施）**
+      ```bash
+      timeout 15 mosquitto_sub -h 192.168.15.14 -t 'agriha/#' -v
+      # → タイムアウト（exit code 124）
+      ```
+      - 15秒間、agriha/# トピックにデータなし
+      - 結論: MQTTデータは既に停止済み
+
+      **関連サービス状態**
+      - agriha-mqtt: ✅ Up About an hour (healthy)
+      - agriha-influxdb: ✅ Up 4 hours
+      - agriha-grafana: ✅ Up 3 hours
+
+      ## 結論
+
+      **Picoは既に停止しているか、物理的に接続されていません。**
+      - 停止操作不要（デバイス不在）
+      - MQTTデータ停止確認済み
+
+      ## 考察
+
+      殿のLINEアラートの原因候補:
+      1. **過去データへのアラート**: InfluxDBに残った古いデータに対するGrafanaアラート
+      2. **アラートルール誤動作**: 閾値設定やクエリの問題
+      3. **別データソース**: agriha/# 以外のトピックからのデータ
+      4. **Pico停止遅延**: 本緊急任務発令時には動いていたが、確認時点では既に停止
+
+      ## 推奨アクション
+
+      1. Grafanaアラートルール確認（http://192.168.15.14:3000）
+      2. InfluxDBクエリ確認（最近のagriha関連データポイント）
+      3. LINE通知設定確認（Contact PointやNotification Policy）
+
+      **緊急性**: Picoは停止済み。追加のデータ送信なし。アラート原因調査は通常優先度で対応可。
+
+    skill_candidate: null
+    read: true
+
+- id: report_352
+  subtask_id: subtask_356
+  worker: ashigaru2
+  status: done
+  timestamp: "2026-02-11T21:34:39"
+  summary: |
+    🚨 緊急任務完了。Grafanaアラート一時停止成功。殿のLINE通知停止を確認。
+    
+    【発火中だったAlert Rule】全6件:
+    - greenhouse-low-temp (低温警報, critical) - 08:18から13時間継続
+    - greenhouse-comm-lost (通信断, critical) - 08:23から13時間継続
+    - greenhouse-high-temp (高温警報, critical) - 08:18から13時間継続
+    - greenhouse-daily-report (日次レポート, info) - 08:22から13時間継続
+    - greenhouse-irrigation-anomaly (灌水異常, warning) - 08:21から13時間継続
+    - greenhouse-high-humid (高湿度警報, warning) - 08:18から13時間継続
+    
+    【原因】全て DatasourceNoData（InfluxDBにテストデータなし）
+    
+    【使用した停止方法】STEP 4-B: Silence作成
+    - Silence ID: 2dfc83d6-d446-4a80-b925-a027f98190f2
+    - 対象: Greenhouse フォルダの全Alert Rule
+    - 期間: 2時間（JST 21:33 → 23:33）
+    - マッチャー: grafana_folder="Greenhouse"
+    
+    【停止確認結果】
+    - ✅ 全6件のアラートが state: "suppressed" に変化
+    - ✅ 全アラートに silencedBy 設定済み
+    - ✅ LINE通知停止を確認
+    
+    【Grafana認証情報】
+    - ユーザー: admin
+    - パスワード: docker-compose.yaml記載のもの（agriha2026）
+    - 設定ファイル: /home/yasu/unipi-agri-ha/docker/docker-compose.yaml
+    
+    【備考】
+    - 当初 STEP 4-A（個別ルールPause）を試みたが、STEP 4-B（Silence）の方が迅速と判断
+    - 正規表現マッチャー ".*" はエラーのため、grafana_folder での完全一致に変更
+    - Silence期限（23:33）後は再度アラートが発火する可能性あり
+  skill_candidate: null
+  read: true
+
+- id: report_353
+  subtask_id: subtask_357
+  worker: ashigaru3
+  status: done
+  timestamp: "2026-02-11T21:40:30"
+  summary: |
+    はっ！スキル別リポジトリ移行準備、完了いたしました。
+
+    【STEP 1: 棚卸し結果】
+    - ファイル数: 53件（dashboard.md記載46件より7件多い）
+    - 総行数: 26,038行
+    - 分類: 汎用16件(5,483行) / IoT特化37件(20,555行) / shogun固有0件
+    
+    【dashboard.mdとの不一致】
+    - dashboard.mdにあるが実ファイルなし: tmux-safe-rename, pytest-schema-validator (2件)
+    - 実ファイルにあるがdashboard.md省略: 9件（agri-iot-board-design-template等）
+    
+    【STEP 2: arsprout_analysis/skills/】
+    - ディレクトリ不在。dashboard.mdの記載は古い情報。移行計画に影響なし。
+    
+    【STEP 3: .gitignore修正】
+    - `!.claude/skills/` の行を削除済み → .claude/skills/ が追跡対象外に
+    - git rm --cached はまだ実行していない（指示通り）
+    
+    【STEP 4: 移行計画案】
+    ■ リポジトリ名推奨: yasunorioi/claude-skills（シンプル・汎用的）
+    ■ 移行手順推奨: 方式A（単純コピー） — 履歴不要、シンプル
+    ■ 参照方法推奨: 手動コピー — .claude/skills/ に配置（Claude Code自動参照パス）
+    ■ 注意点:
+      1. .claude/skills/ パスは変更不可（Claude Code仕様）
+      2. 新リポジトリ移行完了後に git rm --cached 実行
+      3. dashboard.mdのスキル一覧も53件に更新必要
+      4. 本家(yohey-w)スキル非同梱方針に準拠
+    
+    【移行スケジュール案】
+    Phase 1: 新リポジトリ作成・README作成
+    Phase 2: スキル53件コピー・コミット
+    Phase 3: dashboard.md更新（53件一覧）
+    Phase 4: multi-agent-shogunから削除（git rm --cached）
+    Phase 5: 動作確認（Claude Codeがスキルを認識するか）
+    
+    【詳細】上記に全て記載。老中がdashboard.mdに転記されよ。
+  
+  skill_candidate: null
+  read: true
+
+- id: report_354
+  subtask_id: subtask_360
+  worker: ashigaru6
+  status: done
+  timestamp: "2026-02-11T22:02:39"
+  summary: |
+    かしこまりました。スキル査定バッチ3（10件）、完了いたしました。
+    
+    【評価結果サマリ】
+    - 残す: 7件
+    - 統合候補: 2件（要殿判断）
+    - 削除: 1件
+    
+    【詳細評価表】
+    | # | スキル名 | 判定 | 理由 |
+    |---|---------|------|------|
+    | 1 | i2c-sensor-auto-detector | 残す | CP/MP対応、プローブベース型番判別、実用的で汎用性高い |
+    | 2 | iot-auto-test-generator | 残す | USB/LAN/WiFi/UniPi全対応、udev/cron/manual統合、実装完成度が極めて高い |
+    | 3 | iot-comm-comparison | 残す | MQTT/HTTP/WebSocket等の技術選定レポート、他プロジェクトでも有用 |
+    | 4 | iot-design-doc-generator | 残す | 8セクション構成の設計書自動生成、ドキュメント化スキルとして汎用性高い |
+    | 5 | iot-mqtt-connection-tester | 統合候補 | paho-mqtt実装で品質高いが、iot-auto-test-generatorに包含されている。単独でも価値あり（要判断） |
+    | 6 | iot-system-spec-generator | 統合候補 | iot-design-doc-generatorと目的が重複（システム仕様書 vs 設計書）。内容を統合すべき |
+    | 7 | iot-timer-db-generator | 残す | 農業IoT特有の8時間帯・日出日入連動に特化、他に代替なし |
+    | 8 | jar-decompile-analyzer | 削除 | ArSprout解析に使用済みで今後利用予定なし、汎用性低い（Javaプロジェクトがない） |
+    | 9 | nodered-error-alert-flow-generator | 残す | LWT/heartbeat/閾値超過を網羅した異常検知フロー、実用価値高い |
+    | 10 | nodered-setup-guide | 残す | Docker/native両対応の環境構築ガイド、初期セットアップに必須 |
+    
+    【重複スキル詳細】
+    ■ iot-mqtt-connection-tester vs iot-auto-test-generator
+      - 前者: MQTT接続テスト専用（paho-mqtt、細かい制御可能）
+      - 後者: USB/LAN/WiFi/UniPi全対応で、MQTT接続テストを包含
+      - 判断: 前者を単独スキルとして残すか、後者に統合するかは殿の判断が必要
+    
+    ■ iot-system-spec-generator vs iot-design-doc-generator
+      - 前者: 10セクション構成のシステム仕様書（農業/工場/BEMS/スマートホーム対応）
+      - 後者: 8セクション構成の設計書（IoT特化）
+      - 判断: 両者のベストプラクティスを統合し、1スキルに集約すべき
+    
+    【鮮度評価（CP→MP移行）】
+    - i2c-sensor-auto-detector: CP/MP両対応 ★★★★★
+    - iot-auto-test-generator: CP専用記載あり（USB版） ★★★★☆（MP対応追記が必要）
+    
+    【次のステップ】
+    殿の判断をお待ちしておりますわ。統合候補2件の処理方針、削除1件の承認をいただければ、
+    バッチ4（残り10件）に進みます。
+  skill_candidate: null
+  read: true
+
+- id: report_355
+  subtask_id: subtask_361
+  worker: ashigaru7
+  status: done
+  timestamp: "2026-02-11T22:03:00"
+  summary: |
+    かしこまりました。スキル査定バッチ4（10件）、完了いたしました。
+
+    【評価結果】
+    | # | スキル名 | 判定 | 理由（1行） |
+    |---|---------|------|------------|
+    | 1 | nodered-timer-flow-generator | 残す | ArSprout Node-RED制御フローで実利用価値あり。シーケンス制御+日出/日入連動は汎用性高い |
+    | 2 | nodered-timeslot-generator | **統合候補** | #1とほぼ同じ用途（Node-RED農業タイマー）。8時間帯制御は#1に統合可能 |
+    | 3 | oss-competitive-analysis | 残す | 再利用性高い。新規OSSプロジェクト立ち上げ時の市場調査に汎用的に使える |
+    | 4 | oss-competitor-analyzer | **統合候補** | #3の簡易版。GitHub検索→YAML出力は#3とほぼ同じ。#3に統合可能 |
+    | 5 | oss-research-reporter | 残す | 技術調査レポート自動生成。#3/#4と用途は近いが、技術トピック調査に特化しており差別化あり |
+    | 6 | pico-grove-shield-guide | **削除** | CircuitPython非対応。MicroPython移行済みのため鮮度低い。ガイドも基板入手性問題で陳腐化済み |
+    | 7 | pico-mqtt-health-checker | 残す | ArSprout PoEノード監視で実利用価値あり。Ping→Broker→Messageの段階診断は汎用的 |
+    | 8 | pico-mqtt-repl-tester | 残す | MicroPython開発デバッグに有用。切腹ルール遵守のpyserial実装が価値。CP非対応は許容範囲 |
+    | 9 | pico-setup-wizard | **削除** | CircuitPython専用。MicroPython移行済みのため鮮度低い。対話形式も未実装でテンプレートのみ |
+    | 10 | pico-wifi-mqtt-template | **削除** | CircuitPython専用。MicroPython移行済み（umqtt.simple使用に変更）のため鮮度低い |
+
+    【サマリ】
+    - 残す: 5件（#1, #3, #5, #7, #8）
+    - 統合候補: 2件（#2→#1, #4→#3）
+    - 削除: 3件（#6, #9, #10）
+
+    【理由別】
+    - **MicroPython移行による鮮度低下**: #6, #9, #10（CircuitPython専用コードが陳腐化）
+    - **重複・統合可能**: #2（#1のサブセット）, #4（#3の簡易版）
+    - **実利用価値あり**: #1, #3, #5, #7, #8（汎用性または実PJでの活用見込みあり）
+
+    【詳細】
+    - #1: シーケンス制御+日出/日入連動の実装は、rotation-plannerやarsproutで応用可能
+    - #2: 8時間帯制御は#1の設計に統合できる。別スキルで分ける必要性低い
+    - #3: OSS競合分析は新PJ立ち上げ時に汎用的。rotation-planner、shogun自身でも使えた
+    - #4: #3の簡易版。機能差分はYAML出力のみで、#3に吸収可能
+    - #5: #3/#4と異なり、技術トピック調査に特化。差別化あり
+    - #6: Grove Shield入手性問題+CP→MP移行で二重に陳腐化。削除妥当
+    - #7: ArSproutノード監視で活用見込みあり。汎用的なヘルスチェック手法
+    - #8: 切腹ルール遵守のpyserial実装が教育的価値あり。MicroPythonでも応用可能
+    - #9: CP専用セットアップガイド。MP移行により価値喪失
+    - #10: CP専用WiFi+MQTTマネージャー。MP版は既に別途実装済み（umqtt.simple使用）
+  skill_candidate: null
+  read: true
+
+- id: report_356
+  subtask_id: subtask_359
+  worker: ashigaru3
+  status: done
+  timestamp: "2026-02-11T22:03:41"
+  summary: |
+    はっ！スキル査定バッチ2（11件）、完了いたしました。
+
+    【評価結果】
+    | # | スキル名 | 判定 | 理由（1行） |
+    |---|---------|------|------------|
+    | 1 | docker-compose-test | 残す | 汎用性高い（Bash+Python双璧実装、全PJで使える）|
+    | 2 | docker-pytest-runner | 残す | rotation-plannerで実利用価値あり（MeCab等の依存ライブラリテスト）|
+    | 3 | embedded-mqtt-tester | 統合候補 | CP 10.x専用で鮮度低い。iot-mqtt-connection-tester/pico-mqtt-health-checkerと重複 |
+    | 4 | enclosure-generator | 残す | 汎用3Dプリント筐体生成（OpenSCAD、プリセット/カスタム対応）|
+    | 5 | env-derived-values-calculator | 残す | ArSproutで実利用価値あり（VPD/露点/絶対湿度計算）|
+    | 6 | esp32-cam-timelapse-builder | 残す | 汎用ESP32-CAMタイムラプス（FTP/SD/MQTT、DeepSleep対応）|
+    | 7 | frontend-backend-schema-migration | 残す | rotation-plannerで実利用価値あり（React+FastAPI+SQLiteスキーマ移行パターン）|
+    | 8 | git-confidential-docs-isolation | 残す | OSS公開前の機密文書隔離パターン（汎用性高い）|
+    | 9 | ha-integration-designer | 統合候補 | homeassistant-agri-starterと重複（汎用vs農業特化）|
+    | 10 | ha-os-network-discovery | 残す | HA OSデバイス発見（nmap、ニッチだが有用）|
+    | 11 | homeassistant-agri-starter | 残す | ArSproutで実利用価値あり（農業特化HA設定生成）|
+
+    【サマリ】
+    - 残す: 9件（#1, #2, #4, #5, #6, #7, #8, #10, #11）
+    - 統合候補: 2件（#3, #9）
+    - 削除: 0件
+
+    【理由別】
+    - **汎用性が高く実用的**: #1, #4, #6, #8（全プロジェクトで使える）
+    - **実PJで活用中/見込み**: #2, #5, #7, #11（rotation-planner/ArSproutで使用）
+    - **統合可能**: #3（MQTT/Picoテスト重複）, #9（HA統合重複）
+
+    【詳細】
+    - #3: embedded-mqtt-tester は CircuitPython 10.x 専用で、iot-mqtt-connection-tester（paho-mqtt、汎用）と pico-mqtt-health-checker（段階診断）の両方と機能が重複。3件を1件に統合可能
+    - #9: ha-integration-designer（汎用）と homeassistant-agri-starter（農業特化）は目的が重複。後者の方が具体的で実利用価値が高いため、前者の汎用部分を後者に統合可能
+  skill_candidate: null
+  read: true
+
+- id: report_357
+  subtask_id: subtask_358
+  worker: ashigaru2
+  status: done
+  timestamp: "2026-02-11T22:05:11"
+  summary: |
+    はっ！ スキル査定バッチ1（11件）、完了でござる。
+
+    【評価結果】
+    | # | スキル名 | 判定 | 理由（1行） |
+    |---|---------|------|------------|
+    | 1 | adc-sensor-design-template | 削除 | CircuitPython専用（adafruit_ads1x15使用）、MP移行済みで鮮度低い |
+    | 2 | agri-iot-board-design-template | 残す | 基板設計は技術非依存。P82B96/Grove Shield代替等の実用性高い |
+    | 3 | circuitpython-network-manager | 削除 | CircuitPython専用（adafruit_requests使用）、MP移行済みで鮮度低い |
+    | 4 | circuitpython-pico-connection-test | 削除 | 6レイヤーテストは良いがCP専用、MP移行済みで鮮度低い |
+    | 5 | circuitpython-project-initializer | 削除 | CircuitPython専用（code.py/settings.toml生成）、MP移行済みで鮮度低い |
+    | 6 | circuitpython-sensor-mqtt-builder | 削除 | CP専用（Arduinoライブラリポート）、MP移行済みで鮮度低い |
+    | 7 | circuitpython-toml-config | 削除 | CircuitPython 9.x専用、MP移行済みで鮮度低い |
+    | 8 | crud-business-logic-generator | 残す | Gradio+SQLiteのCRUD、rotation-plannerで使用可能、汎用的 |
+    | 9 | csv-safe-wrapper-generator | 残す | 日本語CSV処理（エンコーディング自動検出、アトミック書き込み）、汎用的 |
+    | 10 | dataclass-model-generator | 残す | SQLite→dataclass生成、汎用的 |
+    | 11 | docker-compose-generator | 残す | Docker Compose生成、IoT以外でも使用可能 |
+
+    【サマリ】
+    - 残す: 5件（#2, #8, #9, #10, #11）
+    - 削除: 6件（#1, #3, #4, #5, #6, #7）— 全てCircuitPython専用スキル
+
+    【理由別】
+    - **MicroPython移行による鮮度低下**: タスク説明に明記の通り「CircuitPython → MicroPython に移行済み。CircuitPython専用スキルは鮮度低い」
+    - **汎用性あり**: #2（基板設計）、#8-#11（Python汎用）は技術プラットフォーム非依存で実用価値高い
+
+    【詳細】
+    - #1: adafruit_ads1x15ライブラリ使用のADCテンプレート。MP版は別途作成予定
+    - #2: Grove Shield代替基板設計、P82B96 I2C延長など。基板設計は技術非依存で保持価値あり
+    - #3-#7: 全てCircuitPython固有API（adafruit_requests, settings.toml等）に依存、MP移行により陳腐化
+    - #8: rotation-plannerのReact版でバックエンドCRUD生成に使用可能
+    - #9: 日本語CSV問題（Shift_JIS/CP932/BOM混在）の汎用解決パターン
+    - #10: SQLiteスキーマ→dataclass自動生成、rotation-planner等で実用性高い
+    - #11: Docker Compose生成、shogun自身のDocker構成管理でも応用可能
+  skill_candidate: null
+  read: true
+
+- id: report_357
+  subtask_id: subtask_362
+  worker: ashigaru1
+  status: done
+  timestamp: "2026-02-11T22:03:46"
+  summary: |
+    はっ！ subtask_362、任務完了いたした。
+
+    ■ Part 1: Grafana修正結果
+    - 修正ファイル数: 2
+    - 変更箇所数: 10（各ファイル5箇所ずつ）
+    - 確認結果: 全てOKに変更済み
+
+    【対象ファイル】
+    1. /home/yasu/unipi-agri-ha/cloud_server/grafana/provisioning/alerting.yaml
+    2. /home/yasu/unipi-agri-ha/docker/grafana/provisioning/alerting/alerting.yaml
+
+    【変更内容】
+    - L219: noDataState: NoData → OK（高温警報）
+    - L286: noDataState: NoData → OK（低温警報）
+    - L353: noDataState: NoData → OK（高湿度警報）
+    - L495: noDataState: NoData → OK（灌水異常）
+    - L571: noDataState: NoData → OK（日次レポート）
+    - L420: noDataState: Alerting → 変更なし（通信断ルールは正しくAlertingのまま）
+
+    【確認方法】
+    Grep検索で両ファイルの noDataState を全件確認済み：
+    - OK: 10箇所（5ルール×2ファイル）
+    - Alerting: 2箇所（通信断ルール×2ファイル、正しい設定）
+
+    ■ Part 2: スキル査定結果（11件）
+
+    【サマリ】
+    - 残す: 6件
+    - 統合候補: 5件 → 2スキルに統合（tech-comparison系3→1, w5500系2→1, wireguard系2→1）
+    - 削除: 1件
+
+    【詳細評価表】
+    | # | スキル名 | 判定 | 理由（1行） |
+    |---|---------|------|------------|
+    | 1 | pinout-diagram-generator | 残す | Mermaid図でピン配置自動生成。IoT以外の電子工作でも使える汎用性 |
+    | 2 | playwright-e2e-scaffold | 残す | rotation-planner（React版）のE2Eテスト環境で実利用価値あり |
+    | 3 | raspberrypi-os-installer-guide | 残す | ArSprout本番環境構築で実際に使用。再現性高いテンプレート |
+    | 4 | sensor-driver-generator | 統合候補 | uart-sensor-driver-generatorとほぼ同じ目的。統合可能 |
+    | 5 | sequential-technical-guide-writer | 残す | 手順書自動生成。rotation-planner移植ガイド作成で実利用済み |
+    | 6 | tech-comparison-reporter | 統合候補 | oss-competitive-analysis, iot-comm-comparisonと重複。3件を統合推奨 |
+    | 7 | uart-sensor-driver-generator | 削除 | Python 3.x専用でCircuitPython/MicroPython非対応。鮮度低い |
+    | 8 | w5500-ethernet-connection-test | 統合候補 | w5500-evb-pico-guideと統合可能（接続テストはガイドに含めるべき） |
+    | 9 | w5500-evb-pico-guide | 残す | ArSproutで実利用中。PoE開発ガイドとして価値高い |
+    | 10 | wireguard-client-config-generator | 統合候補 | wireguard-peer-adderと統合可能（クライアント追加時に両方必要） |
+    | 11 | wireguard-peer-adder | 統合候補 | wireguard-client-config-generatorと統合可能（セットで使うべき） |
+
+    【重複・統合の詳細】
+    ■ tech-comparison系（3件→1件）
+      - tech-comparison-reporter: 技術比較レポート
+      - oss-competitive-analysis: OSS競合分析（バッチ3で評価済み）
+      - iot-comm-comparison: IoT通信方式比較（バッチ3で評価済み）
+      → 統合先: "technology-comparison-reporter" に3件を統合
+
+    ■ w5500系（2件→1件）
+      - w5500-evb-pico-guide: 開発ガイド（セットアップ+サンプルコード）
+      - w5500-ethernet-connection-test: 接続テスト手順
+      → 統合先: w5500-evb-pico-guide に接続テストセクションを追加
+
+    ■ wireguard系（2件→1件）
+      - wireguard-client-config-generator: クライアント設定ファイル生成
+      - wireguard-peer-adder: サーバー側peer追加
+      → 統合先: "wireguard-peer-manager" に2件を統合（クライアント追加の全手順を1スキルに）
+
+    ■ sensor-driver系（2件→1件）
+      - sensor-driver-generator: 汎用センサードライバー生成
+      - uart-sensor-driver-generator: UARTセンサードライバー生成（Python 3.x専用）
+      → 統合先: sensor-driver-generator に統合（UART対応をI2C/SPI同様に扱う）
+      → uart-sensor-driver-generatorは削除（鮮度低い）
+
+    【鮮度評価（CP→MP移行）】
+    - uart-sensor-driver-generator: Python 3.x専用、CP/MP非対応 ★☆☆☆☆（削除推奨）
+    - 他10件: MP対応またはプラットフォーム非依存 ★★★★☆以上
+
+    【品質評価】
+    - playwright-e2e-scaffold: テスト設定完備、即利用可能 ★★★★★
+    - raspberrypi-os-installer-guide: ArSprout本番構築で検証済み ★★★★★
+    - sequential-technical-guide-writer: rotation-planner移植ガイドで実証済み ★★★★★
+    - w5500-evb-pico-guide: ArSproutPoEノード開発で実利用中 ★★★★★
+
+    【最終推奨】
+    1. **削除**: uart-sensor-driver-generator（1件）
+    2. **統合**: 5件を2スキルに集約（実質3件削除）
+       - technology-comparison-reporter（tech-comparison系3件統合）
+       - wireguard-peer-manager（wireguard系2件統合）
+       - w5500-evb-pico-guideに接続テストを追加（w5500-ethernet-connection-test削除）
+    3. **残す**: 6件（pinout, playwright, raspi-installer, sequential-guide, w5500-guide, sensor-driver）
+  skill_candidate: null
+  read: true

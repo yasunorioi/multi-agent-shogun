@@ -1,5 +1,5 @@
 # 📊 戦況報告
-最終更新: 2026-02-11 04:00
+最終更新: 2026-02-11 22:45
 
 ## 📜 殿の方針
 
@@ -41,6 +41,21 @@ Raspberry Pi
 
 ## 🚨 要対応 - 殿のご判断をお待ちしております
 
+### cmd_150(≒DB cmd_149) Grafanaアラート → LINE通知問題【no_data修正完了✅】
+- **no_data修正**: ✅ 5ルール×2ファイル = 10箇所 `noDataState: NoData → OK` 変更完了（cmd_152で対応）
+- **通信断ルール**: ✅ `noDataState: Alerting` のまま（正しい設定、変更不要）
+- **対象ファイル**: cloud_server/grafana/provisioning/alerting.yaml + docker/grafana/provisioning/alerting/alerting.yaml
+- **Docker**: 停止中。次回起動時に自動反映される
+- **Pico**: USB未接続。次回USB接続時にmain.py対処必要
+- **subtask_338(watchdog実装)**: コードレビュー完了（3機能実装済み）、実機テストはPico USB未接続のためブロック中
+
+### ~~cmd_152(≒DB cmd_151) スキル53件査定+統合+移行~~ → 全完了✅（2026-02-11 22:45）
+- 殿裁定: 削除11件承認、統合10件承認（技術比較系3件→1件統合も含む）
+- **実績**: 53件 → 32件（▲21件削減）：削除11件 + 統合元11件削除 + 統合先7件更新 + 新規1件(wireguard-peer-manager)
+- **移行先**: https://github.com/yasunorioi/claude-skills （32件、skills/ディレクトリ）
+- **multi-agent-shogun**: git rm --cached済み、.gitignoreで除外。ローカルの.claude/skills/には32件残存（Claude Code用）
+- Grafana no_data→OK修正10箇所も同cmd内で完了
+
 ### ~~cmd_146 方針変更 vs 部屋子出陣済み~~ → 殿裁定: そのまま続行。「やっちゃおう」
 
 ### ~~W5500 Ethernet再接続ロジック未実装~~ → cmd_145(≒DB cmd_144)で対応中
@@ -72,17 +87,17 @@ Raspberry Pi
 
 | 担当 | 戦場 | 任務 | 状況 |
 |------|------|------|------|
-| 足軽1 | arsprout | cmd_145(YAML) subtask_338 watchdog reboot実装+HW WDT+リブート理由ログ+実機テスト | 出陣中 |
-| 足軽2 | — | — | IDLE |
-| 足軽3 | — | — | IDLE |
-| 部屋子1-2 | — | — | IDLE |
-| お針子 | — | — | IDLE |
+| 全員 | — | — | IDLE |
 
 ---
 
 ## ✅ 本日の戦果（直近10件）
 | 時刻 | 戦場 | 任務 | 結果 |
 |------|------|------|------|
+| 22:45 | shogun | cmd_152(YAML)≒DB cmd_151 **スキル査定+統合+移行 全完了🎉** 殿裁定→削除11件+統合10件(7マージ先)実行→yasunorioi/claude-skills新リポジトリ作成→32件移行→multi-agent-shogunからgit rm --cached+push。53件→32件(▲21削減)。Grafana no_data修正10箇所も完了 | ✅ cmd完了 |
+| 22:15 | shogun+arsprout | cmd_152(YAML)≒DB cmd_151 **スキル53件査定+Grafana no_data修正 完了** 5バッチ並列（足軽3名+部屋子2名Sonnet降格）、結果: 残す32/統合候補10/削除11→53件→33件見込み | ✅ 査定完了 |
+| 21:44 | shogun | cmd_151(YAML)≒DB cmd_150 **スキル別リポジトリ移行準備完了** subtask_357 棚卸し53件(汎用16+IoT37/26,038行)・.gitignore修正済み・移行計画案策定（yasunorioi/claude-skills推奨、単純コピー、手動配置）、足軽3号 | ✅ 完了（承認待ち） |
+| 21:34 | arsprout | cmd_150(≒DB cmd_149) **Grafanaアラート緊急停止** subtask_355(Pico確認: USB未接続・MQTTデータ停止済み)+subtask_356(Grafana Silence作成: 全6アラートsuppressed) 根本原因: DatasourceNoData（データ不在で通信断等が13時間発火）。2時間Silence適用済み | ✅ 応急処置完了 |
 | 03:50 | shogun | cmd_149(YAML)≒DB cmd_148 **【リストラ】エージェント構成10名→8名+1コンテナ削減 全完了🎉** 3subtask全done（Wave1並列3名: 足軽2号shutsujin_departure.sh[ペイン6→4/6→4]+足軽3号CLAUDE.md+shogun.md[構造図・ペイン表・通信プロトコル]+足軽5号karo.md+ashigaru.md+ohariko.md[1300行karo改修・報告先roju統一] / Wave2: 老中横断grep検証7ファイル全0件）廃止: 御台所・足軽4-5号・部屋子3号、新構成: 老中全PJ統括・部屋子老中直轄・お針子ooku:agents.2 | ✅ cmd完了 |
 | 02:32 | shogun | cmd_148(YAML)≒DB cmd_147 **没日録検索エンジンDocker構築 全完了🎉** 3subtask全done（Wave1並列: 部屋子1号Docker+FTS5[Dockerfile+build_index.py154行+docker-compose.yml]+部屋子2号FastAPI[main.py375行,4EP:/search,/check/orphans,/check/coverage,/health] / Wave2: 部屋子3号テスト29件全PASSED+統合確認[docker build/up/health→456件/search→watchdog5件/down]全OK）、スキル候補: docker-pytest-runner | ✅ cmd完了 |
 | 01:28 | rotation-planner | cmd_147(YAML)≒DB cmd_146 **Playwright E2Eテスト構築 Wave1+Wave2完了🎉** 4subtask全done（Wave1:基盤7PASS足軽5/Wave2並列3名: ほ場8P1S4F足軽2+輪作14P2S足軽3+農薬5P1S+バックエンドスキーマ修正足軽4）全E2E 35PASS/3SKIP/4FAIL、unitテスト534件影響なし、スキーマ不一致発見→即修正、残課題:crop_history4件FAIL(作物select不一致) | ✅ cmd完了（残4FAIL） |
@@ -166,50 +181,20 @@ Raspberry Pi
 ## 🎯 スキル化候補 - 全件裁定済み
 なし（全候補の裁定完了）
 
-## 🛠️ 生成されたスキル（計44件）
+## 🛠️ スキル（計32件）→ yasunorioi/claude-skills に移行済み
 
-| # | スキル名 | 概要 |
-|---|---------|------|
-| 1 | adc-sensor-design-template | ADCアナログセンサー設計テンプレート |
-| 2 | circuitpython-sensor-mqtt-builder | I2Cセンサー+MQTT統合パターン |
-| 3 | sensor-driver-generator | I2Cセンサードライバ自動生成 |
-| 4 | i2c-sensor-auto-detector | I2C自動検出モジュール生成 |
-| 5 | circuitpython-network-manager | WiFi/Ethernet再接続モジュール |
-| 6 | iot-comm-comparison | IoT通信方式比較レポート生成 |
-| 7 | uart-sensor-driver-generator | UARTセンサードライバ生成 |
-| 8 | circuitpython-toml-config | TOML設定読み込みモジュール |
-| 9 | env-derived-values-calculator | 飽差/露点/絶対湿度計算モジュール |
-| 10 | nodered-setup-guide | Node-RED + Mosquitto環境セットアップ |
-| 11 | iot-timer-db-generator | タイマー用DBスキーマ生成 |
-| 12 | nodered-timeslot-generator | 8時間帯タイマー設定生成 |
-| 13 | nodered-timer-flow-generator | タイマーフロー生成（日出/日入連動） |
-| 14 | jar-decompile-analyzer | JARファイル解析（strings） |
-| 15 | pico-mqtt-repl-tester | CircuitPython REPL経由MQTTテスト（pyserial安全操作） |
-| 16 | iot-mqtt-connection-tester | IoTデバイス⇔MQTTブローカー接続テスト自動化（paho-mqtt） |
-| 17 | pico-mqtt-health-checker | Pico Ethernet+MQTTヘルスチェック（L1-L7段階的障害切り分け） |
-| 18 | ha-os-network-discovery | HA OSデバイスLAN内自動発見（nmap+ポートチェック） |
-| 19 | wireguard-peer-adder | WireGuardピア追加自動化（鍵生成→設定→QR生成） |
-| 20 | wireguard-client-config-generator | WireGuardクライアント設定ファイル生成（sudo不要） |
-| 21 | oss-competitive-analysis | 競合OSSプロジェクト体系的調査・分析（GitHub検索+比較表） |
-| 22 | oss-research-reporter | 技術調査レポート自動生成（WebSearch+構造化YAML出力） |
-| 23 | oss-competitor-analyzer | OSS競合分析自動化（キーワード検索+YAML報告書） |
-| 24 | csv-safe-wrapper-generator | CSV安全読み書きラッパー関数生成（エンコーディング自動検出） |
-| 25 | dataclass-model-generator | dataclass/NamedTupleモデル定義自動生成（型ヒント+プロパティ） |
-| 26 | crud-business-logic-generator | Gradio+SQLiteアプリCRUDビジネスロジック自動生成 |
-| 27 | tmux-safe-rename | tmux表示名・agent_id安全改名（変更禁止パターン自動検出+布陣図列幅自動調整） |
-| 28 | pytest-schema-validator | SQLiteスキーマ検証テスト自動生成（テーブル・カラム・インデックス・FK制約） |
-| 29 | docker-pytest-runner | Docker内pytest実行パターン（MeCab等システムライブラリ依存テスト対応） |
-| 30 | frontend-backend-schema-migration | React/FastAPI/SQLiteスキーマ不一致解消パターン（DB→API→Repository→Test一貫修正） |
-| 31 | playwright-e2e-scaffold | FastAPI+React SPAのPlaywright E2Eテスト基盤構築パターン |
-| 32 | tech-comparison-reporter | 複数技術の比較調査・評価表作成・推奨案提示パターン |
+**リポジトリ**: https://github.com/yasunorioi/claude-skills
+**ローカル**: `.claude/skills/` に32件残存（Claude Code自動参照パス）
 
-**その他作成済みスキル（14件）**:
-pico-setup-wizard, circuitpython-project-initializer, pinout-diagram-generator, docker-compose-test, homeassistant-agri-starter, iot-system-spec-generator, iot-auto-test-generator, ha-integration-designer, docker-compose-generator, pico-wifi-mqtt-template, 他
+| カテゴリ | スキル |
+|---------|--------|
+| IoT/Embedded (12) | agri-iot-board-design-template, enclosure-generator, esp32-cam-timelapse-builder, i2c-sensor-auto-detector, iot-auto-test-generator(※統合), iot-design-doc-generator(※統合), iot-timer-db-generator, pico-mqtt-health-checker, pico-mqtt-repl-tester, pinout-diagram-generator, sensor-driver-generator, w5500-evb-pico-guide(※統合) |
+| HA/Agriculture (6) | env-derived-values-calculator, ha-os-network-discovery, homeassistant-agri-starter(※統合), nodered-error-alert-flow-generator, nodered-setup-guide, nodered-timer-flow-generator(※統合) |
+| DevOps (5) | docker-compose-generator, docker-compose-test, docker-pytest-runner, git-confidential-docs-isolation, wireguard-peer-manager(※新規統合) |
+| Web/Backend (5) | crud-business-logic-generator, csv-safe-wrapper-generator, dataclass-model-generator, frontend-backend-schema-migration, playwright-e2e-scaffold |
+| Research (4) | oss-competitive-analysis(※統合), oss-research-reporter, raspberrypi-os-installer-guide, sequential-technical-guide-writer |
 
-**ArSprout関連スキル（2件、分離保管）**: `/home/yasu/arsprout_analysis/skills/`
-uecs-mqtt-bridge-generator, unipi-arsprout-integration
-
-**保存先**: `/home/yasu/multi-agent-shogun/.claude/skills/`
+※統合 = 他スキルの内容を吸収統合済み。※新規統合 = 2件を統合して新規作成。
 
 ## ⏸️ 待機中
 なし

@@ -1,96 +1,62 @@
 tasks:
-  - subtask_id: subtask_338
-    cmd_id: cmd_144
-    project: arsprout
+  - subtask_id: subtask_362
+    cmd_id: cmd_151
+    project: shogun
     assigned_by: roju
-    status: assigned
+    status: done
     description: |
-      【実装+実機テスト】W5500センサーノード watchdog reboot機能追加。
+      【Grafana no_data修正 + スキル査定バッチ5】
 
-      ## 背景
-      cmd_142 subtask_330の再接続テストで、LANケーブル物理断からの自動復帰ができないことが判明。
-      殿の方針: **Picoは消耗品、リブートで十分**。複雑な再接続ロジックは不要。
+      ## Part 1: Grafana alerting.yaml no_data→OK修正
 
-      ## 実装内容（3点）
+      以下の2つの alerting.yaml で全 Alert Rule の no_data_state を no_data → OK に変更せよ。
 
-      ### 1. MQTT publish連続失敗→machine.reset()
-      - main.py のメインループで MQTT publish 失敗をカウント
-      - 連続N回失敗（閾値: config.pyに外出し、デフォルト3回）→ `machine.reset()` でPicoリブート
-      - boot.py でW5500再初期化+DHCP → main.py で正常ループ再開
-      - **既存の main.py (subtask_331作成済み) を改修せよ。新規作成ではない**
+      対象ファイル:
+      1. /home/yasu/unipi-agri-ha/cloud_server/grafana/provisioning/alerting.yaml
+      2. /home/yasu/unipi-agri-ha/docker/grafana/provisioning/alerting/alerting.yaml
 
-      ### 2. ハードウェアWDT（machine.WDT）併用
-      - `wdt = machine.WDT(timeout=120000)` でハードウェアウォッチドッグ起動（120秒）
-      - メインループの各ループ末尾で `wdt.feed()`
-      - ループがハングしたら120秒後にハードウェアリセット
-      - **注意**: WDTは一度起動すると停止不可（MicroPython仕様）。デバッグ時は注意
+      手順:
+      - 各ファイルを Read → no_data_state を検索 → Edit で no_data → OK に変更
+      - 変更後に Grep で no_data_state を検索し全て OK になったことを確認
 
-      ### 3. リブート理由ログ
-      - リブート前に理由をファイルに書く: `/reboot_reason.txt`
-        ```python
-        with open('/reboot_reason.txt', 'w') as f:
-            f.write('mqtt_fail_count_exceeded')
-        machine.reset()
-        ```
-      - 次回起動時（main.py冒頭）にファイルを読み、MQTTで理由をpublish:
-        - トピック: `agriha/house01/node01/status/reboot_reason`
-        - publish後にファイル削除
-      - 運用で「なぜ再起動したか」を追跡可能にする
+      ## Part 2: スキル査定バッチ5（11件）
 
-      ## 改修対象ファイル
-      - **unipi-agri-ha/micropython/main.py** — メインループにfail count+WDT+reboot reason追加
-      - **unipi-agri-ha/micropython/config.py** — MQTT_FAIL_THRESHOLD=3, WDT_TIMEOUT=120000 追加
+      .claude/skills/ 配下の以下のファイルを全て Read せよ：
+      1. pinout-diagram-generator.md
+      2. playwright-e2e-scaffold.md
+      3. raspberrypi-os-installer-guide.md
+      4. sensor-driver-generator.md
+      5. sequential-technical-guide-writer.md
+      6. tech-comparison-reporter.md
+      7. uart-sensor-driver-generator.md
+      8. w5500-ethernet-connection-test.md
+      9. w5500-evb-pico-guide.md
+      10. wireguard-client-config-generator.md
+      11. wireguard-peer-adder.md
 
-      ## テスト手順
-      1. 改修後のmain.py, config.py を mpremote で実機転送
-         ```
-         mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/main.py :main.py
-         mpremote connect /dev/ttyACM1 cp unipi-agri-ha/micropython/config.py :config.py
-         ```
-      2. 正常動作確認: 3ループ以上安定してMQTT publishされること
-      3. broker停止テスト:
-         - `docker restart agriha-mqtt` でbroker停止（30秒程度停止する）
-         - Pico側でpublish失敗カウントが増加するのを観察
-         - **もし3ループ以内にbrokerが復帰すれば、リブートせずに再接続するはず**
-         - N回連続失敗した場合のみリブート発動
-      4. リブート確認:
-         - brokerを長時間停止（60秒以上）してN回連続失敗を誘発
-           ```
-           docker stop agriha-mqtt
-           ```
-           ※ 約90秒後（30秒×3ループ）にPicoリブートが期待される
-         - リブート後、brokerを再開:
-           ```
-           docker start agriha-mqtt
-           ```
-         - Pico再起動→MQTT再接続→reboot_reason publish確認
-         - mosquitto_sub でreboot_reasonトピックの受信を確認
+      ## 評価基準（5基準）
+      1. **再利用性**: 他プロジェクト（IoT以外）でも使えるか？
+      2. **利用実績**: テンプレートとして完成度が高く実際に使いそうか？（我々のPJ: arsprout農業IoT, rotation-planner畑作管理, shogunマルチエージェント）
+      3. **重複**: 似たスキルが複数ないか？（全53件リスト後述）
+      4. **鮮度**: CircuitPython→MicroPython移行済み。CP専用は鮮度低い
+      5. **品質**: テンプレートとして十分な品質か？
 
-      ## 結果報告フォーマット
-      - 改修内容サマリ（変更行数、追加した機能）
-      - テスト1（正常動作）: PASS/FAIL
-      - テスト2（broker停止→リブート発動）: PASS/FAIL + リブートまでの時間
-      - テスト3（リブート後の正常復帰+reboot_reason publish）: PASS/FAIL
-      - 改善提案（あれば）
+      ## 全53件リスト（重複チェック用）
+      adc-sensor-design-template, agri-iot-board-design-template, circuitpython-network-manager, circuitpython-pico-connection-test, circuitpython-project-initializer, circuitpython-sensor-mqtt-builder, circuitpython-toml-config, crud-business-logic-generator, csv-safe-wrapper-generator, dataclass-model-generator, docker-compose-generator, docker-compose-test, docker-pytest-runner, embedded-mqtt-tester, enclosure-generator, env-derived-values-calculator, esp32-cam-timelapse-builder, frontend-backend-schema-migration, git-confidential-docs-isolation, ha-integration-designer, ha-os-network-discovery, homeassistant-agri-starter, i2c-sensor-auto-detector, iot-auto-test-generator, iot-comm-comparison, iot-design-doc-generator, iot-mqtt-connection-tester, iot-system-spec-generator, iot-timer-db-generator, jar-decompile-analyzer, nodered-error-alert-flow-generator, nodered-setup-guide, nodered-timer-flow-generator, nodered-timeslot-generator, oss-competitive-analysis, oss-competitor-analyzer, oss-research-reporter, pico-grove-shield-guide, pico-mqtt-health-checker, pico-mqtt-repl-tester, pico-setup-wizard, pico-wifi-mqtt-template, pinout-diagram-generator, playwright-e2e-scaffold, raspberrypi-os-installer-guide, sensor-driver-generator, sequential-technical-guide-writer, tech-comparison-reporter, uart-sensor-driver-generator, w5500-ethernet-connection-test, w5500-evb-pico-guide, wireguard-client-config-generator, wireguard-peer-adder
 
-      ## 参照
-      - unipi-agri-ha/micropython/main.py（subtask_331で作成済み。これを改修）
-      - unipi-agri-ha/micropython/boot.py（subtask_331で作成済み。変更不要のはず）
-      - unipi-agri-ha/micropython/config.py（subtask_331で作成済み。閾値追加）
-      - context/arsprout.md
+      ## 報告フォーマット
 
-      ## 注意事項（厳守）
-      - 切腹ルール: cat /dev/ttyACMx 禁止
-      - mpremote並列実行禁止
-      - I2Cピン: GP8(SDA)/GP9(SCL)
-      - デバイスパス: /dev/ttyACM1（要確認: ls /dev/ttyACM*）
-      - Broker: 192.168.15.14:1883（Docker版 agriha-mqtt）
-      - Mosquitto操作: `docker stop/start/restart agriha-mqtt`（sudo不要）
-      - `sudo systemctl restart mosquitto` は使うな（apt版は動いていない）
-      - WDTは停止不可。テスト中にハングするとWDTタイムアウトでリセットされる
+      ### Grafana修正結果
+      - 修正ファイル数: X
+      - 変更箇所数: X
+      - 確認結果: 全てOKに変更済み / 問題あり
 
-    target_path: unipi-agri-ha/micropython/main.py
-    notes: |
-      subtask_331で作成済みの3ファイル(boot.py/config.py/main.py)を改修する。
-      新規作成ではなく既存改修。先にReadで現行コードを確認してから改修せよ。
-      brokerはDocker版(agriha-mqtt)。docker stop/start/restart で操作。sudo不要。
+      ### スキル査定結果
+      | # | スキル名 | 判定 | 理由（1行） |
+      |---|---------|------|------------|
+      | 1 | xxx | 残す/削除/統合候補 | 理由 |
+
+    target_path: /home/yasu/multi-agent-shogun/.claude/skills/
+    wave: 1
+    needs_audit: false
+    created_at: "2026-02-11T21:55:00"

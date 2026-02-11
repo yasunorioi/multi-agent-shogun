@@ -12,8 +12,8 @@ Usage:
     python3 scripts/botsunichiroku.py cmd show CMD_ID [--json]
 
     python3 scripts/botsunichiroku.py subtask list [--cmd CMD_ID] [--worker WORKER] [--status STATUS] [--needs-audit 0|1] [--audit-status STATUS] [--json]
-    python3 scripts/botsunichiroku.py subtask add CMD_ID "description" [--worker WORKER] [--wave N] [--project PROJECT] [--target-path PATH] [--needs-audit]
-    python3 scripts/botsunichiroku.py subtask update SUBTASK_ID [--status STATUS] [--worker WORKER] [--audit-status {pending,in_progress,done}]
+    python3 scripts/botsunichiroku.py subtask add CMD_ID "description" [--worker WORKER] [--wave N] [--project PROJECT] [--target-path PATH] [--needs-audit] [--blocked-by ID1,ID2]
+    python3 scripts/botsunichiroku.py subtask update SUBTASK_ID [--status STATUS] [--worker WORKER] [--audit-status {pending,in_progress,done}] [--blocked-by ID1,ID2]
     python3 scripts/botsunichiroku.py subtask show SUBTASK_ID [--json]
 
     python3 scripts/botsunichiroku.py report add TASK_ID WORKER_ID --status STATUS --summary "text" [--findings JSON] [--files-modified JSON] [--skill-name NAME] [--skill-desc DESC]
@@ -207,7 +207,7 @@ def cmd_show(args) -> None:
 
     # Also fetch subtasks for this command
     subtasks = conn.execute(
-        "SELECT id, worker_id, status, wave, description FROM subtasks WHERE parent_cmd = ? ORDER BY wave, id",
+        "SELECT id, worker_id, status, wave, blocked_by, description FROM subtasks WHERE parent_cmd = ? ORDER BY wave, id",
         (args.cmd_id,),
     ).fetchall()
     conn.close()
@@ -230,17 +230,21 @@ def cmd_show(args) -> None:
 
     if subtasks:
         print(f"\nSubtasks ({len(subtasks)}):")
-        headers = ["ID", "WORKER", "STATUS", "WAVE", "DESCRIPTION"]
+        headers = ["ID", "WORKER", "STATUS", "WAVE", "BLOCKED_BY", "DESCRIPTION"]
         table_rows = []
         for s in subtasks:
+            blocked_by = s["blocked_by"] or "-"
+            if len(blocked_by) > 20:
+                blocked_by = blocked_by[:17] + "..."
             table_rows.append([
                 s["id"],
                 s["worker_id"] or "-",
                 s["status"],
                 str(s["wave"]),
+                blocked_by,
                 s["description"],
             ])
-        print_table(headers, table_rows, [14, 12, 14, 5, 50])
+        print_table(headers, table_rows, [14, 12, 14, 5, 20, 40])
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +254,7 @@ def cmd_show(args) -> None:
 
 def subtask_list(args) -> None:
     conn = get_connection()
-    query = "SELECT id, parent_cmd, worker_id, project, status, wave, description FROM subtasks WHERE 1=1"
+    query = "SELECT id, parent_cmd, worker_id, project, status, wave, blocked_by, description FROM subtasks WHERE 1=1"
     params: list = []
     if args.cmd:
         query += " AND parent_cmd = ?"
@@ -280,19 +284,100 @@ def subtask_list(args) -> None:
         print("No subtasks found.")
         return
 
-    headers = ["ID", "CMD", "WORKER", "STATUS", "WAVE", "PROJECT", "DESCRIPTION"]
+    headers = ["ID", "CMD", "WORKER", "STATUS", "WAVE", "BLOCKED_BY", "DESCRIPTION"]
     table_rows = []
     for r in rows:
+        blocked_by = r["blocked_by"] or "-"
+        # Truncate long blocked_by for table display
+        if len(blocked_by) > 20:
+            blocked_by = blocked_by[:17] + "..."
         table_rows.append([
             r["id"],
             r["parent_cmd"],
             r["worker_id"] or "-",
             r["status"],
             str(r["wave"]),
-            r["project"] or "",
+            blocked_by,
             r["description"],
         ])
-    print_table(headers, table_rows, [14, 10, 12, 14, 5, 15, 40])
+    print_table(headers, table_rows, [14, 10, 12, 14, 5, 20, 35])
+
+
+def _parse_blocked_by(blocked_by_str: str | None) -> list[str]:
+    """Parse comma-separated blocked_by string into a list of subtask IDs."""
+    if not blocked_by_str:
+        return []
+    return [s.strip() for s in blocked_by_str.split(",") if s.strip()]
+
+
+def _detect_cycle(conn: sqlite3.Connection, start_id: str, blocked_by_ids: list[str]) -> str | None:
+    """Detect circular dependencies. Returns the cycle path string if found, None otherwise."""
+    # BFS from each dependency to see if any path leads back to start_id
+    from collections import deque
+    for dep_id in blocked_by_ids:
+        visited = set()
+        queue = deque([dep_id])
+        while queue:
+            current = queue.popleft()
+            if current == start_id:
+                return f"{start_id} -> {dep_id} -> ... -> {start_id}"
+            if current in visited:
+                continue
+            visited.add(current)
+            row = conn.execute("SELECT blocked_by FROM subtasks WHERE id = ?", (current,)).fetchone()
+            if row and row["blocked_by"]:
+                for next_id in _parse_blocked_by(row["blocked_by"]):
+                    queue.append(next_id)
+    return None
+
+
+def auto_unblock(conn: sqlite3.Connection, completed_id: str) -> list[str]:
+    """Auto-unblock subtasks whose dependencies are all resolved.
+
+    When a subtask is completed, find all subtasks that have it in their blocked_by.
+    For each, check if ALL dependencies are now done. If so, change status from
+    'blocked' to 'assigned' (if worker set) or 'pending' (if no worker).
+
+    Returns list of unblocked subtask IDs with their new status.
+    """
+    unblocked = []
+
+    # Find all subtasks that reference completed_id in their blocked_by
+    rows = conn.execute(
+        "SELECT id, blocked_by, worker_id, status FROM subtasks WHERE blocked_by LIKE ?",
+        (f"%{completed_id}%",),
+    ).fetchall()
+
+    for row in rows:
+        if row["status"] != "blocked":
+            continue
+
+        deps = _parse_blocked_by(row["blocked_by"])
+        if completed_id not in deps:
+            continue  # false positive from LIKE match
+
+        # Check if ALL dependencies are done
+        all_resolved = True
+        for dep_id in deps:
+            if dep_id == completed_id:
+                continue
+            dep_row = conn.execute(
+                "SELECT status FROM subtasks WHERE id = ?", (dep_id,)
+            ).fetchone()
+            if not dep_row or dep_row["status"] not in ("done", "archived"):
+                all_resolved = False
+                break
+
+        if all_resolved:
+            new_status = "assigned" if row["worker_id"] else "pending"
+            conn.execute(
+                "UPDATE subtasks SET status = ? WHERE id = ?",
+                (new_status, row["id"]),
+            )
+            worker_info = f" (worker: {row['worker_id']})" if row["worker_id"] else ""
+            unblocked.append(f"{row['id']} -> {new_status}{worker_info}")
+
+    return unblocked
 
 
 def subtask_add(args) -> None:
@@ -309,19 +394,42 @@ def subtask_add(args) -> None:
     subtask_id = f"subtask_{seq:03d}"
     ts = now_iso()
 
+    # Handle blocked_by dependencies
+    blocked_by_str = args.blocked_by if hasattr(args, "blocked_by") and args.blocked_by else None
+    blocked_by_ids = _parse_blocked_by(blocked_by_str)
+
+    if blocked_by_ids:
+        # Verify all dependency subtasks exist
+        for dep_id in blocked_by_ids:
+            dep = conn.execute("SELECT id FROM subtasks WHERE id = ?", (dep_id,)).fetchone()
+            if not dep:
+                conn.close()
+                print(f"Error: dependency subtask '{dep_id}' not found.", file=sys.stderr)
+                sys.exit(1)
+
+        # Cycle detection (check if any dependency eventually points back to this new subtask)
+        # Since this is a new subtask, we only need to check if deps create a cycle among themselves
+        # No cycle possible for a brand new ID, but we validate the dependency chain is valid
+
     assigned_at = ts if args.worker else None
-    status = "assigned" if args.worker else "pending"
+
+    # If blocked_by is specified, force status=blocked regardless of worker
+    if blocked_by_ids:
+        status = "blocked"
+    else:
+        status = "assigned" if args.worker else "pending"
 
     needs_audit = 1 if args.needs_audit else 0
 
     conn.execute(
-        """INSERT INTO subtasks (id, parent_cmd, worker_id, project, description, target_path, status, wave, needs_audit, assigned_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (subtask_id, args.cmd_id, args.worker, args.project, args.description, args.target_path, status, args.wave, needs_audit, assigned_at),
+        """INSERT INTO subtasks (id, parent_cmd, worker_id, project, description, target_path, status, wave, needs_audit, blocked_by, assigned_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (subtask_id, args.cmd_id, args.worker, args.project, args.description, args.target_path, status, args.wave, needs_audit, blocked_by_str, assigned_at),
     )
     conn.commit()
     conn.close()
-    print(f"Created: {subtask_id} (parent={args.cmd_id}, wave={args.wave})")
+    blocked_info = f", blocked_by={blocked_by_str}" if blocked_by_str else ""
+    print(f"Created: {subtask_id} (parent={args.cmd_id}, wave={args.wave}{blocked_info})")
 
 
 def subtask_update(args) -> None:
@@ -348,6 +456,29 @@ def subtask_update(args) -> None:
         updates.append("audit_status = ?")
         params.append(args.audit_status)
 
+    if hasattr(args, "blocked_by") and args.blocked_by is not None:
+        blocked_by_str = args.blocked_by if args.blocked_by else None
+        blocked_by_ids = _parse_blocked_by(blocked_by_str)
+
+        if blocked_by_ids:
+            # Verify dependencies exist
+            for dep_id in blocked_by_ids:
+                dep = conn.execute("SELECT id FROM subtasks WHERE id = ?", (dep_id,)).fetchone()
+                if not dep:
+                    conn.close()
+                    print(f"Error: dependency subtask '{dep_id}' not found.", file=sys.stderr)
+                    sys.exit(1)
+
+            # Cycle detection
+            cycle = _detect_cycle(conn, args.subtask_id, blocked_by_ids)
+            if cycle:
+                conn.close()
+                print(f"Error: circular dependency detected: {cycle}", file=sys.stderr)
+                sys.exit(1)
+
+        updates.append("blocked_by = ?")
+        params.append(blocked_by_str)
+
     if not updates:
         print("Error: no update fields specified.", file=sys.stderr)
         sys.exit(1)
@@ -355,12 +486,19 @@ def subtask_update(args) -> None:
     params.append(args.subtask_id)
     query = f"UPDATE subtasks SET {', '.join(updates)} WHERE id = ?"
     cursor = conn.execute(query, params)
-    conn.commit()
-    conn.close()
 
     if cursor.rowcount == 0:
+        conn.close()
         print(f"Error: subtask '{args.subtask_id}' not found.", file=sys.stderr)
         sys.exit(1)
+
+    # Auto-unblock dependent subtasks when status changes to done
+    unblocked = []
+    if args.status == "done":
+        unblocked = auto_unblock(conn, args.subtask_id)
+
+    conn.commit()
+    conn.close()
 
     changes = []
     if args.status:
@@ -368,6 +506,9 @@ def subtask_update(args) -> None:
     if args.audit_status:
         changes.append(f"audit_status={args.audit_status}")
     print(f"Updated: {args.subtask_id} -> {', '.join(changes)}")
+
+    if unblocked:
+        print(f"Auto-unblocked {len(unblocked)} subtask(s): {', '.join(unblocked)}")
 
 
 def subtask_show(args) -> None:
@@ -393,6 +534,7 @@ def subtask_show(args) -> None:
     print(f"{'Target Path:':<16} {row['target_path'] or '-'}")
     print(f"{'Description:':<16} {row['description']}")
     print(f"{'Notes:':<16} {row['notes'] or '-'}")
+    print(f"{'Blocked By:':<16} {row['blocked_by'] or '-'}")
     print(f"{'Needs Audit:':<16} {'Yes' if row['needs_audit'] else 'No'}")
     print(f"{'Audit Status:':<16} {row['audit_status'] or '-'}")
     print(f"{'Assigned:':<16} {row['assigned_at'] or '-'}")
@@ -839,6 +981,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", help="Project name")
     p.add_argument("--target-path", help="Target working directory")
     p.add_argument("--needs-audit", action="store_true", help="Mark as requiring ohariko audit")
+    p.add_argument("--blocked-by", help="Comma-separated subtask IDs this task depends on (e.g., subtask_200,subtask_201). Forces status=blocked.")
     p.set_defaults(func=subtask_add)
 
     # subtask update
@@ -847,6 +990,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", choices=["pending", "assigned", "in_progress", "done", "blocked", "cancelled", "archived"], help="New status")
     p.add_argument("--worker", help="Assign/reassign to worker")
     p.add_argument("--audit-status", choices=["pending", "in_progress", "done"], help="Set audit status")
+    p.add_argument("--blocked-by", help="Set/update blocked_by dependencies (comma-separated subtask IDs, or empty string to clear)")
     p.set_defaults(func=subtask_update)
 
     # subtask show

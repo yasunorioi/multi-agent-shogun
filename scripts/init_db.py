@@ -57,6 +57,7 @@ TABLES_SQL = {
             notes TEXT,                        -- additional context
             needs_audit INTEGER DEFAULT 0,  -- 1=お針子監査対象
             audit_status TEXT DEFAULT NULL, -- NULL/pending/in_progress/done
+            blocked_by TEXT,                -- comma-separated subtask_ids (e.g. "subtask_200,subtask_201")
             assigned_at TEXT,
             completed_at TEXT,
             FOREIGN KEY (parent_cmd) REFERENCES commands(id)

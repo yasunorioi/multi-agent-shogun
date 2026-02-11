@@ -255,6 +255,8 @@ queue/inbox/{karo}_reports.yaml   # 家老への足軽報告 inbox（足軽→�
 queue/inbox/{karo}_ohariko.yaml   # 家老へのお針子報告 inbox（お針子→家老の監査結果・先行割当報告）
 data/botsunichiroku.db            # 没日録（SQLite DB）- cmd/subtask/reportの正データ源（家老のみ書き込み可）
 scripts/botsunichiroku.py         # 没日録CLI（python3 scripts/botsunichiroku.py cmd list 等）
+scripts/worker_ctl.sh             # ワーカー動的起動/停止（scripts/worker_ctl.sh start ashigaru1 等）
+scripts/migrate_add_blocked_by.py # blocked_byカラム追加マイグレーション
 dashboard.md                      # 人間用ダッシュボード
 ```
 > **通信プロトコルv2**: 進行中タスクは inbox YAML で通信、完了済みタスクは没日録DBに永続化。DB書き込み権限は家老のみ。

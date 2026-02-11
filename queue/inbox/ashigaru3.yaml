@@ -1,1 +1,42 @@
-tasks: []
+tasks:
+  - subtask_id: subtask_359
+    cmd_id: cmd_151
+    project: shogun
+    assigned_by: roju
+    status: done
+    description: |
+      【スキル査定バッチ2】11件のスキルファイルを読み、5基準で評価せよ。
+
+      ## 対象スキル（11件）
+      .claude/skills/ 配下の以下のファイルを全て Read せよ：
+      1. docker-compose-test.md
+      2. docker-pytest-runner.md
+      3. embedded-mqtt-tester.md
+      4. enclosure-generator.md
+      5. env-derived-values-calculator.md
+      6. esp32-cam-timelapse-builder.md
+      7. frontend-backend-schema-migration.md
+      8. git-confidential-docs-isolation.md
+      9. ha-integration-designer.md
+      10. ha-os-network-discovery.md
+      11. homeassistant-agri-starter.md
+
+      ## 評価基準（5基準）
+      1. **再利用性**: 他プロジェクト（IoT以外）でも使えるか？
+      2. **利用実績**: テンプレートとして完成度が高く実際に使いそうか？（我々のPJ: arsprout農業IoT, rotation-planner畑作管理, shogunマルチエージェント）
+      3. **重複**: 似たスキルが複数ないか？（全53件リスト後述）
+      4. **鮮度**: CircuitPython→MicroPython移行済み。CP専用は鮮度低い
+      5. **品質**: テンプレートとして十分な品質か？
+
+      ## 全53件リスト（重複チェック用）
+      adc-sensor-design-template, agri-iot-board-design-template, circuitpython-network-manager, circuitpython-pico-connection-test, circuitpython-project-initializer, circuitpython-sensor-mqtt-builder, circuitpython-toml-config, crud-business-logic-generator, csv-safe-wrapper-generator, dataclass-model-generator, docker-compose-generator, docker-compose-test, docker-pytest-runner, embedded-mqtt-tester, enclosure-generator, env-derived-values-calculator, esp32-cam-timelapse-builder, frontend-backend-schema-migration, git-confidential-docs-isolation, ha-integration-designer, ha-os-network-discovery, homeassistant-agri-starter, i2c-sensor-auto-detector, iot-auto-test-generator, iot-comm-comparison, iot-design-doc-generator, iot-mqtt-connection-tester, iot-system-spec-generator, iot-timer-db-generator, jar-decompile-analyzer, nodered-error-alert-flow-generator, nodered-setup-guide, nodered-timer-flow-generator, nodered-timeslot-generator, oss-competitive-analysis, oss-competitor-analyzer, oss-research-reporter, pico-grove-shield-guide, pico-mqtt-health-checker, pico-mqtt-repl-tester, pico-setup-wizard, pico-wifi-mqtt-template, pinout-diagram-generator, playwright-e2e-scaffold, raspberrypi-os-installer-guide, sensor-driver-generator, sequential-technical-guide-writer, tech-comparison-reporter, uart-sensor-driver-generator, w5500-ethernet-connection-test, w5500-evb-pico-guide, wireguard-client-config-generator, wireguard-peer-adder
+
+      ## 報告フォーマット
+      | # | スキル名 | 判定 | 理由（1行） |
+      |---|---------|------|------------|
+      | 1 | xxx | 残す/削除/統合候補 | 理由 |
+
+    target_path: /home/yasu/multi-agent-shogun/.claude/skills/
+    wave: 1
+    needs_audit: false
+    created_at: "2026-02-11T21:55:00"

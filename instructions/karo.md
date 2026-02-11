@@ -657,6 +657,131 @@ python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --sk
 
 ---
 
+## 🔴 タスク依存関係の宣言的管理（blocked_by）
+
+subtask間の依存関係を `--blocked-by` で宣言的に管理できる。waveは粗い順序制御として残り、blocked_byは細粒度の依存関係を表す。
+
+### 依存関係の宣言
+
+```bash
+# subtask_Aが完了してからsubtask_Cを開始したい場合
+python3 scripts/botsunichiroku.py subtask add cmd_XXX "Cの説明" \
+  --worker ashigaru3 --project shogun --wave 2 \
+  --blocked-by subtask_A
+
+# 複数依存（A と B の両方が完了してからCを開始）
+python3 scripts/botsunichiroku.py subtask add cmd_XXX "Cの説明" \
+  --worker ashigaru3 --project shogun --wave 2 \
+  --blocked-by subtask_A,subtask_B
+```
+
+**注意**:
+- `--blocked-by` 指定時は status が自動的に `blocked` になる（workerが割当済みでも）
+- 依存先の存在チェックと循環検知が自動で行われる
+- 存在しないsubtask_idを指定するとエラー
+
+### 自動アンブロック（auto_unblock）
+
+subtask を `--status done` に更新すると、`auto_unblock()` が自動実行される：
+
+```bash
+python3 scripts/botsunichiroku.py subtask update subtask_A --status done
+# 出力例:
+# Updated: subtask_A -> status=done
+# Auto-unblocked 1 subtask(s): subtask_C -> assigned (worker: ashigaru3)
+```
+
+- 完了した subtask を `blocked_by` に持つ全 subtask を検索
+- **全ての依存が解消**されていれば status を自動変更:
+  - worker割当済み → `assigned`
+  - worker未割当 → `pending`
+- **一部の依存がまだ残っている場合** → `blocked` のまま（何も変わらない）
+
+### 依存関係の確認
+
+```bash
+# subtaskの詳細表示（blocked_byフィールドが表示される）
+python3 scripts/botsunichiroku.py subtask show subtask_C
+
+# 一覧でもBLOCKED_BY列が表示される
+python3 scripts/botsunichiroku.py subtask list --cmd cmd_XXX
+```
+
+### タスク分解時の使い方
+
+```
+例: 3タスク（A, B並列 → C依存）
+
+# Wave 1: 並列実行可能
+subtask add cmd_XXX "タスクA" --worker ashigaru1 --wave 1
+subtask add cmd_XXX "タスクB" --worker ashigaru2 --wave 1
+
+# Wave 2: A,Bの両方が完了してから実行
+subtask add cmd_XXX "タスクC" --worker ashigaru3 --wave 2 \
+  --blocked-by subtask_A,subtask_B
+
+→ AかBが完了しただけではCはblocked
+→ A,B両方が完了した時点でCが自動的にassignedに変わる
+```
+
+## 🔴 動的ワーカー起動/停止（worker_ctl.sh）
+
+API代金節約のため、タスクのない足軽・部屋子は停止しておくことができる。
+`scripts/worker_ctl.sh` でワーカーの起動/停止を動的に管理せよ。
+
+### 基本コマンド
+
+```bash
+# ワーカーを起動（デフォルトモデルで）
+scripts/worker_ctl.sh start ashigaru1
+
+# モデル指定で起動
+scripts/worker_ctl.sh start ashigaru6 --model sonnet
+
+# ワーカーを停止（idle時のみ）
+scripts/worker_ctl.sh stop ashigaru1
+
+# busy状態でも強制停止
+scripts/worker_ctl.sh stop ashigaru1 --force
+
+# 全ワーカーの状態確認
+scripts/worker_ctl.sh status
+
+# アイドルワーカー一覧
+scripts/worker_ctl.sh idle
+
+# 必要ワーカー数（pending/assignedタスク数 vs 稼働中ワーカー数）
+scripts/worker_ctl.sh count-needed
+
+# 全アイドルワーカー一斉停止
+scripts/worker_ctl.sh stop-idle
+```
+
+### 省力起動モード（--idle）
+
+`shutsujin_departure.sh --idle` で起動すると、将軍+老中のみClaude Codeが起動し、
+足軽・部屋子・お針子はペインのみ作成される（Claude Code未起動）。
+
+```bash
+# 省力起動
+./shutsujin_departure.sh -i
+
+# タスク発生時に必要な足軽を起動
+scripts/worker_ctl.sh start ashigaru1
+scripts/worker_ctl.sh start ashigaru2
+
+# タスク完了後にアイドルワーカーを停止
+scripts/worker_ctl.sh stop-idle
+```
+
+### タスク割当フロー（動的ワーカー管理）
+
+1. タスク分解 → 必要なワーカー数を確認
+2. `worker_ctl.sh status` で稼働中ワーカーを確認
+3. 足りなければ `worker_ctl.sh start` で起動
+4. タスク割当 + send-keys（通常フロー）
+5. タスク完了後、次タスクがなければ `worker_ctl.sh stop` で停止
+
 ## 🔴 コンパクション復帰手順（家老）
 
 コンパクション後は以下の正データから状況を再把握せよ。

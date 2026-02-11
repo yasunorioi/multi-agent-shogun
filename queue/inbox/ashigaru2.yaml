@@ -1,1 +1,65 @@
-tasks: []
+tasks:
+  - subtask_id: subtask_358
+    cmd_id: cmd_151
+    project: shogun
+    assigned_by: roju
+    status: done
+    description: |
+      【スキル査定バッチ1】11件のスキルファイルを読み、5基準で評価せよ。
+
+      ## 対象スキル（11件）
+      .claude/skills/ 配下の以下のファイルを全て Read せよ：
+      1. adc-sensor-design-template.md
+      2. agri-iot-board-design-template.md
+      3. circuitpython-network-manager.md
+      4. circuitpython-pico-connection-test.md
+      5. circuitpython-project-initializer.md
+      6. circuitpython-sensor-mqtt-builder.md
+      7. circuitpython-toml-config.md
+      8. crud-business-logic-generator.md
+      9. csv-safe-wrapper-generator.md
+      10. dataclass-model-generator.md
+      11. docker-compose-generator.md
+
+      ## 評価基準（5基準）
+      各スキルを以下の基準で評価し、「残す」「削除」「統合候補」を判定せよ：
+
+      1. **再利用性**: 他プロジェクト（IoT以外）でも使えるか？1回きりの作業用ではないか？
+      2. **利用実績**: スキルの中身から判断。テンプレートとして完成度が高く実際に使いそうか？
+         - 補足: 我々のプロジェクトは arsprout(農業IoT), rotation-planner(畑作管理), shogun(マルチエージェント)
+      3. **重複**: 全53件のリスト（後述）と照合し、似たスキルが複数ないか？統合できないか？
+      4. **鮮度**: 古い技術に依存していないか？
+         - 重要: CircuitPython → MicroPython に移行済み。CircuitPython専用スキルは鮮度低い
+      5. **品質**: 中身がテンプレートとして十分な品質か？
+
+      ## 全53件のスキル名リスト（重複チェック用）
+      adc-sensor-design-template, agri-iot-board-design-template, circuitpython-network-manager,
+      circuitpython-pico-connection-test, circuitpython-project-initializer, circuitpython-sensor-mqtt-builder,
+      circuitpython-toml-config, crud-business-logic-generator, csv-safe-wrapper-generator,
+      dataclass-model-generator, docker-compose-generator, docker-compose-test, docker-pytest-runner,
+      embedded-mqtt-tester, enclosure-generator, env-derived-values-calculator, esp32-cam-timelapse-builder,
+      frontend-backend-schema-migration, git-confidential-docs-isolation, ha-integration-designer,
+      ha-os-network-discovery, homeassistant-agri-starter, i2c-sensor-auto-detector, iot-auto-test-generator,
+      iot-comm-comparison, iot-design-doc-generator, iot-mqtt-connection-tester, iot-system-spec-generator,
+      iot-timer-db-generator, jar-decompile-analyzer, nodered-error-alert-flow-generator, nodered-setup-guide,
+      nodered-timer-flow-generator, nodered-timeslot-generator, oss-competitive-analysis, oss-competitor-analyzer,
+      oss-research-reporter, pico-grove-shield-guide, pico-mqtt-health-checker, pico-mqtt-repl-tester,
+      pico-setup-wizard, pico-wifi-mqtt-template, pinout-diagram-generator, playwright-e2e-scaffold,
+      raspberrypi-os-installer-guide, sensor-driver-generator, sequential-technical-guide-writer,
+      tech-comparison-reporter, uart-sensor-driver-generator, w5500-ethernet-connection-test,
+      w5500-evb-pico-guide, wireguard-client-config-generator, wireguard-peer-adder
+
+      ## 報告フォーマット（必ずこの形式で報告せよ）
+      | # | スキル名 | 判定 | 理由（1行） |
+      |---|---------|------|------------|
+      | 1 | xxx | 残す/削除/統合候補 | 理由 |
+
+      判定の基準:
+      - **残す**: 5基準で概ね問題なし
+      - **削除**: 再利用性なし or 鮮度切れ or 品質不足
+      - **統合候補**: 似たスキルと統合可能（統合先も記載）
+
+    target_path: /home/yasu/multi-agent-shogun/.claude/skills/
+    wave: 1
+    needs_audit: false
+    created_at: "2026-02-11T21:55:00"

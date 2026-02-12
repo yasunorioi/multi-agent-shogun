@@ -1,10 +1,10 @@
 <div align="center">
 
-# multi-agent-shogun
+# multi-agent-shogun + 大奥
 
 **Claude Code + tmux によるマルチエージェント並列開発基盤**
 
-*コマンド1つで8体のAIエージェントが並列稼働。通信コスト0、全ホワイトカラー業務対応。*
+*コマンド1つで8体のAIエージェントが並列稼働。ファイルベース通信、全ホワイトカラー業務対応。*
 
 [![GitHub Stars](https://img.shields.io/github/stars/yohey-w/multi-agent-shogun?style=social)](https://github.com/yohey-w/multi-agent-shogun)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -575,6 +575,6 @@ tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 
 <div align="center">
 
-**1つの命令。8体のAIエージェント。通信コスト0。**
+**1つの命令。8体のAIエージェント。ファイルベース通信。**
 
 </div>

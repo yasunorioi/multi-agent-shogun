@@ -1,60 +1,94 @@
-# Order file (internal use only)
-claude-shogun-orders.md
+# ═══════════════════════════════════════════════════════════════════════════════
+# multi-agent-shogun .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
+# 公開リポジトリ対応: 機密情報・運用データを一切追跡しない設計
+# Private data / runtime artifacts are excluded for public repository safety.
 
-# Claude Code settings
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Claude Code / MCP
+# ─────────────────────────────────────────────────────────────────────────────
 .claude/*
 !.claude/settings.json
 .mcp.json
 
-# Test outputs (generated during testing)
-test_output/
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Runtime data (operation artifacts)
+# ─────────────────────────────────────────────────────────────────────────────
+# 没日録DB — タスク履歴・クライアント名が含まれる
+data/
 
-# Generated skills (local development, top-level only)
+# Memory MCP — 殿の好み・プロジェクト横断知見
+memory/
+
+# ダッシュボード — 進行中タスク・クライアント情報が含まれる
+dashboard.md
+
+# ログ・バックアップ
+logs/
+output/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Queue / Communication (all inbox, tasks, reports)
+# ─────────────────────────────────────────────────────────────────────────────
+# inbox YAML — タスクの description にクライアント名・業務内容が入りうる
+queue/inbox/
+queue/tasks/
+queue/reports/
+queue/research/
+queue/*.yaml
+queue/archive/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Project / Context (confidential)
+# ─────────────────────────────────────────────────────────────────────────────
+# プロジェクト詳細 — クライアント情報・契約情報
+projects/
+
+# プロジェクト一覧 — プロジェクト名・パスが含まれる
+config/projects.yaml
+
+# 運用設定 — スクリーンショットパス等の個人情報
+config/settings.yaml
+
+# PJ固有コンテキスト — 技術知見にVPN接続先等が含まれうる
+context/
+!context/README.md
+
+# ステータスファイル
+status/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Personal / Internal documents
+# ─────────────────────────────────────────────────────────────────────────────
+# 個人的文書・内部指示
+claude-shogun-orders.md
+docs/letter_to_dario.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Generated / Build artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+# スキル（ユーザー固有・業務内容が反映される）
 /skills/
 
-# Python
+# テスト・デモ出力
+test_output/
+demo_output/
+tests/
+
+# 生成スクリプト
+scripts/generate_dashboard.py
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Language / Build
+# ─────────────────────────────────────────────────────────────────────────────
 __pycache__/
 hf/
-
-# Temporary files
 *.tmp
 *.bak
 
-# Demo/analysis outputs (generated during tasks)
-demo_output/
-
-# Runtime data (generated during operation)
-data/
-output/
-queue/research/
-queue/tasks/
-queue/reports/
-
-# Memory MCP data (local to each installation)
-memory/
-
-# Project context (local to each installation, except README)
-context/
-!context/README.md
-!context/arsprout.md
-!context/rotation-planner.md
-queue/*.yaml
-# dashboard.md — privateリポジトリのため追跡対象（2026-02-11 殿裁定）
-config/projects.yaml
-status/
-config/settings.yaml
-logs/
-
-# Project details (contains client/confidential info)
-projects/
-
-# Standalone repos / venvs inside docs
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. External repos / environments inside this tree
+# ─────────────────────────────────────────────────────────────────────────────
 docs/rotation_planner_ui/
 docs/rotation_planner_ui_v2/
-
-# Internal archives
 archive/
-
-# Generated scripts / test directories (not ready for tracking)
-scripts/generate_dashboard.py
-tests/

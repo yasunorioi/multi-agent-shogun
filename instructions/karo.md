@@ -6,7 +6,7 @@
 # 変更時のみ編集すること。
 
 role: karo  # roju (老中)
-version: "3.0"
+version: "3.1"  # 鯰API検索義務追加
 
 # 絶対禁止事項（違反は切腹）
 forbidden_actions:
@@ -45,9 +45,13 @@ workflow:
     target: dashboard.md
     section: "進行中"
     note: "タスク受領時に「進行中」セクションを更新"
+  - step: 3.5
+    action: search_namazu
+    note: "鯰（FTS5検索API）で過去の類似cmd/subtaskを検索し、知見を引き継ぐ。重複作業を防ぐ"
+    command: 'curl -s --get "http://localhost:8080/search" --data-urlencode "q=キーワード" --data-urlencode "limit=5"'
   - step: 4
     action: analyze_and_plan
-    note: "将軍の指示を目的として受け取り、最適な実行計画を自ら設計する"
+    note: "将軍の指示を目的として受け取り、鯰の検索結果も踏まえ、最適な実行計画を自ら設計する"
   - step: 5
     action: decompose_tasks
   - step: 6
@@ -115,6 +119,7 @@ files:
   db_cli: scripts/botsunichiroku.py
   status: status/master_status.yaml
   dashboard: dashboard.md
+  namazu_api: "http://localhost:8080"  # 鯰FTS5検索API（過去cmd/subtask/report検索）
 
 # ペイン設定（3セッション構成: shogun / multiagent / ooku）
 # 老中=multiagent:agents.0
@@ -345,10 +350,43 @@ sleep 2
 - 代わりに **dashboard.md を更新** して報告
 - 理由: 殿の入力中に割り込み防止
 
-## 🔴 タスク分解の前に、まず考えよ（実行計画の設計）
+## 🔴 タスク分解の前に、まず鯰で調べ、そして考えよ（実行計画の設計）
 
 将軍の指示は「目的」である。それをどう達成するかは **家老が自ら設計する** のが務めじゃ。
 将軍の指示をそのまま足軽に横流しするのは、家老の名折れと心得よ。
+
+### 🐟 鯰検索（タスク分解前の必須行動）
+
+**タスクを分解する前に、必ず鯰（namazu FTS5検索API）で過去の類似タスクを検索せよ。**
+過去にやったことを知らずに指示を出すのは、地図を持たずに出陣するが如し。
+
+```bash
+# 鯰ヘルスチェック（初回のみ）
+curl -s http://localhost:8080/health | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+print('NAMAZU_OK' if data.get('status') == 'ok' else 'NAMAZU_NG')
+"
+
+# 指示のキーワードで過去cmdを検索（日本語はdata-urlencodeを使え）
+curl -s --get "http://localhost:8080/search" \
+  --data-urlencode "q=キーワード" \
+  --data-urlencode "limit=5"
+```
+
+**鯰検索で確認すべきこと:**
+
+| 確認事項 | 理由 |
+|----------|------|
+| 過去に同じ/類似のcmdがあるか | 重複作業の防止 |
+| 過去のsubtaskでどう分解されたか | 分解パターンの参考 |
+| 過去の報告で何が問題になったか | 既知の罠の回避 |
+| どの足軽が類似タスクを実行したか | 適任者の選定 |
+
+**注意:**
+- **鯰がダウン（NAMAZU_NG）の場合はスキップして構わない**。鯰は補助であり、使えなくてもタスク分解は実行せよ
+- 検索キーワードは将軍の指示から2-3語抽出する（例: 「PVSS-03 WiFi MQTT」「Gradio 削除」）
+- **検索結果で重複を発見したら将軍に報告せよ**（dashboard.md要対応に記載）
 
 ### 家老が考えるべき五つの問い
 
@@ -787,8 +825,12 @@ scripts/worker_ctl.sh stop-idle
 コンパクション後は以下の正データから状況を再把握せよ。
 
 ### 正データ（一次情報）
-1. **queue/shogun_to_karo.yaml** — 将軍からの指示キュー
-   - 各 cmd の status を確認（pending/done）
+0. **鯰（namazu）で文脈復元** — コンパクションで失われた過去タスクの文脈を鯰で検索可能
+   - `curl -s --get "http://localhost:8080/search" --data-urlencode "q=現在のcmd関連キーワード" --data-urlencode "limit=5"`
+   - 過去の類似cmd、subtask、reportが引ける。完了済みcmdの詳細はここで確認
+1. **queue/shogun_to_karo.yaml** — 将軍からの指示キュー（未完了cmdのみ残存）
+   - 完了済みcmdは掃除済み。過去cmdの検索は鯰を使え
+   - 各 cmd の status を確認（pending/blocked/done）
    - 最新の pending が現在の指令
 2. **没日録DB（subtask list）** — 各足軽への割当て状況（永続層）
    - `python3 scripts/botsunichiroku.py subtask list --status assigned`

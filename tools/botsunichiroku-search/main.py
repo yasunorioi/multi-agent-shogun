@@ -92,9 +92,10 @@ def search(
     if not tokenized.strip():
         raise HTTPException(status_code=400, detail="Empty query after tokenization")
 
-    # FTS5 MATCH用: 各トークンをダブルクォートで囲みOR結合しない
-    # スペース区切りはFTS5で暗黙AND扱い
-    match_query = tokenized
+    # FTS5 MATCH用: 各トークンをダブルクォートで囲んで特殊文字をエスケープ
+    # ハイフン(-), コロン(:), ドット(.)等がFTS5演算子として誤解釈される問題を防ぐ
+    tokens = tokenized.split()
+    match_query = " ".join(f'"{t}"' for t in tokens if t.strip())
 
     conn = get_index_db()
     try:

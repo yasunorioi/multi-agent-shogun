@@ -552,7 +552,21 @@ python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --sk
 
 # 2. YAMLのreadフィールドをtrueに更新（Edit tool使用）
 # 例: queue/inbox/roju_reports.yaml の read: false → read: true
+
+# 3. DB永続化済みエントリをYAMLから削除（直近10件のみ保持）
+#    YAML肥大化防止のため、DB記録後にエントリを削除せよ。
+#    直近10件は残す（鯰がDBから検索可能なため、古いものは不要）。
 ```
+
+### ⚠️ YAML肥大化防止ルール（恒久）
+
+**DB永続化後、報告YAMLのエントリを削除せよ。直近10件のみ保持。**
+
+- 対象: roju_reports.yaml, ooku_reports.yaml, roju_ohariko.yaml, ooku_ohariko.yaml
+- タイミング: `report add` でDBに記録した後
+- 手順: 古いエントリ（read: true かつ DB永続化済み）をYAMLから削除
+- 保持数: 直近10件まで（過去の報告は鯰API `http://localhost:8080/search?q=キーワード` で検索可能）
+- 理由: YAMLが数千行に肥大化すると、Read時のトークン消費が膨大になる
 
 ### スキャン判定
 

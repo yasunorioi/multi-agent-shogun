@@ -31,6 +31,9 @@
 
 ### 階層構造
 
+> 詳細なアーキテクチャは [docs/architecture_shin_ooku.md](docs/architecture_shin_ooku.md) を参照。
+> 鯰（Namazu）の詳細仕様は [docs/namazu_details.md](docs/namazu_details.md) を参照。
+
 ```
 上様（人間 / The Lord）
   │
@@ -39,7 +42,7 @@
 │   SHOGUN     │     │   OHARIKO    │ ← お針子（監査・先行割当）
 │   (将軍)     │     │  (お針子)    │   家老経由で報告
 └──────┬───────┘     └──────┬───────┘
-       │ YAML経由           │ 没日録DB全権閲覧・監査・家老に通知
+       │ YAML経由           │ 没日録DB全権閲覧・監査・老中に通知
        ▼                    ↓
 ┌──────────────┐
 │    ROJU      │
@@ -112,7 +115,7 @@ Layer 4: Session（揮発・コンテキスト内）
 | 足軽/部屋子 | 不可 | 不可 |
 | お針子 | 可（全権閲覧） | 不可 |
 
-DB書き込み権限を家老に集約することで、データ整合性を確保し、競合・不整合を防止。
+DB書き込み権限を老中に集約することで、データ整合性を確保し、競合・不整合を防止。
 
 ---
 
@@ -385,7 +388,7 @@ multi-agent-shogun/
 │       └── build_index.py
 │
 ├── memory/                      # Memory MCP 永続ストレージ
-├── dashboard.md                 # 人間用ダッシュボード（家老が更新）
+├── dashboard.md                 # 人間用ダッシュボード（老中が更新）
 └── CLAUDE.md                    # システム指示書（自動読み込み）
 ```
 

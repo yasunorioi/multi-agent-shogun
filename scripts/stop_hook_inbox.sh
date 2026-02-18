@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stop Hook: エージェントのターン終了時にinbox未読をチェックし、未読があればstopをブロック
-set -eu
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -46,11 +46,11 @@ case "$AGENT_ID" in
     karo-roju)
         # 老中: roju_reports.yaml の read: false + roju_ohariko.yaml の read: false
         if [ -f "$INBOX_DIR/roju_reports.yaml" ]; then
-            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_reports.yaml" 2>/dev/null || echo "0")
+            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_reports.yaml" 2>/dev/null) || COUNT=0
             UNREAD=$((UNREAD + COUNT))
         fi
         if [ -f "$INBOX_DIR/roju_ohariko.yaml" ]; then
-            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_ohariko.yaml" 2>/dev/null || echo "0")
+            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_ohariko.yaml" 2>/dev/null) || COUNT=0
             UNREAD=$((UNREAD + COUNT))
         fi
         INBOX_FILES="roju_reports.yaml, roju_ohariko.yaml"
@@ -60,7 +60,7 @@ case "$AGENT_ID" in
         NUM="${AGENT_ID#ashigaru}"
         INBOX_FILE="$INBOX_DIR/ashigaru${NUM}.yaml"
         if [ -f "$INBOX_FILE" ]; then
-            UNREAD=$(grep -c 'status: assigned' "$INBOX_FILE" 2>/dev/null || echo "0")
+            UNREAD=$(grep -c 'status: assigned' "$INBOX_FILE" 2>/dev/null) || UNREAD=0
         fi
         INBOX_FILES="ashigaru${NUM}.yaml"
         ;;

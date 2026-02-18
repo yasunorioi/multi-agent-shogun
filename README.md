@@ -105,6 +105,7 @@ Layer 4: Session（揮発・コンテキスト内）
 - **進行中タスク** → Layer 3a（YAML inbox）で通信
 - **完了済みタスク** → Layer 3b（没日録DB）に永続化
 - エージェント間通信は YAML ファイル + `tmux send-keys`。**ポーリング禁止**（イベント駆動のみ）
+- **Stop Hook**: エージェントのターン終了時に inbox 未読を自動チェック。未読があれば stop をブロックし、次ターンで自動処理
 
 ### DB権限モデル
 
@@ -207,8 +208,21 @@ tmux attach-session -t shogun      # 将軍に接続して命令
 ./shutsujin_departure.sh -i           # 省力起動（将軍+老中のみ、他は待機）
 ./shutsujin_departure.sh -s           # セットアップのみ（Claude未起動）
 ./shutsujin_departure.sh -t           # 全起動 + Windows Terminal タブ展開
+./shutsujin_departure.sh -shell zsh   # シェル指定（bash/zsh）
 ./shutsujin_departure.sh -h           # ヘルプ
 ```
+
+### `scripts/stop_hook_inbox.sh` — Stop Hook（inbox 未読チェック）
+
+Claude Code の Stop hook として動作。エージェントがターン終了するたびに自動実行され、inbox YAML に未読（`status: assigned` や `read: false`）があれば stop をブロック。これにより send-keys の割り込みリスクを根本解消し、エージェントが自発的に未読を処理する。
+
+| agent_id | 監視ファイル | 未読判定 |
+|----------|------------|----------|
+| shogun | - | 常に approve（人間操作ペイン） |
+| karo-roju | roju_reports.yaml, roju_ohariko.yaml | `read: false` |
+| ashigaru1-3 | ashigaru{N}.yaml | `status: assigned` |
+| ashigaru6-7（部屋子） | ashigaru{N}.yaml | `status: assigned` |
+| ohariko | - | 常に approve（既存フロー維持） |
 
 ### `scripts/worker_ctl.sh` — 動的ワーカー管理
 
@@ -383,6 +397,7 @@ multi-agent-shogun/
 ├── scripts/
 │   ├── botsunichiroku.py        # 没日録CLI
 │   ├── worker_ctl.sh            # 動的ワーカー管理
+│   ├── stop_hook_inbox.sh       # Stop Hook（inbox未読チェック）
 │   ├── init_db.py               # DB初期化
 │   ├── generate_dashboard.py    # ダッシュボード自動生成
 │   └── migrate_*.py             # DBマイグレーション
@@ -410,6 +425,18 @@ multi-agent-shogun/
 # config/settings.yaml
 language: ja   # 戦国風日本語のみ
 language: en   # 戦国風日本語 + 英訳併記
+```
+
+### Claude Code Hooks
+
+`.claude/settings.json` に Stop hook を設定済み。エージェントのターン終了時に `scripts/stop_hook_inbox.sh` が自動実行され、inbox 未読があれば stop をブロックする。
+
+```json
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "bash scripts/stop_hook_inbox.sh", "timeout": 10000 }] }]
+  }
+}
 ```
 
 ### MCP サーバ

@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/stop_hook_inbox.sh",
+            "command": "bash /home/yasu/multi-agent-shogun/scripts/stop_hook_inbox.sh",
             "timeout": 10000
           }
         ]

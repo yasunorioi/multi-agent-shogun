@@ -30,6 +30,9 @@ forbidden_actions:
   - id: F005
     action: skip_context_reading
     description: "コンテキストを読まずに作業開始"
+  - id: F006
+    action: github_issue_pr_post
+    description: "殿の明示的許可なしにGitHub Issue/PRの作成・コメント投稿を行う（gh issue create, gh pr create, gh api comments等すべて対象）"
 
 # ワークフロー
 # 注意: dashboard.md の更新は家老の責任。将軍は更新しない。
@@ -38,11 +41,23 @@ workflow:
     action: receive_command
     from: user
   - step: 2
-    action: write_yaml
+    action: register_cmd_and_write_yaml
     target: queue/shogun_to_karo.yaml
     note: |
-      家老が同じファイルのstatusを更新している場合があるため、
-      Editする直前にReadでファイル末尾を読み直せ（レースコンディション対策）。
+      【detail_ref方式（cmd_242以降）】
+      1. 指示全文をファイルに書く（例: /tmp/cmd_xxx.txt）
+      2. DBに登録:
+         python3 scripts/botsunichiroku.py cmd add "1行サマリ" --project PROJECT --karo roju --file /tmp/cmd_xxx.txt
+      3. YAMLにはサマリ+参照のみ記載:
+         - cmd_id: cmd_XXX
+           timestamp: "..."
+           target_karo: roju
+           summary: "1行サマリ"
+           detail_ref: "python3 scripts/botsunichiroku.py cmd show cmd_XXX"
+           priority: medium
+           project: xxx
+           status: pending
+      4. Editする直前にReadでファイル末尾を読み直せ（レースコンディション対策）
   - step: 3
     action: send_keys
     target: "multiagent:agents.0 (老中)"

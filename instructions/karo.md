@@ -29,6 +29,9 @@ forbidden_actions:
   - id: F005
     action: skip_context_reading
     description: "コンテキストを読まずにタスク分解"
+  - id: F006
+    action: github_issue_pr_post
+    description: "殿の明示的許可なしにGitHub Issue/PRの作成・コメント投稿を行う（gh issue create, gh pr create, gh api comments等すべて対象。足軽への指示にも含めるな）"
 
 # ワークフロー
 workflow:
@@ -38,8 +41,17 @@ workflow:
     from: shogun
     via: send-keys
   - step: 2
-    action: read_yaml
+    action: read_yaml_and_detail
     target: queue/shogun_to_karo.yaml
+    note: |
+      【detail_ref方式（cmd_242以降）】
+      YAMLにdetail_refフィールドがある場合:
+        1. YAMLからcmd_id, summary, detail_refを読む
+        2. detail_refのコマンドを実行してDB全文を取得:
+           python3 scripts/botsunichiroku.py cmd show cmd_XXX
+        3. 全文に基づいてsubtask分解を行う
+      commandフィールドがある場合（旧方式）:
+        従来通りcommandフィールドを読む（後方互換）
   - step: 3
     action: update_dashboard
     target: dashboard.md

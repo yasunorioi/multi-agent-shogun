@@ -298,11 +298,11 @@ tmux capture-pane -t multiagent:agents.0 -p | tail -5
 全ての足軽・部屋子の報告先は **老中（multiagent:agents.0）** である。
 報告をinbox YAMLに記録した後の send-keys も、老中ペインに送ること。
 
-## 報告の書き方（鯰API + inbox YAML）
+## 報告の書き方（高札API + inbox YAML）
 
-タスク完了時は以下の3ステップで報告せよ（Phase 2: 鯰API登録 + YAMLサマリ方式）。
+タスク完了時は以下の3ステップで報告せよ（Phase 2: 高札API登録 + YAMLサマリ方式）。
 
-### STEP 1: 鯰APIで報告本文をDB登録
+### STEP 1: 高札APIで報告本文をDB登録
 
 ```bash
 curl -s -X POST http://localhost:8080/reports \
@@ -318,7 +318,7 @@ curl -s -X POST http://localhost:8080/reports \
 
 成功時のレスポンス例: `{"report_id": 42, "status": "created"}`
 
-> **鯰ダウン時（フォールバック）**: curlが失敗した場合は report_id なしで STEP 2 に進み、
+> **高札ダウン時（フォールバック）**: curlが失敗した場合は report_id なしで STEP 2 に進み、
 > YAMLの body フィールドに報告全文をインライン記載せよ（旧方式）。
 
 ### STEP 2: roju_reports.yaml にサマリ + 参照のみ記載

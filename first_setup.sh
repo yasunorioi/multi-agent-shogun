@@ -57,7 +57,7 @@ echo ""
 echo "  このスクリプトは初回セットアップ用です。"
 echo "  依存関係の確認とディレクトリ構造の作成を行います。"
 echo ""
-echo "  体制: 将軍1 + 老中1 + 足軽3 + 部屋子2 + お針子1 + 鯰(Docker)"
+echo "  体制: 将軍1 + 老中1 + 足軽3 + 部屋子2 + お針子1 + 高札(Docker)"
 echo ""
 echo "  インストール先: $SCRIPT_DIR"
 echo ""
@@ -616,11 +616,11 @@ if [ -f "$BASHRC_FILE" ]; then
         log_info "alias csm は既に正しく設定されています"
     fi
 
-    # cso alias (部屋子・お針子・鯰ウィンドウの起動)
+    # cso alias (部屋子・お針子・高札ウィンドウの起動)
     EXPECTED_CSO="alias cso='tmux attach-session -t ooku'"
     if ! grep -q "alias cso=" "$BASHRC_FILE" 2>/dev/null; then
         echo "$EXPECTED_CSO" >> "$BASHRC_FILE"
-        log_info "alias cso を追加しました（部屋子・お針子・鯰ウィンドウの起動）"
+        log_info "alias cso を追加しました（部屋子・お針子・高札ウィンドウの起動）"
         ALIAS_ADDED=true
     elif ! grep -qF "$EXPECTED_CSO" "$BASHRC_FILE" 2>/dev/null; then
         if sed -i "s|alias cso=.*|$EXPECTED_CSO|" "$BASHRC_FILE" 2>/dev/null; then
@@ -729,9 +729,9 @@ else
 fi
 
 # ============================================================
-# STEP 12: Docker チェック（鯰コンテナ用）
+# STEP 12: Docker チェック（高札コンテナ用）
 # ============================================================
-log_step "STEP 12: Docker チェック（鯰コンテナ用）"
+log_step "STEP 12: Docker チェック（高札コンテナ用）"
 
 if command -v docker &> /dev/null; then
     DOCKER_VERSION=$(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',')
@@ -756,14 +756,14 @@ if command -v docker &> /dev/null; then
     if docker info &> /dev/null; then
         log_success "Docker デーモンは起動中です"
     else
-        log_warn "Docker デーモンが起動していません（鯰コンテナ起動時に必要）"
+        log_warn "Docker デーモンが起動していません（高札コンテナ起動時に必要）"
         log_info "起動コマンド: sudo systemctl start docker"
     fi
 else
     log_warn "Docker がインストールされていません"
-    log_info "鯰（FTS5+MeCab検索API）コンテナの利用に Docker が必要です"
+    log_info "高札（通信ハブ+検索API）コンテナの利用に Docker が必要です"
     log_info "インストール: https://docs.docker.com/engine/install/"
-    RESULTS+=("Docker: 未インストール（鯰コンテナに必要）")
+    RESULTS+=("Docker: 未インストール（高札コンテナに必要）")
 fi
 
 # ============================================================
@@ -817,7 +817,7 @@ echo ""
 echo "  tmuxセッション接続:"
 echo "     css   # 将軍セッション (tmux attach-session -t shogun)"
 echo "     csm   # 老中・足軽セッション (tmux attach-session -t multiagent)"
-echo "     cso   # 部屋子・お針子・鯰セッション (tmux attach-session -t ooku)"
+echo "     cso   # 部屋子・お針子・高札セッション (tmux attach-session -t ooku)"
 echo ""
 echo "  ※ シェル設定は config/settings.yaml の shell: でも変更可能です"
 echo ""

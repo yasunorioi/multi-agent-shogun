@@ -631,9 +631,9 @@ log_success "  └─ 老中・足軽の陣、構築完了"
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STEP 5.2: ooku セッション作成（4ペイン：部屋子1-2 + お針子 + 鯰）
+# STEP 5.2: ooku セッション作成（4ペイン：部屋子1-2 + お針子 + 高札）
 # ═══════════════════════════════════════════════════════════════════════════════
-log_war "🏯 部屋子・お針子・鯰の陣を構築中（2名+1監査+1コンテナ配備）..."
+log_war "🏯 部屋子・お針子・高札の陣を構築中（2名+1監査+1コンテナ配備）..."
 
 if ! tmux new-session -d -s ooku -n "agents" 2>/dev/null; then
     echo "  [ERROR] ooku セッション作成失敗"
@@ -643,7 +643,7 @@ fi
 # 4ペイン作成（2列 x 2行）
 # ペイン配置:
 #   左列: pane 0=heyago1(ashigaru6), 1=heyago2(ashigaru7)
-#   右列: pane 2=ohariko, 3=namazu
+#   右列: pane 2=ohariko, 3=kousatsu
 
 split_pane_safely -h "ooku:agents"
 
@@ -654,15 +654,15 @@ tmux select-pane -t "ooku:agents.$((PANE_BASE+2))"
 split_pane_safely -v "ooku:agents"
 
 # ooku ペイン設定
-OOKU_LABELS=("heyago1" "heyago2" "ohariko" "namazu")
+OOKU_LABELS=("heyago1" "heyago2" "ohariko" "kousatsu")
 OOKU_COLORS=("cyan" "cyan" "yellow" "green")
-OOKU_AGENT_IDS=("ashigaru6" "ashigaru7" "ohariko" "namazu")
+OOKU_AGENT_IDS=("ashigaru6" "ashigaru7" "ohariko" "kousatsu")
 
 if [ "$KESSEN_MODE" = true ]; then
-    OOKU_TITLES=("heyago1(Opus)" "heyago2(Opus)" "ohariko(Opus)" "namazu(FTS5+MeCab)")
+    OOKU_TITLES=("heyago1(Opus)" "heyago2(Opus)" "ohariko(Opus)" "kousatsu(高札API)")
     OOKU_MODELS=("Opus Thinking" "Opus Thinking" "Opus Thinking" "FTS5+MeCab")
 else
-    OOKU_TITLES=("heyago1(Opus)" "heyago2(Opus)" "ohariko(Sonnet)" "namazu(FTS5+MeCab)")
+    OOKU_TITLES=("heyago1(Opus)" "heyago2(Opus)" "ohariko(Sonnet)" "kousatsu(高札API)")
     OOKU_MODELS=("Opus Thinking" "Opus Thinking" "Sonnet Thinking" "FTS5+MeCab")
 fi
 
@@ -678,7 +678,7 @@ done
 tmux set-option -t ooku -w pane-border-status top
 tmux set-option -t ooku -w pane-border-format '#{pane_index} #{@agent_id} (#{@model_name})'
 
-log_success "  └─ 部屋子・お針子・鯰の陣、構築完了"
+log_success "  └─ 部屋子・お針子・高札の陣、構築完了"
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -940,16 +940,16 @@ BOTSU_EOF
         log_info "  └─ 省力起動: 足軽・部屋子・お針子への指示書伝達はスキップ（worker_ctl.sh start 後に手動で伝達）"
     fi
 
-    # namazu（没日録検索エンジン）Docker起動（ooku:agents pane 3）
+    # kousatsu（高札）Docker起動（ooku:agents pane 3）
     sleep 1
-    log_info "  └─ 鯰（namazu）を放流中..."
+    log_info "  └─ 高札（kousatsu）を放流中..."
     p=$((PANE_BASE + 3))
-    tmux send-keys -t "ooku:agents.${p}" "cd tools/botsunichiroku-search && docker compose up --build 2>&1"
+    tmux send-keys -t "ooku:agents.${p}" "cd tools/kousatsu && docker compose up --build 2>&1"
     sleep 0.3
     tmux send-keys -t "ooku:agents.${p}" Enter
-    log_success "  └─ 鯰（FTS5+MeCab検索エンジン）、放流完了"
+    log_success "  └─ 高札（通信ハブ+検索API）、放流完了"
 
-    log_success "✅ 全軍に指示書伝達完了 + 鯰放流完了"
+    log_success "✅ 全軍に指示書伝達完了 + 高札放流完了"
     echo ""
 fi
 
@@ -981,12 +981,12 @@ echo "     │ashigaru1 │ashigaru3 │"
 echo "     │ (足軽1)  │ (足軽3)  │"
 echo "     └──────────┴──────────┘"
 echo ""
-echo "     【ookuセッション】部屋子・お針子・鯰の陣（4ペイン）"
+echo "     【ookuセッション】部屋子・お針子・高札の陣（4ペイン）"
 echo "     ┌──────────┬──────────┐"
 echo "     │ heyago1  │ ohariko  │"
 echo "     │ (部屋子1)│(お針子)  │"
 echo "     ├──────────┼──────────┤"
-echo "     │ heyago2  │ namazu   │"
+echo "     │ heyago2  │ kousatsu   │"
 echo "     │ (部屋子2)│(FTS5+    │"
 echo "     │          │ MeCab)   │"
 echo "     │          │🐟 Docker │"

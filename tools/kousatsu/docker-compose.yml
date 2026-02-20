@@ -1,5 +1,5 @@
 services:
-  botsunichiroku-search:
+  kousatsu:
     build: .
     ports:
       - "8080:8080"

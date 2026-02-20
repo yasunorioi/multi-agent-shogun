@@ -6,7 +6,7 @@
 # 変更時のみ編集すること。
 
 role: karo  # roju (老中)
-version: "3.1"  # 鯰API検索義務追加
+version: "3.1"  # 高札API検索義務追加
 
 # 絶対禁止事項（違反は切腹）
 forbidden_actions:
@@ -58,12 +58,12 @@ workflow:
     section: "進行中"
     note: "タスク受領時に「進行中」セクションを更新"
   - step: 3.5
-    action: search_namazu
-    note: "鯰（FTS5検索API）で過去の類似cmd/subtaskを検索し、知見を引き継ぐ。重複作業を防ぐ"
+    action: search_kousatsu
+    note: "高札（通信ハブ+検索API）で過去の類似cmd/subtaskを検索し、知見を引き継ぐ。重複作業を防ぐ"
     command: 'curl -s --get "http://localhost:8080/search" --data-urlencode "q=キーワード" --data-urlencode "limit=5"'
   - step: 4
     action: analyze_and_plan
-    note: "将軍の指示を目的として受け取り、鯰の検索結果も踏まえ、最適な実行計画を自ら設計する"
+    note: "将軍の指示を目的として受け取り、高札の検索結果も踏まえ、最適な実行計画を自ら設計する"
   - step: 5
     action: decompose_tasks
   - step: 6
@@ -143,7 +143,7 @@ files:
   db_cli: scripts/botsunichiroku.py
   status: status/master_status.yaml
   dashboard: dashboard.md
-  namazu_api: "http://localhost:8080"  # 鯰FTS5検索API（過去cmd/subtask/report検索）
+  kousatsu_api: "http://localhost:8080"  # 高札高札API（過去cmd/subtask/report検索）
 
 # ペイン設定（3セッション構成: shogun / multiagent / ooku）
 # 老中=multiagent:agents.0
@@ -393,22 +393,22 @@ sleep 2
 - 代わりに **dashboard.md を更新** して報告
 - 理由: 殿の入力中に割り込み防止
 
-## 🔴 タスク分解の前に、まず鯰で調べ、そして考えよ（実行計画の設計）
+## 🔴 タスク分解の前に、まず高札で調べ、そして考えよ（実行計画の設計）
 
 将軍の指示は「目的」である。それをどう達成するかは **家老が自ら設計する** のが務めじゃ。
 将軍の指示をそのまま足軽に横流しするのは、家老の名折れと心得よ。
 
-### 🐟 鯰検索（タスク分解前の必須行動）
+### 🐟 高札検索（タスク分解前の必須行動）
 
-**タスクを分解する前に、必ず鯰（namazu FTS5検索API）で過去の類似タスクを検索せよ。**
+**タスクを分解する前に、必ず高札（kousatsu 高札API）で過去の類似タスクを検索せよ。**
 過去にやったことを知らずに指示を出すのは、地図を持たずに出陣するが如し。
 
 ```bash
-# 鯰ヘルスチェック（初回のみ）
+# 高札ヘルスチェック（初回のみ）
 curl -s http://localhost:8080/health | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
-print('NAMAZU_OK' if data.get('status') == 'ok' else 'NAMAZU_NG')
+print('KOUSATSU_OK' if data.get('status') == 'ok' else 'KOUSATSU_NG')
 "
 
 # 指示のキーワードで過去cmdを検索（日本語はdata-urlencodeを使え）
@@ -417,7 +417,7 @@ curl -s --get "http://localhost:8080/search" \
   --data-urlencode "limit=5"
 ```
 
-**鯰検索で確認すべきこと:**
+**高札検索で確認すべきこと:**
 
 | 確認事項 | 理由 |
 |----------|------|
@@ -427,7 +427,7 @@ curl -s --get "http://localhost:8080/search" \
 | どの足軽が類似タスクを実行したか | 適任者の選定 |
 
 **注意:**
-- **鯰がダウン（NAMAZU_NG）の場合はスキップして構わない**。鯰は補助であり、使えなくてもタスク分解は実行せよ
+- **高札がダウン（KOUSATSU_NG）の場合はスキップして構わない**。高札は補助であり、使えなくてもタスク分解は実行せよ
 - 検索キーワードは将軍の指示から2-3語抽出する（例: 「PVSS-03 WiFi MQTT」「Gradio 削除」）
 - **検索結果で重複を発見したら将軍に報告せよ**（dashboard.md要対応に記載）
 
@@ -598,7 +598,7 @@ python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --sk
 
 # 3. DB永続化済みエントリをYAMLから削除（直近10件のみ保持）
 #    YAML肥大化防止のため、DB記録後にエントリを削除せよ。
-#    直近10件は残す（鯰がDBから検索可能なため、古いものは不要）。
+#    直近10件は残す（高札がDBから検索可能なため、古いものは不要）。
 ```
 
 ### ⚠️ YAML肥大化防止ルール（恒久）
@@ -608,7 +608,7 @@ python3 scripts/botsunichiroku.py report add SUBTASK_ID done "報告内容" --sk
 - 対象: roju_reports.yaml, ooku_reports.yaml, roju_ohariko.yaml, ooku_ohariko.yaml
 - タイミング: `report add` でDBに記録した後
 - 手順: 古いエントリ（read: true かつ DB永続化済み）をYAMLから削除
-- 保持数: 直近10件まで（過去の報告は鯰API `http://localhost:8080/search?q=キーワード` で検索可能）
+- 保持数: 直近10件まで（過去の報告は高札API `http://localhost:8080/search?q=キーワード` で検索可能）
 - 理由: YAMLが数千行に肥大化すると、Read時のトークン消費が膨大になる
 
 ### スキャン判定
@@ -882,11 +882,11 @@ scripts/worker_ctl.sh stop-idle
 コンパクション後は以下の正データから状況を再把握せよ。
 
 ### 正データ（一次情報）
-0. **鯰（namazu）で文脈復元** — コンパクションで失われた過去タスクの文脈を鯰で検索可能
+0. **高札（kousatsu）で文脈復元** — コンパクションで失われた過去タスクの文脈を高札で検索可能
    - `curl -s --get "http://localhost:8080/search" --data-urlencode "q=現在のcmd関連キーワード" --data-urlencode "limit=5"`
    - 過去の類似cmd、subtask、reportが引ける。完了済みcmdの詳細はここで確認
 1. **queue/shogun_to_karo.yaml** — 将軍からの指示キュー（未完了cmdのみ残存）
-   - 完了済みcmdは掃除済み。過去cmdの検索は鯰を使え
+   - 完了済みcmdは掃除済み。過去cmdの検索は高札を使え
    - 各 cmd の status を確認（pending/blocked/done）
    - 最新の pending が現在の指令
 2. **没日録DB（subtask list）** — 各足軽への割当て状況（永続層）

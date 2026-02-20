@@ -32,7 +32,7 @@
 ### 階層構造
 
 > 詳細なアーキテクチャは [docs/architecture_shin_ooku.md](docs/architecture_shin_ooku.md) を参照。
-> 鯰（Namazu）の詳細仕様は [docs/namazu_details.md](docs/namazu_details.md) を参照。
+> 高札（Kousatsu）の詳細仕様は [docs/kousatsu_details.md](docs/kousatsu_details.md) を参照。
 
 ```
 上様（人間 / The Lord）
@@ -68,7 +68,7 @@
 | 足軽（Ashigaru） | 3 | 実働部隊。コーディング・調査・文書作成 |
 | 部屋子（Heyago） | 2 | 老中直轄の調査実働部隊 |
 | お針子（Ohariko） | 1 | 監査・先行割当。ツンデレ口調 |
-| 鯰（Namazu） | 1台 | Docker コンテナ。FTS5+MeCab 全文検索 API |
+| 高札（Kousatsu） | 1台 | Docker コンテナ。FTS5+MeCab 全文検索 API |
 
 ### セッション構成（3セッション / 9ペイン）
 
@@ -78,7 +78,7 @@
 │  将軍(Opus)  │    │ 老中     │ 足軽2    │    │ 部屋子1  │ お針子   │
 │              │    │ (Opus)   │ (Sonnet) │    │ (Opus)   │ (Sonnet) │
 └──────────────┘    ├──────────┼──────────┤    ├──────────┼──────────┤
-                    │ 足軽1    │ 足軽3    │    │ 部屋子2  │ 鯰       │
+                    │ 足軽1    │ 足軽3    │    │ 部屋子2  │ 高札       │
                     │ (Sonnet) │ (Sonnet) │    │ (Opus)   │ (Docker) │
                     └──────────┴──────────┘    └──────────┴──────────┘
 ```
@@ -155,7 +155,7 @@ Windows の場合は先に `install.bat` を管理者として実行（WSL2 + Ub
 ```bash
 tmux attach-session -t shogun      # 将軍に接続して命令
 # tmux attach-session -t multiagent  # 老中+足軽の様子を確認
-# tmux attach-session -t ooku        # 部屋子+お針子+鯰を確認
+# tmux attach-session -t ooku        # 部屋子+お針子+高札を確認
 ```
 
 エイリアス（`first_setup.sh` が自動設定）: `css`=shogun, `csm`=multiagent, `cso`=ooku
@@ -267,7 +267,7 @@ python3 scripts/botsunichiroku.py audit list          # 監査待ち一覧
 python3 scripts/botsunichiroku.py archive --days 7    # 7日以上前の完了分をアーカイブ
 ```
 
-### 鯰（Namazu） — 全文検索 Docker コンテナ
+### 高札（Kousatsu） — 全文検索 Docker コンテナ
 
 FTS5 + MeCab による没日録の日本語全文検索 API。ooku セッションの pane 3 で稼働。
 
@@ -403,7 +403,7 @@ multi-agent-shogun/
 │   └── migrate_*.py             # DBマイグレーション
 │
 ├── tools/
-│   └── botsunichiroku-search/   # 鯰（FTS5+MeCab検索API Docker）
+│   └── kousatsu/   # 高札（FTS5+MeCab検索API Docker）
 │       ├── Dockerfile
 │       ├── docker-compose.yml
 │       ├── main.py
@@ -510,7 +510,7 @@ tmux attach-session -t ooku
 # Pane 0: 部屋子1（heyago1）
 # Pane 1: 部屋子2（heyago2）
 # Pane 2: お針子（ohariko）
-# Pane 3: 鯰（namazu / Docker）
+# Pane 3: 高札（kousatsu / Docker）
 ```
 
 </details>
@@ -523,7 +523,7 @@ tmux attach-session -t ooku
 |----------|------|
 | `tmux attach -t shogun` | 将軍に接続 |
 | `tmux attach -t multiagent` | 老中+足軽に接続 |
-| `tmux attach -t ooku` | 部屋子+お針子+鯰に接続 |
+| `tmux attach -t ooku` | 部屋子+お針子+高札に接続 |
 | `Ctrl+B` → `0`-`3` | ペイン切替 |
 | `Ctrl+B` → `d` | デタッチ（エージェントは稼働継続） |
 | マウスホイール | ペイン内スクロール |

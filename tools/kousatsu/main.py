@@ -1,4 +1,4 @@
-"""没日録検索エンジン - FastAPI検索API
+"""高札（kousatsu）- 通信ハブ+検索API
 
 FTS5インデックスDBおよび没日録DB（読み取り専用）に対して
 全文検索・矛盾検出・カバレッジチェックを提供する。
@@ -13,7 +13,7 @@ import MeCab
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-app = FastAPI(title="没日録検索エンジン", version="1.0.0")
+app = FastAPI(title="高札 - 通信ハブ+検索API", version="1.0.0")
 
 # --- 環境変数 ---
 BOTSUNICHIROKU_DB = os.environ.get("BOTSUNICHIROKU_DB", "/data/botsunichiroku.db")

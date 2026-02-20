@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ../../data/botsunichiroku.db:/data/botsunichiroku.db:ro
+      - ../../data/botsunichiroku.db:/data/botsunichiroku.db:rw
     environment:
       - BOTSUNICHIROKU_DB=/data/botsunichiroku.db
       - INDEX_DB=/data/search_index.db

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import MeCab
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 app = FastAPI(title="没日録検索エンジン", version="1.0.0")
 
@@ -78,6 +79,35 @@ def get_botsunichiroku_db() -> sqlite3.Connection:
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def get_botsunichiroku_db_rw() -> sqlite3.Connection:
+    """没日録DBへの読み書き接続を返す（POST/PATCH系エンドポイント用）。"""
+    db_path = Path(BOTSUNICHIROKU_DB)
+    if not db_path.exists():
+        raise HTTPException(status_code=503, detail="botsunichiroku.db not found")
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# --- Pydanticモデル ---
+
+class ReportCreate(BaseModel):
+    subtask_id: str
+    worker_id: str
+    status: str       # done|blocked|error
+    summary: str
+    body: str = ""
+    skill_candidate_name: str = ""
+    skill_candidate_desc: str = ""
+
+
+class AuditCreate(BaseModel):
+    subtask_id: str
+    result: str       # approved|rejected_trivial|rejected_judgment
+    summary: str
+    findings: str = ""
 
 
 # ============================================================
@@ -677,3 +707,132 @@ def health():
         "botsunichiroku_db_exists": botsunichiroku_exists,
         "mecab_available": mecab_available,
     }
+
+
+# ============================================================
+# 8. POST /reports - 足軽/部屋子が報告を登録
+# ============================================================
+@app.post("/reports", status_code=201)
+def create_report(report: ReportCreate):
+    valid_statuses = {"done", "blocked", "error"}
+    if report.status not in valid_statuses:
+        raise HTTPException(status_code=422, detail=f"status must be one of {valid_statuses}")
+
+    conn = get_botsunichiroku_db_rw()
+    try:
+        # subtask存在チェック
+        row = conn.execute(
+            "SELECT id FROM subtasks WHERE id = ?", (report.subtask_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"subtask '{report.subtask_id}' not found")
+
+        ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        cur = conn.execute(
+            """INSERT INTO reports
+               (worker_id, task_id, timestamp, status, summary, notes,
+                skill_candidate_name, skill_candidate_desc)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                report.worker_id,
+                report.subtask_id,
+                ts,
+                report.status,
+                report.summary,
+                report.body or None,
+                report.skill_candidate_name or None,
+                report.skill_candidate_desc or None,
+            ),
+        )
+        conn.commit()
+        report_id = cur.lastrowid
+    finally:
+        conn.close()
+
+    return {"report_id": report_id, "status": "created"}
+
+
+# ============================================================
+# 9. POST /audit - お針子が監査結果を登録
+# ============================================================
+@app.post("/audit", status_code=200)
+def create_audit(audit: AuditCreate):
+    valid_results = {"approved", "rejected_trivial", "rejected_judgment"}
+    if audit.result not in valid_results:
+        raise HTTPException(status_code=422, detail=f"result must be one of {valid_results}")
+
+    audit_status = "done" if audit.result == "approved" else "rejected"
+
+    conn = get_botsunichiroku_db_rw()
+    try:
+        # subtask存在チェック
+        row = conn.execute(
+            "SELECT id, notes FROM subtasks WHERE id = ?", (audit.subtask_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"subtask '{audit.subtask_id}' not found")
+
+        # notes に [audit] プレフィックス付きで追記
+        existing_notes = row["notes"] or ""
+        audit_note = f"[audit] {audit.findings}" if audit.findings else f"[audit] {audit.summary}"
+        new_notes = (existing_notes + "\n" + audit_note).strip() if existing_notes else audit_note
+
+        conn.execute(
+            "UPDATE subtasks SET audit_status = ?, notes = ? WHERE id = ?",
+            (audit_status, new_notes, audit.subtask_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"subtask_id": audit.subtask_id, "audit_status": audit_status, "status": "updated"}
+
+
+# ============================================================
+# 10. GET /reports/{report_id} - 報告全文取得
+# ============================================================
+@app.get("/reports/{report_id}")
+def get_report(report_id: int):
+    conn = get_botsunichiroku_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM reports WHERE id = ?", (report_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"report {report_id} not found")
+        return {
+            "id": row["id"],
+            "worker_id": row["worker_id"],
+            "task_id": row["task_id"],
+            "timestamp": row["timestamp"],
+            "status": row["status"],
+            "summary": row["summary"],
+            "notes": row["notes"],
+            "skill_candidate_name": row["skill_candidate_name"],
+            "skill_candidate_desc": row["skill_candidate_desc"],
+        }
+    finally:
+        conn.close()
+
+
+# ============================================================
+# 11. GET /audit/{subtask_id} - 監査結果取得
+# ============================================================
+@app.get("/audit/{subtask_id}")
+def get_audit(subtask_id: str):
+    conn = get_botsunichiroku_db()
+    try:
+        row = conn.execute(
+            "SELECT id, audit_status, needs_audit, notes FROM subtasks WHERE id = ?",
+            (subtask_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"subtask '{subtask_id}' not found")
+        return {
+            "subtask_id": subtask_id,
+            "audit_status": row["audit_status"],
+            "needs_audit": bool(row["needs_audit"]),
+            "notes": row["notes"],
+        }
+    finally:
+        conn.close()

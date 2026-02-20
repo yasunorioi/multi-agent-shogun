@@ -90,7 +90,16 @@ workflow:
   - step: 10
     action: scan_all_reports
     method: "Read queue/inbox/roju_reports.yaml"
-    note: "起こした足軽だけでなく報告inboxを必ずスキャン。通信ロスト対策（通信プロトコルv2）"
+    note: |
+      起こした足軽だけでなく報告inboxを必ずスキャン。通信ロスト対策（通信プロトコルv2）。
+      【detail_ref方式（Phase 2以降）】
+      YAMLエントリに detail_ref フィールドがある場合:
+        1. YAMLから subtask_id, summary, detail_ref を読む
+        2. detail_refのコマンドを実行して全文取得:
+           curl -s localhost:8080/reports/{report_id} | python3 -m json.tool
+        3. 全文に基づいて完了処理を行う
+      detail_ref がない場合（旧方式・フォールバック）:
+        summary フィールドを直接読む（後方互換）
   - step: 11
     action: update_dashboard
     target: dashboard.md
@@ -113,8 +122,11 @@ workflow:
     note: |
       お針子から報告YAMLで監査結果を受信した場合の処理（通信プロトコルv2）:
       1. queue/inbox/roju_ohariko.yaml を Read（全報告スキャンの一部として実行）
-      2. 新規報告（status: done, read: false）を確認
-      3. findings で監査結果を判別:
+      2. 新規報告（read: false）を確認
+      3. detail_ref フィールドがある場合は全文取得（Phase 2以降）:
+         curl -s localhost:8080/audit/{subtask_id} | python3 -m json.tool
+         detail_ref がない場合（旧方式）: summary/findings をインライン読取
+      4. findings で監査結果を判別:
          - 合格 → 通常の完了処理（dashboard戦果移動、次タスク進行）
          - 要修正（自明: typo等）→ 足軽/部屋子に修正タスク再割当
          - 要修正（判断必要: 仕様等）→ dashboard.md「要対応」に記載
@@ -262,10 +274,14 @@ persona:
 # 1. お針子の報告YAMLを読み込む（全報告スキャンの一部として実行）
 Read queue/inbox/roju_ohariko.yaml
 
-# 2. 新規報告（status: done, read: false）を確認
-# YAMLフォーマット: subtask_id, status, findings, skill_candidate, read
+# 2. 新規報告（read: false）を確認
+# YAMLフォーマット（Phase 2以降）: subtask_id, summary, detail_ref, timestamp, read
 
-# 3. findings で監査結果を判別（合格/要修正）
+# 3. detail_ref がある場合は全文取得（Phase 2以降）
+# curl -s localhost:8080/audit/{subtask_id} | python3 -m json.tool
+# detail_ref がない場合（旧方式・後方互換）: findings をインライン読取
+
+# 4. findings で監査結果を判別（合格/要修正）
 ```
 
 | 監査結果 | audit_status | 家老の対応 |

@@ -28,6 +28,9 @@ forbidden_actions:
   - id: F005
     action: skip_context_reading
     description: "コンテキストを読まずに作業開始"
+  - id: F006
+    action: github_issue_pr_post
+    description: "殿の明示的許可なしにGitHub Issue/PRの作成・コメント投稿を行う（gh issue create, gh pr create, gh api comments等すべて対象）"
 
 # ワークフロー
 workflow:
@@ -153,6 +156,7 @@ skill_candidate:
 
 足軽の既知の弱点を認識し、回避せよ：
 - **報告は20行以内**: 50行超の報告は殿もKaroも読まない。要点だけ書け
+- **🔴 作業完了したら即報告**: 分析を深掘りし続けるな。80%できたら報告を書け。完璧な分析より速い報告が価値がある。報告が遅いと老中・将軍がブロックされる
 - **安易にblocked宣言するな**: 宣言前に代替手段を3つ考えよ
 - **`cat /dev/ttyACM0` 禁止**: シリアルデバイス直接アクセスでターミナル破壊（切腹ルール）
 
@@ -294,43 +298,63 @@ tmux capture-pane -t multiagent:agents.0 -p | tail -5
 全ての足軽・部屋子の報告先は **老中（multiagent:agents.0）** である。
 報告をinbox YAMLに記録した後の send-keys も、老中ペインに送ること。
 
-## 報告の書き方（inbox YAML）
+## 報告の書き方（鯰API + inbox YAML）
 
-タスク完了時は、家老の報告inbox YAMLに報告を記録せよ。
+タスク完了時は以下の3ステップで報告せよ（Phase 2: 鯰API登録 + YAMLサマリ方式）。
 
-### 基本形式
+### STEP 1: 鯰APIで報告本文をDB登録
 
 ```bash
-# 1. 老中の報告inboxに新規報告を追記
-Edit queue/inbox/roju_reports.yaml
-# 以下の形式で reports リストの末尾に追加:
-# - id: report_XXX  # 既存のreport IDから連番を推測
-#   subtask_id: SUBTASK_ID
-#   worker: ashigaru{N}
-#   status: done
-#   timestamp: "YYYY-MM-DDTHH:MM:SS"  # date "+%Y-%m-%dT%H:%M:%S" で取得
-#   summary: |
-#     タスク完了。WBS 2.3節を作成。担当者3名、期間を2/1-2/15に設定。
-#   skill_candidate: null
-#   read: false
+curl -s -X POST http://localhost:8080/reports \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subtask_id": "subtask_XXX",
+    "worker_id": "ashigaru{N}",
+    "status": "done",
+    "summary": "1行サマリ（老中が最初に読む要点）",
+    "body": "報告全文。実装内容、コミット番号、テスト結果、注意事項等を詳細に記載。"
+  }'
+```
+
+成功時のレスポンス例: `{"report_id": 42, "status": "created"}`
+
+> **鯰ダウン時（フォールバック）**: curlが失敗した場合は report_id なしで STEP 2 に進み、
+> YAMLの body フィールドに報告全文をインライン記載せよ（旧方式）。
+
+### STEP 2: roju_reports.yaml にサマリ + 参照のみ記載
+
+```bash
+# 老中の報告inboxに新規報告を追記（末尾に追加）
+# ※ Edit ツールを使う場合は必ず Read してから Edit せよ
+```
+
+```yaml
+- subtask_id: subtask_XXX
+  cmd_id: cmd_YYY
+  worker: ashigaru{N}
+  status: completed
+  reported_at: "YYYY-MM-DDTHH:MM:SS"  # date "+%Y-%m-%dT%H:%M:%S" で取得
+  summary: "1行サマリ（STEP 1と同一文）"
+  detail_ref: "curl -s localhost:8080/reports/42"  # STEP 1で得たreport_id
+  skill_candidate:
+    name: ~
+  read: false
 ```
 
 ### スキル化候補がある場合
 
-```bash
-Edit queue/inbox/roju_reports.yaml
-# skill_candidate フィールドに記載:
-# - id: report_XXX
-#   subtask_id: SUBTASK_ID
-#   worker: ashigaru{N}
-#   status: done
-#   timestamp: "2026-02-08T11:30:00"
-#   summary: |
-#     タスク完了。README改善を実施。初心者向けセットアップガイドを追加。
-#   skill_candidate:
-#     name: "readme-improver"
-#     description: "README.mdを初心者向けに改善するパターン。他プロジェクトでも有用。"
-#   read: false
+```yaml
+- subtask_id: subtask_XXX
+  cmd_id: cmd_YYY
+  worker: ashigaru{N}
+  status: completed
+  reported_at: "2026-02-08T11:30:00"
+  summary: "README改善完了。初心者向けセットアップガイドを追加。"
+  detail_ref: "curl -s localhost:8080/reports/43"
+  skill_candidate:
+    name: "readme-improver"
+    description: "README.mdを初心者向けに改善するパターン。他プロジェクトでも有用。"
+  read: false
 ```
 
 ### ステータスの種類

@@ -27,6 +27,9 @@ forbidden_actions:
   - id: F005
     action: skip_context_reading
     description: "コンテキストを読まずに作業開始"
+  - id: F006
+    action: github_issue_pr_post
+    description: "殿の明示的許可なしにGitHub Issue/PRの作成・コメント投稿を行う（gh issue create, gh pr create, gh api comments等すべて対象）"
 
 # 特権
 privileges:
@@ -377,29 +380,45 @@ queue/inbox/
   └── roju_ohariko.yaml       # 老中へのお針子報告 inbox
 ```
 
-#### 監査報告フォーマット
+#### 監査報告フォーマット（鯰API + YAMLサマリ方式）
+
+**STEP 1: 鯰APIで監査結果をDB登録**
+
+```bash
+curl -s -X POST http://localhost:8080/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subtask_id": "subtask_XXX",
+    "result": "approved",
+    "summary": "1行サマリ（監査結果の要点）",
+    "findings": "詳細findings。合格/却下理由、検出した問題点等を詳細に記載。"
+  }'
+```
+
+成功時のレスポンス例: `{"subtask_id": "subtask_XXX", "audit_status": "done", "status": "updated"}`
+
+> **鯰ダウン時（フォールバック）**: curlが失敗した場合は STEP 2 で findings をインライン記載せよ（旧方式）。
+
+**STEP 2: roju_ohariko.yaml にサマリ + 参照のみ記載**
+
 ```yaml
 # queue/inbox/roju_ohariko.yaml
 audit_reports:
-  - id: audit_report_001
-    subtask_id: subtask_294
-    timestamp: "2026-02-08T11:30:00"
-    result: approved  # approved | rejected_trivial | rejected_judgment
-    summary: |
-      監査結果: 合格。4観点クリア。品質は及第点よ。
-    findings: []
-    read: false  # 家老が読んだかフラグ
+  - subtask_id: subtask_XXX
+    summary: "監査合格: 4観点クリア。品質及第点よ。"
+    detail_ref: "curl -s localhost:8080/audit/subtask_XXX"
+    timestamp: "YYYY-MM-DDTHH:MM:SS"
+    read: false
 
-  - id: audit_report_002
-    subtask_id: subtask_296
-    timestamp: "2026-02-08T11:40:00"
-    result: rejected_trivial
-    summary: |
-      監査結果: 要修正（自明）。数値不一致を検出。
-    findings:
-      - "194行目: 「17箇所」→「15箇所」に修正が必要"
+  # 却下の場合（result: rejected_trivial / rejected_judgment）
+  - subtask_id: subtask_YYY
+    summary: "監査却下（自明）: 194行目数値不一致。修正を要求。"
+    detail_ref: "curl -s localhost:8080/audit/subtask_YYY"
+    timestamp: "YYYY-MM-DDTHH:MM:SS"
     read: false
 ```
+
+> **旧方式（フォールバック）**: 鯰ダウン時のみ findings をインライン記載してよい。
 
 #### 先行割当報告フォーマット
 ```yaml

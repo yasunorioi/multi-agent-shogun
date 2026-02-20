@@ -162,14 +162,25 @@ def cmd_list(args) -> None:
 
 
 def cmd_add(args) -> None:
+    details = None
+    if args.details_file:
+        import os
+        if not os.path.exists(args.details_file):
+            print(f"Error: file '{args.details_file}' not found.", file=sys.stderr)
+            sys.exit(1)
+        with open(args.details_file) as f:
+            details = f.read()
+    elif args.details_stdin:
+        details = sys.stdin.read()
+
     conn = get_connection()
     seq = next_counter(conn, "cmd_id")
     cmd_id = f"cmd_{seq:03d}"
     ts = now_iso()
     conn.execute(
-        """INSERT INTO commands (id, timestamp, command, project, priority, status, assigned_karo, created_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)""",
-        (cmd_id, ts, args.description, args.project, args.priority, args.karo, ts),
+        """INSERT INTO commands (id, timestamp, command, project, priority, status, assigned_karo, created_at, details)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+        (cmd_id, ts, args.description, args.project, args.priority, args.karo, ts, details),
     )
     conn.commit()
     conn.close()
@@ -224,7 +235,11 @@ def cmd_show(args) -> None:
     print(f"{'Priority:':<16} {row['priority']}")
     print(f"{'Project:':<16} {row['project'] or '-'}")
     print(f"{'Assigned Karo:':<16} {row['assigned_karo'] or '-'}")
-    print(f"{'Details:':<16} {row['details'] or '-'}")
+    if row['details']:
+        print(f"{'Details:':<16}")
+        print(row['details'])
+    else:
+        print(f"{'Details:':<16} -")
     print(f"{'Created:':<16} {row['created_at']}")
     print(f"{'Completed:':<16} {row['completed_at'] or '-'}")
 
@@ -944,6 +959,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", help="Project name (e.g., arsprout, shogun)")
     p.add_argument("--priority", default="medium", choices=["critical", "high", "medium", "low"], help="Priority level")
     p.add_argument("--karo", choices=["roju", "midaidokoro"], help="Assign to specific karo")
+    p.add_argument("--file", dest="details_file", help="Read details from file")
+    p.add_argument("--stdin", dest="details_stdin", action="store_true", help="Read details from stdin")
     p.set_defaults(func=cmd_add)
 
     # cmd update

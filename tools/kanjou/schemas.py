@@ -104,3 +104,31 @@ class PreAuditReport(BaseModel):
     checklist_check: ChecklistCheckResult
     skill_evaluation: Optional[SkillCandidateEvaluation] = None
     pre_verdict: PreVerdict
+
+
+# ---------- Ohariko Meta-Audit (お針子監査の監査) ----------
+
+class OharikoAuditIssue(BaseModel):
+    audit_report_id: str
+    check: str
+    problem: str
+    severity: IssueSeverity
+
+
+class OharikoAuditResult(BaseModel):
+    audit_report_id: str
+    subtask_id: str
+    result_match: bool
+    findings_quality: Severity
+    coverage_check: bool
+    prefix_valid: bool
+    issues: list[OharikoAuditIssue] = Field(default_factory=list)
+    qwen_review: Optional[str] = None
+    severity: Severity
+
+
+class OharikoMetaAuditReport(BaseModel):
+    """お針子監査の監査結果（メタ監査）"""
+    total_audited: int
+    reports: list[OharikoAuditResult] = Field(default_factory=list)
+    overall_severity: Severity

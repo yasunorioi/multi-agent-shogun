@@ -13,6 +13,9 @@ from tools.kanjou.schemas import (
     FormatCheckResult,
     FormatIssue,
     IssueSeverity,
+    OharikoAuditIssue,
+    OharikoAuditResult,
+    OharikoMetaAuditReport,
     PreAuditReport,
     PreVerdict,
     RejectionPattern,
@@ -27,8 +30,13 @@ from tools.kanjou.kanjou_ginmiyaku import (
     _check_required_fields,
     _check_skill_candidate,
     _extract_json,
+    check_findings_prefixes,
+    check_findings_specificity,
+    check_result_findings_consistency,
     determine_pre_verdict,
+    load_ohariko_reports,
     rule_based_format_check,
+    run_ohariko_audit,
 )
 from tools.kanjou.tools import DBQueryTool, FileReadTool, KousatsuAPITool
 
@@ -402,3 +410,309 @@ class TestFileReadTool:
 def test_httpx_import():
     import httpx
     assert hasattr(httpx, "get")
+
+
+# ============================================================
+# Ohariko Meta-Audit Schema Tests
+# ============================================================
+
+class TestOharikoAuditIssue:
+    def test_valid(self):
+        issue = OharikoAuditIssue(
+            audit_report_id="audit_report_039",
+            check="prefix_format",
+            problem="Invalid prefix",
+            severity=IssueSeverity.warn,
+        )
+        assert issue.audit_report_id == "audit_report_039"
+        assert issue.severity == IssueSeverity.warn
+
+
+class TestOharikoAuditResult:
+    def test_valid(self):
+        result = OharikoAuditResult(
+            audit_report_id="audit_report_039",
+            subtask_id="subtask_559",
+            result_match=True,
+            findings_quality=Severity.ok,
+            coverage_check=True,
+            prefix_valid=True,
+            issues=[],
+            severity=Severity.ok,
+        )
+        assert result.audit_report_id == "audit_report_039"
+        assert result.severity == Severity.ok
+
+    def test_with_issues(self):
+        result = OharikoAuditResult(
+            audit_report_id="audit_report_039",
+            subtask_id="subtask_559",
+            result_match=False,
+            findings_quality=Severity.warn,
+            coverage_check=True,
+            prefix_valid=False,
+            issues=[
+                OharikoAuditIssue(
+                    audit_report_id="audit_report_039",
+                    check="prefix_format",
+                    problem="bad prefix",
+                    severity=IssueSeverity.warn,
+                )
+            ],
+            severity=Severity.warn,
+        )
+        assert len(result.issues) == 1
+
+
+class TestOharikoMetaAuditReport:
+    def test_minimal(self):
+        r = OharikoMetaAuditReport(
+            total_audited=0,
+            reports=[],
+            overall_severity=Severity.ok,
+        )
+        assert r.total_audited == 0
+
+    def test_json_roundtrip(self):
+        r = OharikoMetaAuditReport(
+            total_audited=1,
+            reports=[
+                OharikoAuditResult(
+                    audit_report_id="audit_report_039",
+                    subtask_id="subtask_559",
+                    result_match=True,
+                    findings_quality=Severity.warn,
+                    coverage_check=True,
+                    prefix_valid=True,
+                    issues=[
+                        OharikoAuditIssue(
+                            audit_report_id="audit_report_039",
+                            check="specificity",
+                            problem="vague finding",
+                            severity=IssueSeverity.warn,
+                        )
+                    ],
+                    qwen_review='{"quality": "mediocre", "issues": ["lazy"]}',
+                    severity=Severity.warn,
+                )
+            ],
+            overall_severity=Severity.warn,
+        )
+        j = r.model_dump_json()
+        r2 = OharikoMetaAuditReport.model_validate_json(j)
+        assert r2.total_audited == 1
+        assert r2.reports[0].audit_report_id == "audit_report_039"
+        assert r2.reports[0].qwen_review is not None
+        assert r2.overall_severity == Severity.warn
+
+
+# ============================================================
+# Ohariko Meta-Audit Logic Tests
+# ============================================================
+
+class TestCheckFindingsPrefixes:
+    def test_all_valid(self):
+        findings = [
+            "[確認OK] テスト27件全PASS",
+            "[品質][中] 設計書§5のOllama記述が未更新",
+            "[品質][軽微] コメント更新漏れ",
+            "[高札分析] cmd_249の依存管理",
+            "[鯰分析] subtask依存解析",
+            "[情報] auto_reject閾値の見直し",
+        ]
+        invalid = check_findings_prefixes(findings)
+        assert len(invalid) == 0
+
+    def test_invalid_prefix(self):
+        findings = [
+            "[確認OK] テストPASS",
+            "これはプレフィックスなし",
+            "[不明] 不正なプレフィックス",
+        ]
+        invalid = check_findings_prefixes(findings)
+        assert len(invalid) == 2
+
+    def test_empty_list(self):
+        assert check_findings_prefixes([]) == []
+
+    def test_品質高(self):
+        findings = ["[品質][高] 致命的な問題"]
+        assert check_findings_prefixes(findings) == []
+
+
+class TestResultFindingsConsistency:
+    def test_approved_with_few_issues(self):
+        findings = [
+            "[確認OK] テストPASS",
+            "[品質][中] 軽い指摘",
+            "[確認OK] 設計書整合",
+        ]
+        ok, reason = check_result_findings_consistency("approved", findings)
+        assert ok is True
+
+    def test_approved_with_many_quality_issues(self):
+        findings = [
+            "[品質][中] 問題1",
+            "[品質][中] 問題2",
+            "[品質][高] 問題3",
+        ]
+        ok, reason = check_result_findings_consistency("approved", findings)
+        assert ok is False
+        assert "approved" in reason
+
+    def test_rejected_with_no_quality_issues(self):
+        findings = [
+            "[確認OK] テストPASS",
+            "[確認OK] 設計書整合",
+        ]
+        ok, reason = check_result_findings_consistency("rejected_trivial", findings)
+        assert ok is False
+        assert "rejected" in reason
+
+    def test_rejected_with_quality_issues(self):
+        findings = [
+            "[品質][中] 問題発見",
+            "[確認OK] テストPASS",
+        ]
+        ok, reason = check_result_findings_consistency("rejected_trivial", findings)
+        assert ok is True
+
+    def test_unknown_result(self):
+        ok, reason = check_result_findings_consistency("unknown", ["[確認OK] ok"])
+        assert ok is True
+
+
+class TestCheckFindingsSpecificity:
+    def test_specific_findings(self):
+        findings = [
+            "[品質][中] 設計書§5.1のOllama記述が未更新。agriha_control.py L200参照",
+            "[品質][軽微] テスト22件はPASSだが追加推奨",
+        ]
+        sev, vague = check_findings_specificity(findings)
+        assert sev == Severity.ok
+        assert len(vague) == 0
+
+    def test_vague_findings(self):
+        findings = [
+            "[品質][中] なんか問題がある",
+            "[品質][中] よくない感じ",
+        ]
+        sev, vague = check_findings_specificity(findings)
+        assert sev == Severity.error
+        assert len(vague) == 2
+
+    def test_confirmations_skipped(self):
+        findings = [
+            "[確認OK] テストPASS",
+            "[確認OK] 設計書整合",
+        ]
+        sev, vague = check_findings_specificity(findings)
+        assert sev == Severity.ok
+        assert len(vague) == 0
+
+    def test_mixed(self):
+        findings = [
+            "[確認OK] テストPASS",
+            "[品質][中] 曖昧な指摘",
+        ]
+        sev, vague = check_findings_specificity(findings)
+        assert sev == Severity.warn
+        assert len(vague) == 1
+
+
+class TestLoadOharikoReports:
+    def test_load_from_file(self, tmp_path):
+        yaml_content = """audit_reports:
+  - id: audit_report_001
+    subtask_id: subtask_100
+    result: approved
+    summary: "テスト合格"
+    findings:
+      - "[確認OK] テストPASS"
+  - id: audit_report_002
+    subtask_id: subtask_200
+    result: rejected_trivial
+    summary: "却下"
+    findings:
+      - "[品質][中] 問題あり"
+"""
+        f = tmp_path / "test_ohariko.yaml"
+        f.write_text(yaml_content)
+        reports = load_ohariko_reports(limit=5, yaml_path=f)
+        assert len(reports) == 2
+        assert reports[0]["id"] == "audit_report_001"
+
+    def test_load_with_limit(self, tmp_path):
+        yaml_content = """audit_reports:
+  - id: r1
+    subtask_id: s1
+  - id: r2
+    subtask_id: s2
+  - id: r3
+    subtask_id: s3
+"""
+        f = tmp_path / "test.yaml"
+        f.write_text(yaml_content)
+        reports = load_ohariko_reports(limit=2, yaml_path=f)
+        assert len(reports) == 2
+
+    def test_load_missing_file(self, tmp_path):
+        reports = load_ohariko_reports(yaml_path=tmp_path / "nonexistent.yaml")
+        assert reports == []
+
+    def test_load_empty_yaml(self, tmp_path):
+        f = tmp_path / "empty.yaml"
+        f.write_text("")
+        reports = load_ohariko_reports(yaml_path=f)
+        assert reports == []
+
+
+class TestRunOharikoAudit:
+    def test_run_with_mock_data(self, tmp_path):
+        yaml_content = """audit_reports:
+  - id: audit_report_001
+    subtask_id: subtask_100
+    result: approved
+    summary: "テスト合格。27件PASS。"
+    findings:
+      - "[確認OK] テスト27件全PASS ✓"
+      - "[品質][軽微] コメント更新漏れ。test_control.py L45参照"
+"""
+        f = tmp_path / "ohariko.yaml"
+        f.write_text(yaml_content)
+
+        with patch("tools.kanjou.kanjou_ginmiyaku.qwen_ohariko_review", return_value=None):
+            report = run_ohariko_audit(limit=5, yaml_path=f)
+
+        assert report.total_audited == 1
+        assert report.reports[0].audit_report_id == "audit_report_001"
+        assert report.reports[0].prefix_valid is True
+        assert report.reports[0].result_match is True
+
+    def test_run_empty(self, tmp_path):
+        f = tmp_path / "empty.yaml"
+        f.write_text("audit_reports: []")
+
+        report = run_ohariko_audit(limit=5, yaml_path=f)
+        assert report.total_audited == 0
+        assert report.overall_severity == Severity.ok
+
+    def test_run_with_qwen_poor_rating(self, tmp_path):
+        yaml_content = """audit_reports:
+  - id: audit_report_bad
+    subtask_id: subtask_999
+    result: approved
+    summary: "合格"
+    findings:
+      - "[確認OK] OK"
+"""
+        f = tmp_path / "ohariko.yaml"
+        f.write_text(yaml_content)
+
+        qwen_response = '{"quality": "poor", "issues": ["lazy approval"], "missed_checks": ["tests"]}'
+        with patch("tools.kanjou.kanjou_ginmiyaku.qwen_ohariko_review", return_value=qwen_response):
+            report = run_ohariko_audit(limit=5, yaml_path=f)
+
+        assert report.total_audited == 1
+        assert report.reports[0].severity == Severity.error
+        assert any(i.check == "qwen_review" for i in report.reports[0].issues)

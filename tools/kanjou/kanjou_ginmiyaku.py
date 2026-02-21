@@ -19,12 +19,17 @@ from typing import Optional
 
 import httpx
 
+import yaml
+
 from tools.kanjou.schemas import (
     AutoJudgment,
     ChecklistCheckResult,
     FormatCheckResult,
     FormatIssue,
     IssueSeverity,
+    OharikoAuditIssue,
+    OharikoAuditResult,
+    OharikoMetaAuditReport,
     PreAuditReport,
     PreVerdict,
     RejectionPattern,
@@ -33,6 +38,8 @@ from tools.kanjou.schemas import (
     SkillCandidateEvaluation,
     SkillScores,
 )
+from pathlib import Path
+
 from tools.kanjou.tools import DBQueryTool, FileReadTool, KousatsuAPITool
 
 # ---------- Config ----------
@@ -385,16 +392,287 @@ def run_audit(subtask_id: str) -> PreAuditReport:
     return report
 
 
+# ---------- Phase 2: Ohariko Meta-Audit ----------
+
+OHARIKO_YAML = Path("/home/yasu/multi-agent-shogun/queue/inbox/roju_ohariko.yaml")
+
+# Valid finding prefixes
+VALID_FINDING_PREFIXES = [
+    "[確認OK]",
+    "[品質][軽微]",
+    "[品質][中]",
+    "[品質][高]",
+    "[高札分析]",
+    "[鯰分析]",
+    "[情報]",
+]
+
+
+def load_ohariko_reports(limit: int = 5, yaml_path: Path | None = None) -> list[dict]:
+    """Load audit_reports from roju_ohariko.yaml."""
+    path = yaml_path or OHARIKO_YAML
+    if not path.is_file():
+        return []
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    if not isinstance(data, dict):
+        return []
+    reports = data.get("audit_reports", [])
+    if not isinstance(reports, list):
+        return []
+    return reports[:limit]
+
+
+def check_findings_prefixes(findings: list[str]) -> list[str]:
+    """Check that each finding starts with a valid prefix.
+
+    Returns list of findings with invalid prefixes.
+    """
+    invalid = []
+    for f in findings:
+        f_stripped = f.strip()
+        if not any(f_stripped.startswith(p) for p in VALID_FINDING_PREFIXES):
+            invalid.append(f_stripped)
+    return invalid
+
+
+def check_result_findings_consistency(
+    result: str, findings: list[str]
+) -> tuple[bool, str]:
+    """Check consistency between result field and findings content.
+
+    Returns (is_consistent, reason).
+    """
+    quality_issues = [
+        f for f in findings
+        if any(f.strip().startswith(p) for p in ("[品質][中]", "[品質][高]"))
+    ]
+    num_quality = len(quality_issues)
+
+    if result == "approved" and num_quality >= 3:
+        return False, f"approved but {num_quality} medium/high quality issues found"
+
+    if result in ("rejected_trivial", "rejected_judgment") and num_quality == 0:
+        confirmations = [f for f in findings if f.strip().startswith("[確認OK]")]
+        if len(confirmations) == len(findings):
+            return False, "rejected but all findings are confirmations with no quality issues"
+
+    return True, "consistent"
+
+
+def check_findings_specificity(findings: list[str]) -> tuple[Severity, list[str]]:
+    """Check that findings contain specific evidence (filenames, line numbers, counts).
+
+    Returns (severity, list_of_vague_findings).
+    """
+    # Patterns indicating specificity
+    specificity_patterns = [
+        re.compile(r"\b\w+\.\w{1,5}\b"),      # filename.ext
+        re.compile(r"\b[Ll]ine\s*:?\s*\d+|L\d{2,}"),  # line reference
+        re.compile(r"\d+\s*(件|テスト|PASS|行|項目|ファイル|tests?)"),  # counts
+        re.compile(r"§\d"),                    # section reference
+        re.compile(r"\b(ch|v)\d"),             # channel/version reference
+    ]
+
+    vague = []
+    for f in findings:
+        f_stripped = f.strip()
+        # Skip pure confirmations — they are inherently specific enough
+        if f_stripped.startswith("[確認OK]"):
+            continue
+        # Check for quality issues that lack specifics
+        if not any(p.search(f_stripped) for p in specificity_patterns):
+            vague.append(f_stripped)
+
+    if len(vague) == 0:
+        return Severity.ok, []
+    elif len(vague) <= 1:
+        return Severity.warn, vague
+    else:
+        return Severity.error, vague
+
+
+def qwen_ohariko_review(audit_report: dict) -> Optional[str]:
+    """Ask Qwen to review an ohariko audit report for quality."""
+    report_id = audit_report.get("id", "unknown")
+    result = audit_report.get("result", "unknown")
+    summary = audit_report.get("summary", "")
+    findings = audit_report.get("findings", [])
+    findings_text = "\n".join(f"  - {f}" for f in findings)
+
+    prompt = (
+        f"This is an audit report (id: {report_id}) with result: {result}.\n"
+        f"Summary: {summary[:500]}\n"
+        f"Findings:\n{findings_text[:1500]}\n\n"
+        "Evaluate this audit quality. Return JSON only:\n"
+        '{"quality": "good"|"mediocre"|"poor", '
+        '"issues": ["issue1", ...], '
+        '"missed_checks": ["check1", ...]}'
+    )
+
+    try:
+        r = httpx.post(
+            f"{OLLAMA_BASE}/api/chat",
+            json={
+                "model": OLLAMA_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a meta-auditor reviewing an AI auditor's work. "
+                            "Be strict and unforgiving. Check for: lazy approvals, "
+                            "vague findings, missing critical checks, inconsistent judgments. "
+                            "Respond ONLY in JSON."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+            },
+            timeout=OLLAMA_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        return data.get("message", {}).get("content", "")
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return None
+
+
+def run_ohariko_audit(
+    limit: int = 5, yaml_path: Path | None = None
+) -> OharikoMetaAuditReport:
+    """Run meta-audit on ohariko's audit reports."""
+    print(f"[Meta-Audit] お針子監査の監査を開始 (limit={limit})...")
+
+    reports = load_ohariko_reports(limit, yaml_path)
+    if not reports:
+        print("  [WARN] No audit reports found.")
+        return OharikoMetaAuditReport(
+            total_audited=0, reports=[], overall_severity=Severity.ok
+        )
+
+    print(f"  Found {len(reports)} audit reports to review.")
+
+    results: list[OharikoAuditResult] = []
+
+    for report in reports:
+        report_id = report.get("id", "unknown")
+        subtask_id = report.get("subtask_id", "unknown")
+        result_field = report.get("result", "")
+        findings = report.get("findings", [])
+
+        print(f"\n  --- Reviewing {report_id} ({subtask_id}) ---")
+        issues: list[OharikoAuditIssue] = []
+
+        # Check 1: Findings prefix format
+        invalid_prefixes = check_findings_prefixes(findings)
+        prefix_valid = len(invalid_prefixes) == 0
+        if not prefix_valid:
+            for inv in invalid_prefixes:
+                issues.append(OharikoAuditIssue(
+                    audit_report_id=report_id,
+                    check="prefix_format",
+                    problem=f"Invalid prefix: {inv[:80]}",
+                    severity=IssueSeverity.warn,
+                ))
+        print(f"    Prefix check: {'OK' if prefix_valid else f'{len(invalid_prefixes)} invalid'}")
+
+        # Check 2: Result-findings consistency
+        is_consistent, reason = check_result_findings_consistency(result_field, findings)
+        if not is_consistent:
+            issues.append(OharikoAuditIssue(
+                audit_report_id=report_id,
+                check="result_consistency",
+                problem=reason,
+                severity=IssueSeverity.error,
+            ))
+        print(f"    Consistency:   {'OK' if is_consistent else reason}")
+
+        # Check 3: Findings specificity
+        specificity_sev, vague_list = check_findings_specificity(findings)
+        if vague_list:
+            for v in vague_list:
+                issues.append(OharikoAuditIssue(
+                    audit_report_id=report_id,
+                    check="findings_specificity",
+                    problem=f"Vague finding: {v[:80]}",
+                    severity=IssueSeverity.warn,
+                ))
+        print(f"    Specificity:   {specificity_sev.value} ({len(vague_list)} vague)")
+
+        # Check 4: Qwen review
+        print("    Qwen review:   ", end="")
+        qwen_result = qwen_ohariko_review(report)
+        if qwen_result:
+            print(f"received ({len(qwen_result)} chars)")
+            try:
+                qwen_parsed = _extract_json(qwen_result)
+                if qwen_parsed.get("quality") == "poor":
+                    issues.append(OharikoAuditIssue(
+                        audit_report_id=report_id,
+                        check="qwen_review",
+                        problem=f"Qwen rated quality as poor: {qwen_parsed.get('issues', [])}",
+                        severity=IssueSeverity.error,
+                    ))
+            except ValueError:
+                pass  # Non-parseable Qwen output — skip
+        else:
+            print("skipped (Ollama unavailable)")
+
+        # Determine per-report severity
+        has_error = any(i.severity == IssueSeverity.error for i in issues)
+        has_warn = any(i.severity == IssueSeverity.warn for i in issues)
+        if has_error:
+            severity = Severity.error
+        elif has_warn:
+            severity = Severity.warn
+        else:
+            severity = Severity.ok
+
+        results.append(OharikoAuditResult(
+            audit_report_id=report_id,
+            subtask_id=subtask_id,
+            result_match=is_consistent,
+            findings_quality=specificity_sev,
+            coverage_check=True,  # Placeholder — full coverage check needs subtask description
+            prefix_valid=prefix_valid,
+            issues=issues,
+            qwen_review=qwen_result,
+            severity=severity,
+        ))
+
+    # Overall severity
+    if any(r.severity == Severity.error for r in results):
+        overall = Severity.error
+    elif any(r.severity == Severity.warn for r in results):
+        overall = Severity.warn
+    else:
+        overall = Severity.ok
+
+    meta_report = OharikoMetaAuditReport(
+        total_audited=len(results),
+        reports=results,
+        overall_severity=overall,
+    )
+
+    print(f"\n[Meta-Audit] Complete: {len(results)} reports audited, overall={overall.value}")
+    return meta_report
+
+
 # ---------- CLI ----------
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="kanjou_ginmiyaku",
-        description="勘定吟味役 — 自動監査ツール (Phase 0-1)",
+        description="勘定吟味役 — 自動監査ツール (Phase 0-2)",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--phase0", action="store_true", help="Ollama疎通確認 (Phase 0)")
     group.add_argument("--audit", metavar="SUBTASK_ID", help="subtask監査 (Phase 1)")
+    group.add_argument("--audit-ohariko", action="store_true", help="お針子監査の監査 (Phase 2)")
+
+    parser.add_argument("--limit", type=int, default=5, help="対象件数 (--audit-ohariko用)")
 
     args = parser.parse_args()
 
@@ -411,6 +689,12 @@ def main() -> int:
         report = run_audit(subtask_id)
         print("\n--- PreAuditReport ---")
         print(report.model_dump_json(indent=2))
+        return 0
+
+    if args.audit_ohariko:
+        meta_report = run_ohariko_audit(limit=args.limit)
+        print("\n--- OharikoMetaAuditReport ---")
+        print(meta_report.model_dump_json(indent=2))
         return 0
 
     return 1

@@ -38,7 +38,7 @@ from tools.kanjou.tools import DBQueryTool, FileReadTool, KousatsuAPITool
 # ---------- Config ----------
 
 OLLAMA_BASE = "http://localhost:11434"
-OLLAMA_MODEL = "qwen2.5-coder:1.5b"
+OLLAMA_MODEL = "qwen2.5:1.5b"
 OLLAMA_TIMEOUT = 30.0
 
 

@@ -84,7 +84,7 @@ def build_index() -> None:
     idx = sqlite3.connect(INDEX_DB)
     idx.execute(FTS5_CREATE)
 
-    counts = {"command": 0, "subtask": 0, "report": 0}
+    counts = {"command": 0, "subtask": 0, "report": 0, "dashboard": 0}
 
     # --- commands ---
     for row in src.execute("SELECT id, command, project, status, details FROM commands"):
@@ -143,11 +143,40 @@ def build_index() -> None:
         )
         counts["report"] += 1
 
+    # --- dashboard_entries ---
+    # テーブル存在チェック付き（古いDBでもクラッシュしない）
+    try:
+        dashboard_rows = src.execute(
+            "SELECT id, cmd_id, section, content, status, tags FROM dashboard_entries"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        dashboard_rows = []
+
+    for row in dashboard_rows:
+        content = tokenize(tagger, safe_str(row["content"]))
+        idx.execute(
+            "INSERT INTO search_index (source_type, source_id, parent_id, project, worker_id, status, content) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "dashboard",
+                str(row["id"]),
+                safe_str(row["cmd_id"]),   # parent_id = cmd_id
+                "",                         # project = ""
+                safe_str(row["tags"]),      # worker_id フィールドにtagsを格納
+                safe_str(row["status"]),
+                content,
+            ),
+        )
+        counts["dashboard"] += 1
+
     idx.commit()
     idx.close()
     src.close()
 
-    print(f"Indexed: {counts['command']} commands, {counts['subtask']} subtasks, {counts['report']} reports")
+    print(
+        f"Indexed: {counts['command']} commands, {counts['subtask']} subtasks, "
+        f"{counts['report']} reports, {counts['dashboard']} dashboard entries"
+    )
 
 
 if __name__ == "__main__":

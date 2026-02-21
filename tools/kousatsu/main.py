@@ -110,6 +110,14 @@ class AuditCreate(BaseModel):
     findings: str = ""
 
 
+class DashboardEntryCreate(BaseModel):
+    section: str         # "戦果", "スキル候補", "findings", "殿裁定" 等
+    content: str         # エントリ本文
+    cmd_id: str = ""     # nullable, 関連cmd_id
+    status: str = ""     # "done", "adopted", "rejected" 等
+    tags: str = ""       # カンマ区切りタグ
+
+
 # ============================================================
 # 1. GET /search - 全文検索
 # ============================================================
@@ -811,6 +819,97 @@ def get_report(report_id: int):
             "skill_candidate_name": row["skill_candidate_name"],
             "skill_candidate_desc": row["skill_candidate_desc"],
         }
+    finally:
+        conn.close()
+
+
+# ============================================================
+# 12. POST /dashboard - dashboardエントリ登録
+# ============================================================
+@app.post("/dashboard", status_code=201)
+def create_dashboard_entry(entry: DashboardEntryCreate):
+    conn = get_botsunichiroku_db_rw()
+    try:
+        ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        cmd_id_value = entry.cmd_id if entry.cmd_id else None
+        cur = conn.execute(
+            """INSERT INTO dashboard_entries
+               (cmd_id, section, content, status, tags, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                cmd_id_value,
+                entry.section,
+                entry.content,
+                entry.status or None,
+                entry.tags or None,
+                ts,
+            ),
+        )
+        conn.commit()
+        entry_id = cur.lastrowid
+    finally:
+        conn.close()
+
+    return {"id": entry_id, "status": "created"}
+
+
+# ============================================================
+# 13. GET /dashboard - dashboardエントリ取得
+# ============================================================
+@app.get("/dashboard")
+def get_dashboard(
+    section: str = Query(None, description="セクションでフィルタ"),
+    cmd_id: str = Query(None, description="cmd_idでフィルタ"),
+    q: str = Query(None, description="contentのLIKE検索"),
+    limit: int = Query(20, ge=1, le=100, description="返却件数"),
+):
+    conn = get_botsunichiroku_db()
+    try:
+        conditions = []
+        params: list = []
+        if section:
+            conditions.append("section = ?")
+            params.append(section)
+        if cmd_id:
+            conditions.append("cmd_id = ?")
+            params.append(cmd_id)
+        if q:
+            conditions.append("content LIKE ?")
+            params.append(f"%{q}%")
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        count_cur = conn.execute(
+            f"SELECT COUNT(*) FROM dashboard_entries {where_clause}",
+            params.copy(),
+        )
+        total = count_cur.fetchone()[0]
+
+        params.append(limit)
+        cur = conn.execute(
+            f"""SELECT id, cmd_id, section, content, status, tags, created_at
+                FROM dashboard_entries
+                {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ?""",
+            params,
+        )
+        rows = cur.fetchall()
+
+        entries = [
+            {
+                "id": row["id"],
+                "cmd_id": row["cmd_id"],
+                "section": row["section"],
+                "content": row["content"],
+                "status": row["status"],
+                "tags": row["tags"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+        return {"total": total, "entries": entries}
     finally:
         conn.close()
 

@@ -29,6 +29,10 @@ Usage:
 
     python3 scripts/botsunichiroku.py stats [--json]
     python3 scripts/botsunichiroku.py archive [--days N] [--dry-run]
+
+    python3 scripts/botsunichiroku.py dashboard add SECTION CONTENT [--cmd CMD_ID] [--tags TAG1,TAG2] [--status STATUS]
+    python3 scripts/botsunichiroku.py dashboard list [--section SECTION] [--limit N] [--cmd CMD_ID]
+    python3 scripts/botsunichiroku.py dashboard search KEYWORD
 """
 
 import argparse
@@ -931,6 +935,90 @@ def archive_run(args) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dashboard subcommands
+# ---------------------------------------------------------------------------
+
+
+def dashboard_add(args) -> None:
+    conn = get_connection()
+    ts = now_iso()
+    cursor = conn.execute(
+        "INSERT INTO dashboard_entries (cmd_id, section, content, status, tags, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (args.cmd, args.section, args.content, args.status, args.tags, ts),
+    )
+    conn.commit()
+    entry_id = cursor.lastrowid
+    conn.close()
+    print(f"Created: dashboard entry #{entry_id}")
+
+
+def dashboard_list(args) -> None:
+    conn = get_connection()
+    query = "SELECT id, cmd_id, section, content, status, tags, created_at FROM dashboard_entries WHERE 1=1"
+    params: list = []
+    if args.section:
+        query += " AND section = ?"
+        params.append(args.section)
+    if args.cmd:
+        query += " AND cmd_id = ?"
+        params.append(args.cmd)
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(args.limit)
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if not rows:
+        print("No dashboard entries found.")
+        return
+
+    headers = ["ID", "CMD", "SECTION", "STATUS", "TAGS", "CONTENT", "CREATED"]
+    table_rows = []
+    for r in rows:
+        content = r["content"] or ""
+        content_short = content[:40] if len(content) > 40 else content
+        table_rows.append([
+            str(r["id"]),
+            r["cmd_id"] or "-",
+            r["section"],
+            r["status"] or "-",
+            r["tags"] or "-",
+            content_short,
+            r["created_at"],
+        ])
+    print_table(headers, table_rows, [5, 10, 12, 10, 16, 40, 20])
+
+
+def dashboard_search(args) -> None:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, cmd_id, section, content, status, tags, created_at FROM dashboard_entries WHERE content LIKE ? ORDER BY id DESC",
+        (f"%{args.keyword}%",),
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        print(f"No entries found for keyword: {args.keyword}")
+        return
+
+    headers = ["ID", "CMD", "SECTION", "STATUS", "TAGS", "CONTENT", "CREATED"]
+    table_rows = []
+    for r in rows:
+        content = r["content"] or ""
+        content_short = content[:40] if len(content) > 40 else content
+        table_rows.append([
+            str(r["id"]),
+            r["cmd_id"] or "-",
+            r["section"],
+            r["status"] or "-",
+            r["tags"] or "-",
+            content_short,
+            r["created_at"],
+        ])
+    print_table(headers, table_rows, [5, 10, 12, 10, 16, 40, 20])
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -1091,6 +1179,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--days", type=int, default=7, help="Archive commands completed more than N days ago (default: 7)")
     p.add_argument("--dry-run", action="store_true", help="Show what would be archived without making changes")
     p.set_defaults(func=archive_run)
+
+    # === dashboard ===
+    dashboard_parser = top_sub.add_parser("dashboard", help="Manage dashboard entries")
+    dashboard_sub = dashboard_parser.add_subparsers(dest="action", required=True)
+
+    # dashboard add
+    p = dashboard_sub.add_parser("add", help="Add a dashboard entry")
+    p.add_argument("section", help="Section name (e.g., 戦果, スキル候補, findings, 殿裁定, ブロック事項)")
+    p.add_argument("content", help="Entry content text")
+    p.add_argument("--cmd", help="Related command ID (e.g., cmd_249)", default=None)
+    p.add_argument("--tags", help="Comma-separated tags (e.g., OTA,Arduino)", default=None)
+    p.add_argument("--status", help="Entry status (e.g., done, adopted, rejected, resolved, frozen)", default=None)
+    p.set_defaults(func=dashboard_add)
+
+    # dashboard list
+    p = dashboard_sub.add_parser("list", help="List dashboard entries")
+    p.add_argument("--section", help="Filter by section name", default=None)
+    p.add_argument("--limit", type=int, default=20, help="Max entries to show (default: 20)")
+    p.add_argument("--cmd", help="Filter by command ID", default=None)
+    p.set_defaults(func=dashboard_list)
+
+    # dashboard search
+    p = dashboard_sub.add_parser("search", help="Search dashboard entries by keyword")
+    p.add_argument("keyword", help="Keyword to search in content")
+    p.set_defaults(func=dashboard_search)
 
     return parser
 

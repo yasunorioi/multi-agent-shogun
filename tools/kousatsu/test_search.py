@@ -53,6 +53,12 @@ SUBTASKS_DATA = [
      "2026-02-01T13:00:00", "2026-02-02T13:00:00", 1, "done"),
 ]
 
+DASHBOARD_DATA = [
+    ("cmd_249", "戦果", "cmd_249全完了。センサー2層構造実装+56テスト全PASS", "done", "sensor,multi-house", "2026-02-21T10:15:00"),
+    (None, "殿裁定", "Node-RED全面撤去決定。LLM直接制御に移行", "resolved", "Node-RED,LLM", "2026-02-19T15:00:00"),
+    ("cmd_238", "スキル候補", "fastapi-linebot-ollama採用", "adopted", "skill,linebot", "2026-02-20T09:25:00"),
+]
+
 REPORTS_DATA = [
     ("ashigaru1", "subtask_200", "2026-02-02T14:00:00", "done",
      "watchdogタイマー実装完了。CircuitPythonのwatchdog.WatchDogTimerを使用。タイムアウト30秒に設定。",
@@ -147,6 +153,22 @@ def create_test_botsunichiroku_db(db_path: str) -> None:
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         REPORTS_DATA,
     )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cmd_id TEXT,
+            section TEXT NOT NULL,
+            content TEXT NOT NULL,
+            status TEXT,
+            tags TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.executemany(
+        "INSERT INTO dashboard_entries (cmd_id, section, content, status, tags, created_at) "
+        "VALUES (?,?,?,?,?,?)",
+        DASHBOARD_DATA,
+    )
     conn.commit()
     conn.close()
 
@@ -206,8 +228,8 @@ class TestBuildIndex:
         conn = sqlite3.connect(index_db)
         count = conn.execute("SELECT COUNT(*) FROM search_index").fetchone()[0]
         conn.close()
-        # commands: 3 + subtasks: 9 + reports: 7 = 19
-        assert count == 19
+        # commands: 3 + subtasks: 9 + reports: 7 + dashboard: 3 = 22
+        assert count == 22
 
     def test_commands_indexed(self, index_db):
         """commandsの全レコードがインデックスに投入されるか"""
@@ -501,8 +523,8 @@ class TestHealth:
         resp = client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
-        # 3 commands + 9 subtasks + 7 reports = 19
-        assert data["index_record_count"] == 19
+        # 3 commands + 9 subtasks + 7 reports + 3 dashboard = 22
+        assert data["index_record_count"] == 22
 
     def test_health_db_exists(self, client):
         """DB存在フラグが正しいか"""
@@ -726,3 +748,97 @@ class TestWorkerStats:
         data = resp.json()
         assert len(data["workers"]) == 1
         assert data["workers"][0]["total_tasks"] == 0
+
+
+# ============================================================
+# 9. POST/GET /dashboard エンドポイントのテスト
+# ============================================================
+
+class TestDashboard:
+    """POST/GET /dashboard のテスト群"""
+
+    def test_post_dashboard_entry(self, client):
+        """POST /dashboard で登録 → 201"""
+        resp = client.post("/dashboard", json={
+            "section": "戦果",
+            "content": "テスト登録エントリ",
+            "cmd_id": "cmd_001",
+            "status": "done",
+            "tags": "test,integration",
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "id" in data
+        assert data["status"] == "created"
+        assert isinstance(data["id"], int)
+
+    def test_post_dashboard_entry_no_cmd_id(self, client):
+        """cmd_id空で登録 → 201（cmd_idはNULL許容）"""
+        resp = client.post("/dashboard", json={
+            "section": "殿裁定",
+            "content": "cmd_id無しのエントリ",
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["status"] == "created"
+        assert isinstance(data["id"], int)
+
+    def test_get_dashboard_all(self, client):
+        """GET /dashboard → 全件取得（DASHBOARD_DATAの3件）"""
+        resp = client.get("/dashboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total" in data
+        assert "entries" in data
+        assert data["total"] == 3
+        assert len(data["entries"]) == 3
+
+    def test_get_dashboard_filter_section(self, client):
+        """GET /dashboard?section=戦果 → セクションフィルタ"""
+        resp = client.get("/dashboard", params={"section": "戦果"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["entries"][0]["section"] == "戦果"
+
+    def test_get_dashboard_search_q(self, client):
+        """GET /dashboard?q=センサー → contentのLIKE検索"""
+        resp = client.get("/dashboard", params={"q": "センサー"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] >= 1
+        assert any("センサー" in e["content"] for e in data["entries"])
+
+    def test_search_includes_dashboard(self, client):
+        """GET /search?q=センサー → source_type=dashboardがFTS5でヒット"""
+        resp = client.get("/search", params={"q": "センサー"})
+        assert resp.status_code == 200
+        data = resp.json()
+        source_types = [r["source_type"] for r in data["results"]]
+        assert "dashboard" in source_types
+
+    def test_dashboard_response_structure(self, client):
+        """レスポンス構造が正しいか"""
+        resp = client.get("/dashboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total" in data
+        assert "entries" in data
+        assert isinstance(data["entries"], list)
+        if data["entries"]:
+            entry = data["entries"][0]
+            assert "id" in entry
+            assert "cmd_id" in entry
+            assert "section" in entry
+            assert "content" in entry
+            assert "status" in entry
+            assert "tags" in entry
+            assert "created_at" in entry
+
+    def test_get_dashboard_ordered_by_created_at_desc(self, client):
+        """created_at DESCでソートされているか"""
+        resp = client.get("/dashboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        created_ats = [e["created_at"] for e in data["entries"]]
+        assert created_ats == sorted(created_ats, reverse=True)

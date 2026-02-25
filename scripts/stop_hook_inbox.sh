@@ -1,8 +1,24 @@
 #!/bin/bash
-# Stop Hook: エージェントのターン終了時にinbox未読をチェックし、未読があればstopをブロック
+# ═══════════════════════════════════════════════════════════════
+# stop_hook_inbox.sh — Claude Code Stop Hook for inbox delivery
+# ═══════════════════════════════════════════════════════════════
+# When a Claude Code agent finishes its turn and is about to go idle,
+# this hook:
+#   1. Analyzes last_assistant_message to detect task completion/error
+#   2. Auto-notifies karo via inbox_write (background, non-blocking)
+#   3. Checks the agent's inbox for unread messages
+#   4. If unread messages exist, BLOCKs the stop and feeds them back
+#
+# Environment:
+#   TMUX_PANE — used to identify which agent is running
+#   __STOP_HOOK_SCRIPT_DIR — override for testing (default: auto-detect)
+#   __STOP_HOOK_AGENT_ID  — override for testing (default: from tmux)
+# ═══════════════════════════════════════════════════════════════
+
 set -u
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# ─── SCRIPT_DIR (testable) ───
+SCRIPT_DIR="${__STOP_HOOK_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # 1. stdin読み込み（Claude Codeがstop_hook_activeなどのJSONを渡す）
 INPUT=$(cat)
@@ -21,12 +37,15 @@ if [ "$HOOK_ACTIVE" = "True" ] || [ "$HOOK_ACTIVE" = "true" ]; then
     exit 0
 fi
 
-# 3. agent_id取得（tmux @agent_id）
-if [ -z "${TMUX_PANE:-}" ]; then
-    exit 0
+# 3. agent_id取得（テスト用override対応）
+if [ -n "${__STOP_HOOK_AGENT_ID+x}" ]; then
+    AGENT_ID="$__STOP_HOOK_AGENT_ID"
+elif [ -n "${TMUX_PANE:-}" ]; then
+    AGENT_ID=$(tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}' 2>/dev/null || echo "")
+else
+    AGENT_ID=""
 fi
 
-AGENT_ID=$(tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}' 2>/dev/null || echo "")
 if [ -z "$AGENT_ID" ]; then
     exit 0
 fi
@@ -38,7 +57,37 @@ case "$AGENT_ID" in
         ;;
 esac
 
-# 5. agent_idに応じたinboxファイル・未読検知
+# ─── 5. Analyze last_assistant_message ───
+LAST_MSG=$(echo "$INPUT" | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('last_assistant_message', ''))
+except:
+    print('')
+" 2>/dev/null || echo "")
+
+if [ -n "$LAST_MSG" ]; then
+    NOTIFY_TYPE=""
+    NOTIFY_CONTENT=""
+
+    # 完了検出パターン（日本語+英語、動詞+文脈ペアで誤検出防止）
+    if echo "$LAST_MSG" | grep -qiE '任務完了|完了でござる|報告YAML.*更新|報告YAML.*記入|report.*updated|task completed|タスク完了|roju_reports.*更新'; then
+        NOTIFY_TYPE="report_completed"
+        NOTIFY_CONTENT="${AGENT_ID}、タスク完了検出。roju_reports確認されたし。"
+    # エラー検出パターン
+    elif echo "$LAST_MSG" | grep -qiE 'エラー.*中断|失敗.*中断|見つからない.*中断|abort|error.*abort|failed.*stop'; then
+        NOTIFY_TYPE="error_report"
+        NOTIFY_CONTENT="${AGENT_ID}、エラーで停止検出。確認されたし。"
+    fi
+
+    # 老中に自動通知（background、非ブロッキング）
+    if [ -n "$NOTIFY_TYPE" ]; then
+        bash "$SCRIPT_DIR/scripts/inbox_write.sh" roju_reports \
+            "$NOTIFY_CONTENT" "$NOTIFY_TYPE" "$AGENT_ID" &
+    fi
+fi
+
+# ─── 6. agent_idに応じたinboxファイル・未読検知 ───
 INBOX_DIR="$SCRIPT_DIR/queue/inbox"
 UNREAD=0
 
@@ -70,12 +119,12 @@ case "$AGENT_ID" in
         ;;
 esac
 
-# 6. 未読なし → approve
+# 7. 未読なし → approve
 if [ "$UNREAD" -eq 0 ] 2>/dev/null; then
     exit 0
 fi
 
-# 7. サマリ生成（python3でYAMLパース、最大5件）
+# 8. サマリ生成（python3でYAMLパース、最大5件）
 SUMMARY=$(python3 -c "
 import yaml, sys, os
 
@@ -126,7 +175,7 @@ except Exception:
     print('(YAMLの詳細取得失敗。ファイルを直接確認せよ)')
 " 2>/dev/null || echo "(summary unavailable)")
 
-# 8. JSON出力でblockを返す
+# 9. JSON出力でblockを返す
 REASON="inbox未読${UNREAD}件あり。queue/inbox/${INBOX_FILES}を読んで処理せよ。内容: ${SUMMARY}"
 # JSONエスケープ
 REASON_ESCAPED=$(echo "$REASON" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))" 2>/dev/null || echo "\"inbox未読あり\"")

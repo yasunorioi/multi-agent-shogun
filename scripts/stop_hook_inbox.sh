@@ -81,7 +81,9 @@ if [ -n "$LAST_MSG" ]; then
     fi
 
     # 老中に自動通知（background、非ブロッキング）
-    if [ -n "$NOTIFY_TYPE" ]; then
+    # karo-roju自身は自分のinbox(roju_reports)に書き込まない
+    # 理由: 自分のinboxに自分で通知→直後にunreadとして検出→blockのレースコンディション
+    if [ -n "$NOTIFY_TYPE" ] && [ "$AGENT_ID" != "karo-roju" ]; then
         bash "$SCRIPT_DIR/scripts/inbox_write.sh" roju_reports \
             "$NOTIFY_CONTENT" "$NOTIFY_TYPE" "$AGENT_ID" &
     fi
@@ -93,15 +95,28 @@ UNREAD=0
 
 case "$AGENT_ID" in
     karo-roju)
-        # 老中: roju_reports.yaml の read: false + roju_ohariko.yaml の read: false
-        if [ -f "$INBOX_DIR/roju_reports.yaml" ]; then
-            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_reports.yaml" 2>/dev/null) || COUNT=0
-            UNREAD=$((UNREAD + COUNT))
-        fi
-        if [ -f "$INBOX_DIR/roju_ohariko.yaml" ]; then
-            COUNT=$(grep -c 'read: false' "$INBOX_DIR/roju_ohariko.yaml" 2>/dev/null) || COUNT=0
-            UNREAD=$((UNREAD + COUNT))
-        fi
+        # 老中: roju_reports.yaml + roju_ohariko.yaml の実報告（stophook_notification除外）をカウント
+        # stophook_notificationはinformationalな通知でkaro-rojuをblockすべきではない
+        COUNT=$(python3 -c "
+import yaml, os, sys
+inbox_dir = '$INBOX_DIR'
+count = 0
+for fname in ['roju_reports.yaml', 'roju_ohariko.yaml']:
+    fpath = os.path.join(inbox_dir, fname)
+    if not os.path.exists(fpath):
+        continue
+    try:
+        with open(fpath) as f:
+            data = yaml.safe_load(f) or {}
+        for key in ['reports', 'audit_reports', 'health_reports', 'preemptive_assignments']:
+            for entry in (data.get(key) or []):
+                if entry.get('read') == False and entry.get('subtask_id') != 'stophook_notification':
+                    count += 1
+    except Exception:
+        pass
+print(count)
+" 2>/dev/null) || COUNT=0
+        UNREAD=$((UNREAD + COUNT))
         INBOX_FILES="roju_reports.yaml, roju_ohariko.yaml"
         ;;
     ashigaru[1-8])

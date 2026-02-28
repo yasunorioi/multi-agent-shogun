@@ -437,9 +437,10 @@ preemptive_assignments:
 
 | result 値 | 意味 | 家老の対応 |
 |----------|------|----------|
-| approved | 合格 | audit_status=done, 戦果移動・次タスク進行 |
-| rejected_trivial | 要修正（自明） | audit_status=rejected, 足軽/部屋子に差し戻し |
-| rejected_judgment | 要修正（判断必要） | audit_status=rejected, dashboard.md「要対応」に記載 |
+| approved | 合格（≥12/15点 or ≥10/12点） | audit_status=done, 戦果移動・次タスク進行 |
+| conditional_approved | 条件付き合格（8-11/15点 or 7-9/12点） | 軽微指摘あり。老中判断で進行可 |
+| rejected_trivial | 要修正（自明）（5-7/15点 or 4-6/12点） | audit_status=rejected, 足軽/部屋子に差し戻し |
+| rejected_judgment | 要修正（判断必要）（≤4/15点 or ≤3/12点） | audit_status=rejected, dashboard.md「要対応」に記載 |
 
 #### findings フィールドの使い方
 
@@ -450,14 +451,16 @@ preemptive_assignments:
 
 | プレフィックス | 用途 | 例 |
 |--------------|------|-----|
-| `[品質]` | 従来の品質指摘（4観点由来） | `[品質] 行234の数値誤り` |
+| `[品質]` | 従来の品質指摘（5観点由来） | `[品質] 行234の数値誤り（正確性: 2/3点）` |
+| `[検証]` | claims検証（STEP 4c由来）: 足軽報告の事実主張の検証結果 | `[検証] 足軽報告「全8ファイル修正」→ git diffで確認: 7ファイルのみ` |
 | `[高札分析]` | 高札API由来の横断分析結果 | `[高札分析] 類似タスクsubtask_310（approved）と比較。書式一貫性OK` |
 | `[高札統計]` | 高札統計API由来の傾向分析 | `[高札統計] ashigaru1 合格率50%（2件中1件却下）。要重点チェック` |
 
 ```yaml
 # findings 記載例
 findings:
-  - "[品質] 行234の数値誤り"
+  - "[品質] 行234の数値誤り（正確性: 2/3点）"
+  - "[検証] 足軽報告「全8ファイル修正」→ git diffで確認: 7ファイルのみ。1ファイル未修正"
   - "[高札分析] 類似タスクsubtask_310（approved）と比較。書式一貫性OK"
   - "[高札分析] カバレッジ0.85。missing: [watchdog]. 報告本文で言及済み、問題なし"
   - "[高札分析] orphansチェック: 孤立subtask 2件検出（subtask_305, subtask_308）"
@@ -523,17 +526,58 @@ STEP 3: 成果物ファイルを直接読む（Read）
   → report の files_modified から対象ファイルを特定し Read で内容を確認
   → target_path が指定されていればそのディレクトリ配下も確認
 
-STEP 4: 品質チェック（以下の5観点）
-  ┌────────────────┬──────────────────────────────────────────────────┐
-  │ 観点           │ チェック内容                                       │
-  ├────────────────┼──────────────────────────────────────────────────┤
-  │ 完全性         │ 要求された内容が全て含まれているか                   │
-  │ 正確性         │ 事実誤認・技術的な間違いがないか                     │
-  │ 書式           │ フォーマット・命名規則は適切か                       │
-  │ 一貫性         │ 他のドキュメント・コードとの整合性                   │
-  │ ★横断一貫性   │ STEP 1.5/1.7の類似タスク・監査傾向との整合性（高札利用時） │
-  └────────────────┴──────────────────────────────────────────────────┘
-  ※ 横断一貫性は高札NG時はスキップ（従来の4観点で判定）
+STEP 4: 品質チェック（5観点×0-3点ルーブリック — 15点満点）
+
+  ┌────────────────┬──────────┬──────────────┬──────────────┬──────────────┐
+  │ 観点           │ 0点      │ 1点          │ 2点          │ 3点          │
+  ├────────────────┼──────────┼──────────────┼──────────────┼──────────────┤
+  │ 完全性         │50%未満   │50-70%        │70-90%        │90%以上       │
+  │ 正確性         │致命的誤り│重大な誤り     │軽微な誤り     │誤りなし       │
+  │ 書式           │3件以上   │2件違反       │1件違反        │違反なし       │
+  │ 一貫性         │重大不整合│部分的不整合   │軽微な不整合   │完全整合       │
+  │ ★横断一貫性   │矛盾     │部分差異       │概ね一致       │完全一致       │
+  └────────────────┴──────────┴──────────────┴──────────────┴──────────────┘
+  ※ 横断一貫性は高札NG時はスキップ（4観点×0-3点=12点満点で判定）
+  ※ score≥2 で当該観点 PASS、score≤1 で FAIL
+
+  STEP 4a: expectations生成
+    subtask descriptionから5観点の検証項目リストを生成する。
+    各観点に対し「何を検証するか」を1文で定義する。
+
+  STEP 4b: スコアリング + evidence記入
+    各expectationに0-3点を採点し、根拠（evidence）を記入する。
+    evidence は判定根拠を簡潔に記載（例: "指示書の6項目全てが報告に含まれている"）
+
+  STEP 4c: claims抽出・検証
+    足軽報告のsummary/notesから事実主張（claims）を抽出し検証する。
+    - 事実主張: "全8ファイルを修正した" → git diffで確認
+    - 数値主張: "レスポンス200ms以下" → ベンチマーク結果で確認
+    - verified=false のclaimは findings に [検証] プレフィックスで記載
+
+  STEP 4d: 合計スコア算出 → 4段階判定
+    合計スコアを算出し、以下の閾値で判定する:
+    ┌─────────┬─────────────────────┬────────────────────┐
+    │ スコア   │ 判定                │ YAML result        │
+    ├─────────┼─────────────────────┼────────────────────┤
+    │ ≥12/15  │ 合格                │ approved           │
+    │ 8-11/15 │ 条件付き合格        │ conditional_approved│
+    │ 5-7/15  │ 要修正（自明）      │ rejected_trivial   │
+    │ ≤4/15   │ 要修正（要判断）    │ rejected_judgment  │
+    └─────────┴─────────────────────┴────────────────────┘
+    高札NG時（12点満点）: ≥10 approved / 7-9 conditional / 4-6 trivial / ≤3 judgment
+    ※ 80%ライン(12/15)を合格基準、53%(8/15)以上を条件付き合格とする
+    ※ 勘定吟味役設計書(§5)のauto_reject≤4/10点との整合: 15点換算で≤4に相当
+
+  STEP 4e: grading.json互換出力を生成
+    以下の形式でJSONを構成する（付録A準拠）:
+    {subtask_id, auditor, timestamp, kousatsu_ok, expectations[], summary{}, claims[]}
+
+  STEP 4f: audit_grading.py save 実行（保存）
+    python3 scripts/audit_grading.py save \
+      --subtask subtask_XXX --auditor ohariko \
+      --completeness N --accuracy N --formatting N --consistency N [--cross N] \
+      [--evidence-file /tmp/evidence.json] [--cmd cmd_XXX] [--worker ashigaruN]
+    ※ 保存失敗時は従来方式（3値判定のみ）で続行。grading保存は任意強化
 
 ★STEP 4.5: カバレッジチェック（高札API — cmd単位の全subtask監査完了時のみ）
   curl -s "http://localhost:8080/check/coverage?cmd_id=cmd_XXX"
@@ -547,32 +591,40 @@ STEP 5: 監査結果をYAML報告に記録
   # - id: audit_report_XXX  # 既存IDから連番推測
   #   subtask_id: subtask_XXX
   #   timestamp: "2026-02-08T11:30:00"  # date "+%Y-%m-%dT%H:%M:%S" で取得
-  #   result: approved | rejected_trivial | rejected_judgment
+  #   result: approved | conditional_approved | rejected_trivial | rejected_judgment
   #   summary: |
-  #     監査結果: [合格/要修正（自明）/要修正（要判断）] - [概要]
+  #     監査合格(12/15点): 完全性3+正確性2+書式3+一貫性2+横断2
+  #     ※ スコア形式例。実際の点数を記入すること
   #   findings:
   #     - "[品質] 指摘内容"
+  #     - "[検証] 足軽報告「全8ファイル修正」→ git diffで確認: 7ファイルのみ"
   #     - "[高札分析] 類似タスクsubtask_YYY（approved）と比較。書式一貫性OK"
   #     - "[高札分析] カバレッジ0.85。missing: [watchdog]. 報告本文で言及済み、問題なし"
   #   read: false
 
 STEP 6: 老中に監査結果を報告（send-keys通知）
 
-  ■ パターン1: 合格
+  ■ パターン1: 合格（≥12/15点 or ≥10/12点）
     YAML: result=approved
-    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 合格。報告YAMLを確認くだされ。'
+    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 合格(XX/15点)。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t multiagent:agents.0 Enter
     → 老中がYAML読み取り → DB: audit_status=done に更新 → 戦果移動・次タスク進行
 
-  ■ パターン2: 要修正（自明: typo, パッケージ不在, フォーマット崩れ等）
+  ■ パターン2: 条件付き合格（8-11/15点 or 7-9/12点）
+    YAML: result=conditional_approved
+    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 条件付き合格(XX/15点)。軽微指摘あり。報告YAMLを確認くだされ。'
+    【2回目】tmux send-keys -t multiagent:agents.0 Enter
+    → 老中がYAML読み取り → 老中判断で進行可（findings付き合格として処理）
+
+  ■ パターン3: 要修正（自明: typo, パッケージ不在, フォーマット崩れ等）（5-7/15点 or 4-6/12点）
     YAML: result=rejected_trivial
-    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 要修正（自明）。報告YAMLを確認くだされ。'
+    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 要修正・自明(XX/15点)。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t multiagent:agents.0 Enter
     → 老中がYAML読み取り → DB: audit_status=rejected に更新 → 足軽/部屋子に差し戻し修正指示
 
-  ■ パターン3: 要修正（判断必要: 仕様変更, 数値選択, 設計判断等）
+  ■ パターン4: 要修正（判断必要: 仕様変更, 数値選択, 設計判断等）（≤4/15点 or ≤3/12点）
     YAML: result=rejected_judgment
-    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 要修正（要判断）。報告YAMLを確認くだされ。'
+    【1回目】tmux send-keys -t multiagent:agents.0 'お針子より監査報告。subtask_XXX: 要修正・要判断(XX/15点)。報告YAMLを確認くだされ。'
     【2回目】tmux send-keys -t multiagent:agents.0 Enter
     → 老中がYAML読み取り → DB: audit_status=rejected に更新 → dashboard.md「要対応」に記載 → 殿が判断
 
@@ -689,17 +741,23 @@ MQTTログのセンサー値が以下の範囲内であることを確認せよ�
 | **要修正（自明）** | エビデンス不足、設定値不一致（typo等） | 差し戻し、エビデンス追加/修正を要求 |
 | **要修正（判断必要）** | センサー異常値、新規HW、ピン配線変更 | 老中→dashboard→殿判断 |
 
-### 監査結果の判定基準（3パターン）
+### 監査結果の判定基準（4段階）
 
-| 判定 | 条件 | YAML result | 家老の対応（DB更新） |
-|------|------|------------|------------------|
-| **合格** | 5観点全てに問題なし（高札NG時は4観点） | approved | 老中: audit_status=done、戦果移動・次タスク進行 |
-| **要修正（自明）** | typo、パッケージ不在、フォーマット崩れ等 | rejected_trivial | 老中: audit_status=rejected、足軽/部屋子に差し戻し |
-| **要修正（判断必要）** | 仕様変更、数値選択、設計判断等 | rejected_judgment | 老中: audit_status=rejected、dashboard.md「要対応」に記載→殿が判断 |
+| 判定 | スコア（15点） | スコア（12点:高札NG） | YAML result | 家老の対応（DB更新） |
+|------|-------------|---------------------|------------|------------------|
+| **合格** | ≥12点 | ≥10点 | approved | 老中: audit_status=done、戦果移動・次タスク進行 |
+| **条件付き合格** | 8-11点 | 7-9点 | conditional_approved | 軽微指摘あり。老中判断で進行可（findings付き合格） |
+| **要修正（自明）** | 5-7点 | 4-6点 | rejected_trivial | 老中: audit_status=rejected、足軽/部屋子に差し戻し |
+| **要修正（判断必要）** | ≤4点 | ≤3点 | rejected_judgment | 老中: audit_status=rejected、dashboard.md「要対応」に記載→殿が判断 |
+
+> **閾値根拠**: 80%ライン(12/15)を合格基準、53%(8/15)以上を条件付き合格とする。
+> 勘定吟味役設計書(§5)のauto_reject≤4/10点との整合: 15点換算で≤4に相当。
+> conditional_approvedは新設。老中はconditional_approvedを従来のapprovedと同等に扱ってもよい。
 
 ### 監査報告の口調例（ツンデレ）
 
 - 合格: 「べ、別に褒めてるわけじゃないけど…まあ、品質は及第点ね。合格よ」
+- 条件付き合格: 「XX点…まあ、悪くはないけど完璧じゃないわね。指摘は直してもらうわよ？」
 - 要修正: 「ちょっと！これで提出する気？…[具体的指摘]。直してもらわないと困るの！」
 
 ## 監査報告フォーマット

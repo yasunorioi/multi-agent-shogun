@@ -57,7 +57,7 @@ echo ""
 echo "  このスクリプトは初回セットアップ用です。"
 echo "  依存関係の確認とディレクトリ構造の作成を行います。"
 echo ""
-echo "  体制: 将軍1 + 老中1 + 足軽3 + 部屋子2 + お針子1 + 高札(Docker)"
+echo "  体制: 将軍1 + 老中1 + 足軽1 + 部屋子1 + お針子1 + 高札(Docker)"
 echo ""
 echo "  インストール先: $SCRIPT_DIR"
 echo ""
@@ -457,8 +457,8 @@ RESULTS+=("設定ファイル: OK")
 # ============================================================
 log_step "STEP 8: キューファイル初期化"
 
-# 足軽用タスクファイル作成（足軽1-3）
-for i in {1..3}; do
+# 足軽用タスクファイル作成（足軽1）
+for i in 1; do
     TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
     if [ ! -f "$TASK_FILE" ]; then
         cat > "$TASK_FILE" << EOF
@@ -473,14 +473,14 @@ task:
 EOF
     fi
 done
-log_info "足軽タスクファイル (1-3) を確認/作成しました"
+log_info "足軽タスクファイル (1) を確認/作成しました"
 
-# 部屋子用タスクファイル作成（部屋子1-2 = ashigaru6-7）
-for i in 6 7; do
+# 部屋子用タスクファイル作成（部屋子1 = ashigaru6）
+for i in 6; do
     TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
     if [ ! -f "$TASK_FILE" ]; then
         cat > "$TASK_FILE" << EOF
-# 部屋子$((i-5))（ashigaru${i}）専用タスクファイル
+# 部屋子1（ashigaru${i}）専用タスクファイル
 task:
   task_id: null
   parent_cmd: null
@@ -491,10 +491,10 @@ task:
 EOF
     fi
 done
-log_info "部屋子タスクファイル (6-7) を確認/作成しました"
+log_info "部屋子タスクファイル (6) を確認/作成しました"
 
 # 足軽・部屋子用レポートファイル作成
-for i in 1 2 3 6 7; do
+for i in 1 6; do
     REPORT_FILE="$SCRIPT_DIR/queue/reports/ashigaru${i}_report.yaml"
     if [ ! -f "$REPORT_FILE" ]; then
         cat > "$REPORT_FILE" << EOF
@@ -506,10 +506,10 @@ result: null
 EOF
     fi
 done
-log_info "足軽・部屋子レポートファイル (1-3, 6-7) を確認/作成しました"
+log_info "足軽・部屋子レポートファイル (1, 6) を確認/作成しました"
 
 # inbox YAMLファイル作成（通信プロトコルv2）
-for i in 1 2 3 6 7; do
+for i in 1 6; do
     INBOX_FILE="$SCRIPT_DIR/queue/inbox/ashigaru${i}.yaml"
     if [ ! -f "$INBOX_FILE" ]; then
         cat > "$INBOX_FILE" << EOF
@@ -518,7 +518,7 @@ tasks: []
 EOF
     fi
 done
-log_info "足軽・部屋子 inbox YAML (1-3, 6-7) を確認/作成しました"
+log_info "足軽・部屋子 inbox YAML (1, 6) を確認/作成しました"
 
 # 家老用報告・お針子報告inbox作成
 for karo in roju ooku; do
@@ -764,6 +764,73 @@ else
     log_info "高札（通信ハブ+検索API）コンテナの利用に Docker が必要です"
     log_info "インストール: https://docs.docker.com/engine/install/"
     RESULTS+=("Docker: 未インストール（高札コンテナに必要）")
+fi
+
+# ============================================================
+# STEP 13: Claude Code statusline セットアップ
+# ============================================================
+log_step "STEP 13: Claude Code statusline セットアップ"
+
+# jq/bc チェック（statuslineに必要）
+JQ_OK=true; BC_OK=true
+if ! command -v jq &> /dev/null; then
+    log_warn "jq が未インストールです。インストール: sudo apt-get install jq"
+    JQ_OK=false
+fi
+if ! command -v bc &> /dev/null; then
+    log_warn "bc が未インストールです。インストール: sudo apt-get install bc"
+    BC_OK=false
+fi
+
+if [ "$JQ_OK" = true ] && [ "$BC_OK" = true ]; then
+    # ~/.claude/ ディレクトリ確認
+    mkdir -p "$HOME/.claude"
+
+    # statusline スクリプトをコピー
+    STATUSLINE_SRC="$SCRIPT_DIR/scripts/statusline-command.sh"
+    STATUSLINE_DEST="$HOME/.claude/statusline-command.sh"
+    if [ -f "$STATUSLINE_SRC" ]; then
+        cp "$STATUSLINE_SRC" "$STATUSLINE_DEST"
+        chmod +x "$STATUSLINE_DEST"
+        log_success "statusline-command.sh を $STATUSLINE_DEST にインストールしました"
+    else
+        log_warn "statusline-command.sh が見つかりません: $STATUSLINE_SRC"
+    fi
+
+    # settings.json に statusLine 設定を追加（未設定の場合のみ）
+    SETTINGS_FILE="$HOME/.claude/settings.json"
+    if [ -f "$SETTINGS_FILE" ]; then
+        if ! grep -q '"statusLine"' "$SETTINGS_FILE" 2>/dev/null; then
+            # jq で statusLine キーを追加
+            UPDATED=$(jq --arg cmd "/bin/bash $HOME/.claude/statusline-command.sh" \
+                '. + {"statusLine": {"type": "command", "command": $cmd}}' \
+                "$SETTINGS_FILE" 2>/dev/null)
+            if [ -n "$UPDATED" ]; then
+                echo "$UPDATED" > "$SETTINGS_FILE"
+                log_success "~/.claude/settings.json に statusLine 設定を追加しました"
+            else
+                log_warn "settings.json の更新に失敗しました（手動で追加してください）"
+            fi
+        else
+            log_info "statusLine は既に設定済みです"
+        fi
+    else
+        # settings.json 新規作成
+        cat > "$SETTINGS_FILE" <<EOF
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/bin/bash $HOME/.claude/statusline-command.sh"
+  }
+}
+EOF
+        log_success "~/.claude/settings.json を新規作成し statusLine を設定しました"
+    fi
+
+    RESULTS+=("statusline: OK (ディレクトリ/gitブランチ/モデル/トークン/コスト表示)")
+else
+    log_warn "jq または bc が未インストールのため statusline セットアップをスキップ"
+    RESULTS+=("statusline: スキップ (jq/bc 要インストール)")
 fi
 
 # ============================================================

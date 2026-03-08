@@ -72,9 +72,10 @@ script_dir = sys.argv[3]
 AGENT_MAP = {
     "shogun":    {"role": "将軍",   "pane": "shogun:main.0",       "instructions": "instructions/shogun.md"},
     "karo-roju": {"role": "老中",   "pane": "multiagent:agents.0", "instructions": "instructions/karo.md"},
-    "ashigaru1": {"role": "足軽1",  "pane": "multiagent:agents.1", "instructions": "instructions/ashigaru.md"},
-    "ashigaru2": {"role": "足軽2",  "pane": "multiagent:agents.1", "instructions": "instructions/ashigaru.md"},
-    "ashigaru6": {"role": "部屋子1","pane": "multiagent:agents.2", "instructions": "instructions/ashigaru.md"},
+    "gunshi":    {"role": "軍師",   "pane": "multiagent:agents.1", "instructions": "instructions/gunshi.md"},
+    "ashigaru1": {"role": "足軽1",  "pane": "multiagent:agents.2", "instructions": "instructions/ashigaru.md"},
+    "ashigaru2": {"role": "足軽2",  "pane": "multiagent:agents.3", "instructions": "instructions/ashigaru.md"},
+    "ashigaru6": {"role": "部屋子1","pane": "multiagent:agents.4", "instructions": "instructions/ashigaru.md"},
     "ohariko":   {"role": "お針子", "pane": "ooku:agents.0",       "instructions": "instructions/ohariko.md"},
 }
 
@@ -85,7 +86,7 @@ info = AGENT_MAP.get(agent_id, {
 })
 
 # 報告先の決定
-if agent_id in ("ashigaru1", "ashigaru2", "ashigaru6"):
+if agent_id in ("ashigaru1", "ashigaru2", "ashigaru6", "gunshi"):
     report_yaml = "queue/inbox/roju_reports.yaml"
 elif agent_id == "ohariko":
     report_yaml = "queue/inbox/roju_ohariko.yaml"
@@ -97,7 +98,22 @@ else:
 # inbox YAMLからタスク取得
 tasks = []
 try:
-    if agent_id.startswith("ashigaru"):
+    if agent_id == "gunshi":
+        inbox_path = os.path.join(script_dir, "queue", "inbox", "gunshi.yaml")
+        if os.path.exists(inbox_path):
+            with open(inbox_path) as f:
+                data = yaml.safe_load(f) or {}
+            for task in (data.get("tasks") or []):
+                status = task.get("status", "")
+                if status in ("assigned", "in_progress"):
+                    tasks.append({
+                        "subtask_id": task.get("subtask_id", ""),
+                        "cmd_id": task.get("cmd_id", ""),
+                        "status": status,
+                        "description": (task.get("description", "") or "").strip().split("\n")[0][:100],
+                        "project": task.get("project", ""),
+                    })
+    elif agent_id.startswith("ashigaru"):
         num = agent_id.replace("ashigaru", "")
         inbox_path = os.path.join(script_dir, "queue", "inbox", f"ashigaru{num}.yaml")
         if os.path.exists(inbox_path):

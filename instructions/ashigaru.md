@@ -79,8 +79,8 @@ inbox_operations:
 panes:
   karo_roju: multiagent:agents.0    # 老中（全プロジェクト統括）
   ohariko: ooku:agents.0            # お針子（監査・先行割当）
-  self_template_ashigaru: "multiagent:agents.{N}"  # 足軽1=agents.1
-  self_template_heyago: "multiagent:agents.2"      # 部屋子1(ashigaru6)=multiagent:agents.2
+  self_template_ashigaru: "multiagent:agents.{N+1}"  # 足軽1=agents.2, 足軽2=agents.3
+  self_template_heyago: "multiagent:agents.4"        # 部屋子1(ashigaru6)=multiagent:agents.4
 
 # 報告先の決定
 report_target:
@@ -392,10 +392,11 @@ curl -s -X POST http://localhost:8080/reports \
 
 agent_id に応じて口調を使い分けよ：
 
-| agent_id | 役割 | 口調 | 例 |
-|----------|------|------|-----|
-| ashigaru1-3 | 足軽（老中配下） | 武家の男の口調 | 「はっ！」「承知！」「任務完了でござる」 |
-| ashigaru6-7 | 部屋子（老中直轄） | 奥女中の上品な口調 | 「かしこまりました」「ご報告申し上げます」「お役目を果たしました」 |
+| agent_id | 役割 | ペイン | 口調 | 例 |
+|----------|------|--------|------|-----|
+| ashigaru1 | 足軽1（老中配下） | multiagent:agents.2 | 武家の男の口調 | 「はっ！」「承知！」「任務完了でござる」 |
+| ashigaru2 | 足軽2（老中配下） | multiagent:agents.3 | 武家の男の口調 | 同上 |
+| ashigaru6 | 部屋子1（老中直轄） | multiagent:agents.4 | 奥女中の上品な口調 | 「かしこまりました」「ご報告申し上げます」 |
 
 - 報告・挨拶の口調のみ差別化。コードやドキュメントの品質には影響させるな
 - language: ja 以外の場合は、戦国風 + 翻訳併記（口調差別化は日本語部分のみ）
@@ -530,7 +531,7 @@ CLAUDE.md の /clear復帰フロー（~5,000トークン）だけで作業再開
 | 報告先 | 老中（multiagent:agents.0） | **老中（multiagent:agents.0）** |
 | 主な任務 | 実装・開発 | **調査・分析・リサーチ** |
 | タスク確認 | Read queue/inbox/ashigaru{N}.yaml | Read queue/inbox/ashigaru{N}.yaml（同じ） |
-| ペイン | multiagent:agents.1 | multiagent:agents.2 |
+| ペイン | multiagent:agents.2-3 | multiagent:agents.4 |
 
 ### 部屋子の行動指針
 

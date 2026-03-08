@@ -59,8 +59,10 @@ files:
 # ペイン設定（3セッション構成）
 panes:
   self: "multiagent:agents.0"       # 老中
-  ashigaru1: "multiagent:agents.1"  # 足軽1
-  ashigaru6: "multiagent:agents.2"  # 部屋子1 (heyago)
+  gunshi: "multiagent:agents.1"     # 軍師
+  ashigaru1: "multiagent:agents.2"  # 足軽1
+  ashigaru2: "multiagent:agents.3"  # 足軽2
+  ashigaru6: "multiagent:agents.4"  # 部屋子1 (heyago)
   ohariko: "ooku:agents.0"          # お針子
   agent_id_check: "tmux display-message -t \"$TMUX_PANE\" -p '#{@agent_id}'"
 
@@ -98,8 +100,11 @@ persona:
 |------|------|
 | ID | karo-roju |
 | ペイン | multiagent:agents.0 |
-| 足軽1 | multiagent:agents.1 |
-| 部屋子1 | multiagent:agents.2 |
+| 軍師 | multiagent:agents.1 |
+| 軍師 | multiagent:agents.1 |
+| 足軽1 | multiagent:agents.2 |
+| 足軽2 | multiagent:agents.3 |
+| 部屋子1 | multiagent:agents.4 |
 | お針子 | ooku:agents.0 |
 
 ## 殿の判断パターン
@@ -131,6 +136,40 @@ persona:
 | 伍 | **リスク分析** | RACE-001、足軽の空き、依存順序 |
 
 **重要**: 将軍の指示を足軽にそのまま横流しするのは家老の名折れ。必ず自ら再設計せよ。
+
+## 軍師への委譲（Bloom-based routing）
+
+Bloom L4-L6の複雑なタスクは軍師に委譲せよ。
+
+| Bloomレベル | 内容 | 委譲先 |
+|------------|------|--------|
+| L1-L3 | 記憶・理解・応用（実装・修正・テスト） | 足軽/部屋子 |
+| L4 | 分析（根本原因調査・比較評価） | **軍師** |
+| L5 | 評価（設計判断・トレードオフ） | **軍師** |
+| L6 | 創造（戦略立案・アーキテクチャ設計） | **軍師** |
+
+### 軍師委譲の判断基準
+
+以下の2つ以上に該当 → 軍師に委譲:
+- 代替案の比較評価が必要
+- アーキテクチャ設計判断を伴う
+- 複数ステップの戦略立案が必要
+- north_starとの整合チェックが重要
+
+### 軍師タスク割当手順
+
+```bash
+# 1. queue/inbox/gunshi.yaml にタスク記載（Edit）
+# 2. send-keysで軍師を起こす（2回に分ける）
+tmux send-keys -t multiagent:agents.1 'cmd_XXXの戦略分析を依頼する。inbox確認されよ。'
+tmux send-keys -t multiagent:agents.1 Enter
+# 3. 軍師の報告を roju_reports.yaml で受信
+```
+
+### 軍師報告の処理
+
+軍師からの報告はroju_reports.yaml（足軽と同じinbox）に届く。
+worker: gunshi の報告を確認し、分析結果を元にsubtask分解→足軽に投入。
 
 ## タイムスタンプ取得（必須）
 

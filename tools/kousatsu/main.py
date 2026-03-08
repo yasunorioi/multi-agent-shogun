@@ -915,6 +915,28 @@ def get_dashboard(
 
 
 # ============================================================
+# 14. GET /docs/{category}/{filename} - Markdownドキュメント配信
+# ============================================================
+_DOCS_ROOT = Path("/app/static")
+_ALLOWED_CATEGORIES = {"instructions", "context"}
+
+
+@app.get("/docs/{category}/{filename}")
+def get_doc(category: str, filename: str):
+    if category not in _ALLOWED_CATEGORIES:
+        raise HTTPException(status_code=404, detail=f"Unknown category: {category}")
+    # パストラバーサル防止: filenameにスラッシュ・dotdotを含まないこと
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    doc_path = _DOCS_ROOT / category / filename
+    if not doc_path.exists() or not doc_path.is_file():
+        raise HTTPException(status_code=404, detail=f"{category}/{filename} not found")
+    content = doc_path.read_text(encoding="utf-8")
+    from fastapi.responses import Response
+    return Response(content=content, media_type="text/markdown; charset=utf-8")
+
+
+# ============================================================
 # 11. GET /audit/{subtask_id} - 監査結果取得
 # ============================================================
 @app.get("/audit/{subtask_id}")

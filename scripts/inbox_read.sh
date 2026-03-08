@@ -32,8 +32,12 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="${__STOP_HOOK_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-PY_READER="$SCRIPT_DIR/scripts/inbox_read.py"
+# REPO_ROOT: リポジトリルート（inbox YAML / DB CLIの基準パス）
+REPO_ROOT="${__STOP_HOOK_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# PY_READER: inbox_read.py は常に自スクリプトと同じディレクトリ
+PY_READER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inbox_read.py"
+# 環境変数 SCRIPT_DIR は Python 側に渡すリポジトリルート
+SCRIPT_DIR="$REPO_ROOT"
 
 # ─── 引数解析 ────────────────────────────────────────────────────────────────
 
@@ -83,7 +87,7 @@ case "$INBOX_NAME" in
   *)             SECTION_KEY="tasks" ;;
 esac
 
-INBOX_FILE="$SCRIPT_DIR/queue/inbox/${INBOX_NAME}.yaml"
+INBOX_FILE="$REPO_ROOT/queue/inbox/${INBOX_NAME}.yaml"
 LOCKFILE="${INBOX_FILE}.lock"
 
 if [ ! -f "$INBOX_FILE" ]; then

@@ -26,21 +26,27 @@ DB_PATH="$PROJECT_ROOT/data/botsunichiroku.db"
 
 # Map agent_id -> tmux pane target
 declare -A PANE_MAP=(
-    [ashigaru1]="multiagent:agents.1"
-    [ashigaru6]="multiagent:agents.2"
+    [gunshi]="multiagent:agents.1"
+    [ashigaru1]="multiagent:agents.2"
+    [ashigaru2]="multiagent:agents.3"
+    [ashigaru6]="multiagent:agents.4"
     [ohariko]="ooku:agents.0"
 )
 
 # Map agent_id -> default model
 declare -A DEFAULT_MODEL=(
+    [gunshi]="opus"
     [ashigaru1]="sonnet"
+    [ashigaru2]="sonnet"
     [ashigaru6]="opus"
     [ohariko]="sonnet"
 )
 
 # Map agent_id -> display label for pane title
 declare -A DISPLAY_LABEL=(
+    [gunshi]="gunshi"
     [ashigaru1]="ashigaru1"
+    [ashigaru2]="ashigaru2"
     [ashigaru6]="heyago1"
     [ohariko]="ohariko"
 )
@@ -233,7 +239,7 @@ cmd_status() {
     printf "  %-12s  %-24s  %-15s  %-16s\n" "AGENT" "PANE" "STATE" "MODEL"
     printf "  %-12s  %-24s  %-15s  %-16s\n" "────────────" "────────────────────────" "───────────────" "────────────────"
 
-    for agent_id in ashigaru1 ashigaru6 ohariko; do
+    for agent_id in gunshi ashigaru1 ashigaru2 ashigaru6 ohariko; do
         local pane="${PANE_MAP[$agent_id]}"
         local state
         state=$(get_pane_state "$pane")
@@ -261,7 +267,7 @@ cmd_status() {
 cmd_idle() {
     local idle_workers=()
 
-    for agent_id in ashigaru1 ashigaru6 ohariko; do
+    for agent_id in gunshi ashigaru1 ashigaru2 ashigaru6 ohariko; do
         local pane="${PANE_MAP[$agent_id]}"
         local state
         state=$(get_pane_state "$pane")
@@ -293,7 +299,7 @@ cmd_count_needed() {
 
     # Count currently running workers
     local running=0
-    for agent_id in ashigaru1 ashigaru6; do
+    for agent_id in gunshi ashigaru1 ashigaru2 ashigaru6; do
         local state
         state=$(get_pane_state "${PANE_MAP[$agent_id]}")
         if [ "$state" = "running-idle" ] || [ "$state" = "running-busy" ]; then
@@ -312,7 +318,7 @@ cmd_count_needed() {
 cmd_stop_idle() {
     local stopped=0
 
-    for agent_id in ashigaru1 ashigaru6 ohariko; do
+    for agent_id in gunshi ashigaru1 ashigaru2 ashigaru6 ohariko; do
         local pane="${PANE_MAP[$agent_id]}"
         local state
         state=$(get_pane_state "$pane")
@@ -349,7 +355,7 @@ show_usage() {
     echo "  count-needed                            Count workers needed for pending tasks"
     echo "  stop-idle                               Stop all idle workers"
     echo ""
-    echo "Agent IDs: ashigaru1 (足軽1), ashigaru6 (heyago1), ohariko"
+    echo "Agent IDs: gunshi (軍師), ashigaru1 (足軽1), ashigaru2 (足軽2), ashigaru6 (heyago1), ohariko"
     echo ""
     echo "Examples:"
     echo "  scripts/worker_ctl.sh start ashigaru1"

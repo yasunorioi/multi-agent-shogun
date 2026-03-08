@@ -187,6 +187,26 @@ subtask分解が完了したら、配布前に以下を確認:
 worker: gunshi の報告を確認し、分析結果を元にsubtask分解→足軽に投入。
 `queue/inbox/gunshi_analysis.yaml` も必ず参照せよ（推奨モデル・品質基準が記載）。
 
+### PDCAモード（pdca_needed=true の場合）
+
+軍師の分析で `pdca_needed: true` の場合、通常の一括配布ではなくPDCAループで進める:
+
+1. **パイロット配布**: subtaskを全件配布せず、パイロット1件のみ足軽に配布
+2. **お針子Check待ち**: お針子の監査結果（PASS/FAIL）を待つ
+3. **結果フィードバック**:
+   - PASS → 残りのsubtaskを通常配布。pdca完了
+   - FAIL → 軍師にフィードバック（gunshi.yamlに差分分析タスクを割当）
+4. **ループ**: 軍師の改修指示を元に再配布。最大3回
+5. **エスカレーション**: 3回FAILの場合、dashboard.md「🚨 要対応」に記載:
+   ```markdown
+   ### 🚨 PDCAエスカレーション (subtask_xxx)
+   **失敗内容**: 3回分のhistoryサマリ
+   **軍師分析**: 原因と対策案
+   **選択肢**: 方針変更/スコープ縮小/中止
+   ```
+
+> `gunshi_analysis.yaml` の `pdca.status` と `pdca.history` でループ進捗を追跡。
+
 ## Bloom-based QC routing（お針子監査判定基準）
 
 | Bloomレベル | QC方針 | 理由 |

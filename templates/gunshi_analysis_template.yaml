@@ -40,6 +40,26 @@ analysis:
   pdca_needed: false            # true: 反復改善サイクルが必要
   pdca_max_iterations: 3       # pdca_needed: true の場合の最大反復数
 
+# ─── PDCA ループ管理（pdca_needed: true の場合のみ） ──────────
+# 軍師がステータス遷移を管理:
+#   planning → piloting → checking → passed（成功時）
+#                            ↓
+#                         revising → piloting → ...（最大3回）
+#                            ↓
+#                         escalated（3回失敗時）
+pdca:
+  iteration: 1                 # 現在のイテレーション (1-3)
+  status: planning             # planning|piloting|checking|revising|passed|escalated
+  history:
+    - iteration: 1
+      action: "初回パイロット実装"
+      result: null             # pass|fail（お針子Check後に記入）
+      feedback: null           # 失敗理由・改修指示（Act時に記入）
+    # - iteration: 2
+    #   action: "改修指示に基づく再実装"
+    #   result: null
+    #   feedback: null
+
   # ─── North Star 整合（north_star指定がある場合は必須） ───
   north_star_alignment:
     status: aligned             # aligned | misaligned | unclear

@@ -404,14 +404,16 @@ curl -s -X POST http://localhost:8080/audit \
 ```yaml
 # queue/inbox/roju_ohariko.yaml
 audit_reports:
-  - subtask_id: subtask_XXX
+  - request_id: b4e8c3d2        # v3: 監査依頼時のrequest_id（あれば返す。なければ省略可）
+    subtask_id: subtask_XXX
     summary: "監査合格: 4観点クリア。品質及第点よ。"
     detail_ref: "curl -s localhost:8080/audit/subtask_XXX"
     timestamp: "YYYY-MM-DDTHH:MM:SS"
     read: false
 
   # 却下の場合（result: rejected_trivial / rejected_judgment）
-  - subtask_id: subtask_YYY
+  - request_id: c5f9d4e3        # v3
+    subtask_id: subtask_YYY
     summary: "監査却下（自明）: 194行目数値不一致。修正を要求。"
     detail_ref: "curl -s localhost:8080/audit/subtask_YYY"
     timestamp: "YYYY-MM-DDTHH:MM:SS"

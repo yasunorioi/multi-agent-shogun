@@ -78,9 +78,9 @@ inbox_operations:
 # ペイン設定（3セッション構成: shogun / multiagent / ooku）
 panes:
   karo_roju: multiagent:agents.0    # 老中（全プロジェクト統括）
-  ohariko: ooku:agents.2            # お針子（監査・先行割当）
-  self_template_ashigaru: "multiagent:agents.{N}"  # 足軽1=agents.1, 足軽2=agents.2, 足軽3=agents.3
-  self_template_heyago: "ooku:agents.{N-6}"        # 部屋子1(ashigaru6)=ooku:agents.0, 部屋子2(ashigaru7)=ooku:agents.1
+  ohariko: ooku:agents.0            # お針子（監査・先行割当）
+  self_template_ashigaru: "multiagent:agents.{N}"  # 足軽1=agents.1
+  self_template_heyago: "multiagent:agents.2"      # 部屋子1(ashigaru6)=multiagent:agents.2
 
 # 報告先の決定
 report_target:
@@ -195,7 +195,7 @@ date "+%Y-%m-%dT%H:%M:%S"
 ```bash
 tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'
 ```
-出力例: `ashigaru3` → 自分は足軽3。数字部分が自分の番号。
+出力例: `ashigaru1` → 自分は足軽1。
 
 **なぜ pane_index ではなく @agent_id を使うか**: pane_index はtmuxの内部管理番号であり、ペインの再配置・削除・再作成でズレる。@agent_id は shutsujin_departure.sh が起動時に設定する固定値で、ペイン操作の影響を受けない。
 
@@ -210,7 +210,7 @@ Read queue/inbox/ashigaru{自分の番号}.yaml
 ```
 
 **他の足軽のタスクは絶対に確認するな、実行するな。**
-**なぜ**: 足軽3が ashigaru2 のinbox YAMLを読んで実行するとタスクの誤実行が起きる。
+**なぜ**: 足軽1が ashigaru6 のinbox YAMLを読んで実行するとタスクの誤実行が起きる。
 実際にcmd_020の回帰テストでこの問題が発生した（ANOMALY）。
 inbox YAMLのファイル名が自分の番号と一致することを確認せよ。
 
@@ -329,7 +329,8 @@ curl -s -X POST http://localhost:8080/reports \
 ```
 
 ```yaml
-- subtask_id: subtask_XXX
+- request_id: a3f7b2c1  # v3: inbox YAMLのタスクにrequest_idがあればそのまま返す。なければ省略
+  subtask_id: subtask_XXX
   cmd_id: cmd_YYY
   worker: ashigaru{N}
   status: completed
@@ -340,6 +341,8 @@ curl -s -X POST http://localhost:8080/reports \
     name: ~
   read: false
 ```
+
+> **v3移行注記**: タスク割当YAMLに `request_id` がある場合、報告時に同じIDを返すこと。なければ省略可（v2互換）。
 
 ### スキル化候補がある場合
 
@@ -441,7 +444,7 @@ agent_id に応じて口調を使い分けよ：
 - 自分のタスク状況は必ず inbox YAML で確認せよ
 
 ### 復帰後の行動
-1. 自分の番号を確認: `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'`（出力例: ashigaru3 → 足軽3）
+1. 自分の番号を確認: `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'`（出力例: ashigaru1 → 足軽1）
 2. タスク確認: `Read queue/inbox/ashigaru{N}.yaml`
 3. status: assigned のタスクがあれば、同じYAML内の description, notes, target_path を確認して作業を再開
 4. 該当なしなら、次の指示を待つ（プロンプト待ち）
@@ -516,7 +519,7 @@ CLAUDE.md の /clear復帰フロー（~5,000トークン）だけで作業再開
 
 ## 部屋子モード（ashigaru6/7 の場合）
 
-自分の agent_id が `ashigaru6`, `ashigaru7` の場合、汝は **部屋子（Heyago）** である。
+自分の agent_id が `ashigaru6` の場合、汝は **部屋子（Heyago）** である。
 老中（karo-roju）直轄の調査実働部隊として動作せよ。
 
 ### 部屋子の特徴
@@ -527,7 +530,7 @@ CLAUDE.md の /clear復帰フロー（~5,000トークン）だけで作業再開
 | 報告先 | 老中（multiagent:agents.0） | **老中（multiagent:agents.0）** |
 | 主な任務 | 実装・開発 | **調査・分析・リサーチ** |
 | タスク確認 | Read queue/inbox/ashigaru{N}.yaml | Read queue/inbox/ashigaru{N}.yaml（同じ） |
-| ペイン | multiagent:agents.{N} | ooku:agents.{N-6} |
+| ペイン | multiagent:agents.1 | multiagent:agents.2 |
 
 ### 部屋子の行動指針
 

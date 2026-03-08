@@ -89,6 +89,18 @@ if [ -n "$LAST_MSG" ]; then
     fi
 fi
 
+# ─── 5.5 コンパクション復帰検出 → identity情報注入 ───
+# summaryの特徴的パターンでコンパクションを推定し、身元情報をblock理由に含める
+if echo "$LAST_MSG" | grep -qiE 'エージェントの役割|コンパクション復帰|Summary生成時の必須事項|summary.*generated'; then
+    IDENTITY=$(bash "$SCRIPT_DIR/scripts/identity_inject.sh" --agent-id "$AGENT_ID" 2>/dev/null || echo "")
+    if [ -n "$IDENTITY" ]; then
+        REASON="コンパクション復帰検出。${IDENTITY}"
+        REASON_ESCAPED=$(echo "$REASON" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))" 2>/dev/null || echo "\"コンパクション復帰検出\"")
+        echo "{\"decision\": \"block\", \"reason\": ${REASON_ESCAPED}}"
+        exit 0
+    fi
+fi
+
 # ─── 6. agent_idに応じたinboxファイル・未読検知 ───
 INBOX_DIR="$SCRIPT_DIR/queue/inbox"
 UNREAD=0

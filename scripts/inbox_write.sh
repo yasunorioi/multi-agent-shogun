@@ -2,9 +2,10 @@
 # ═══════════════════════════════════════════════════════════════
 # inbox_write.sh — YAML inbox への安全書き込みユーティリティ
 # ═══════════════════════════════════════════════════════════════
-# Usage: bash scripts/inbox_write.sh <target_inbox> <content> [type] [from] [request_id]
+# Usage: bash scripts/inbox_write.sh <target_inbox> <content> [type] [from] [request_id] [subtask_id]
 # Example (v2): bash scripts/inbox_write.sh roju_reports "ashigaru1完了" report_completed ashigaru1
 # Example (v3): bash scripts/inbox_write.sh roju_reports "ashigaru1完了" report_completed ashigaru1 a3f7b2c1
+# Example (v3+subtask): bash scripts/inbox_write.sh roju_reports "ashigaru1完了" report_completed ashigaru1 a3f7b2c1 subtask_830
 #
 # 書き込み先: queue/inbox/{target_inbox}.yaml の reports:[] セクション
 # 排他制御: flock -w 5（5秒タイムアウト、最大3回リトライ）
@@ -23,13 +24,14 @@ CONTENT="$2"
 TYPE="${3:-wake_up}"
 FROM="${4:-unknown}"
 REQUEST_ID="${5:-}"  # v3: optional request_id (UUID 8文字)
+SUBTASK_ID="${6:-stophook_notification}"  # optional: 未指定時は後方互換
 
 INBOX="$SCRIPT_DIR/queue/inbox/${TARGET}.yaml"
 LOCKFILE="${INBOX}.lock"
 
 # Validate arguments
 if [ -z "$TARGET" ] || [ -z "$CONTENT" ]; then
-    echo "Usage: inbox_write.sh <target_inbox> <content> [type] [from] [request_id]" >&2
+    echo "Usage: inbox_write.sh <target_inbox> <content> [type] [from] [request_id] [subtask_id]" >&2
     exit 1
 fi
 
@@ -58,6 +60,7 @@ content = '''$CONTENT'''
 msg_type = '$TYPE'
 from_agent = '$FROM'
 request_id = '$REQUEST_ID'  # v3: empty string if not provided
+subtask_id = '$SUBTASK_ID'
 
 try:
     with open(inbox_path) as f:
@@ -69,7 +72,7 @@ try:
         data['reports'] = []
 
     new_entry = {
-        'subtask_id': 'stophook_notification',
+        'subtask_id': subtask_id,
         'worker': from_agent,
         'status': 'notification',
         'reported_at': timestamp,

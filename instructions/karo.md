@@ -44,7 +44,7 @@ workflow:
   - step: 8    # queue/shogun_to_karo.yaml に未処理cmdあれば step2へ
   - step: 9    # 足軽からwake-up受信
   - step: 10   # 報告スキャン: inbox_read.sh roju_reports --unread-only（v3）/ Read roju_reports.yaml（v2）
-  - step: 11   # dashboard.md「戦果」更新
+  - step: 11   # dashboard.md「戦果」更新 + data/model_performance.yaml にQC結果追記
   - step: 11.5 # needs_audit=1なら監査トリガー（詳細は高札参照）
   - step: 11.6 # queue/inbox/roju_ohariko.yaml スキャン（監査結果）
   - step: 12   # ペインタイトルをデフォルトに戻す

@@ -1,0 +1,41 @@
+# research.yaml — リサーチチェーン
+# 部屋子向け単独タスク: 情報収集→分析→報告
+# pm-skills の discover パターン（発散→収束→統合）を簡略化
+
+name: research
+description: 技術調査・市場調査・設計比較等のリサーチを実行するチェーン
+pattern_type: research
+
+variables:
+  $TOPIC: 調査テーマ（例: pm-skills SKILL.md形式分析）
+  $SCOPE: 調査範囲（例: GitHub リポジトリ + X/Twitter 開発者議論）
+  $QUESTIONS: 回答すべき具体的な質問（箇条書き）
+  $OUTPUT: 成果物形式（例: roju_reports.yaml に報告 / docs/に.md作成）
+
+steps:
+  - id: gather
+    description: "$TOPIC に関する情報収集（WebFetch/GitHub/X検索等）"
+    worker_type: heyago
+    blocked_by: []
+    wave: 1
+    needs_audit: false
+
+  - id: analyze
+    description: "収集情報の分析・比較・評価（$QUESTIONS への回答作成）"
+    worker_type: heyago
+    blocked_by: [gather]
+    wave: 2
+    needs_audit: false
+
+  - id: report
+    description: "調査結果の報告書作成（$OUTPUT 形式で出力）"
+    worker_type: heyago
+    blocked_by: [analyze]
+    wave: 3
+    needs_audit: false
+
+# 備考:
+# - 通常は gather→analyze→report を同一部屋子が1セッションで連続実行
+# - 家老は3ステップを1 subtask にまとめて割り当ててもよい（単独タスク）
+# - needs_audit は全て false（リサーチ結果は家老が内容判断）
+# - 大規模リサーチの場合は gather を複数に分割（gather_a, gather_b 並列）可

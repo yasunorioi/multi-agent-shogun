@@ -1,0 +1,40 @@
+# bugfix.yaml — バグ修正チェーン
+# 軽量版: 原因調査→修正→テスト→確認
+# 通常2-3 subtaskで完了する短いチェーン
+
+name: bugfix
+description: バグの原因調査・修正・テストを実行する軽量チェーン
+pattern_type: fix
+
+variables:
+  $PROJECT: プロジェクトID（例: uecs-llm）
+  $TARGET: 作業対象パス（例: /home/yasu/uecs-llm）
+  $BUG: バグの症状・再現手順
+  $REPORTED_BY: 報告元（殿/お針子監査/テスト失敗 等）
+
+steps:
+  - id: investigate
+    description: "$BUG の原因調査（ログ確認・再現・根本原因特定）"
+    worker_type: ashigaru
+    blocked_by: []
+    wave: 1
+    needs_audit: false
+
+  - id: fix
+    description: "修正実装 + テスト追加（回帰テスト含む）"
+    worker_type: ashigaru
+    blocked_by: [investigate]
+    wave: 2
+    needs_audit: true
+
+  - id: verify
+    description: "全テスト実行 + 修正確認（git push含む）"
+    worker_type: ashigaru
+    blocked_by: [fix]
+    wave: 3
+    needs_audit: false
+
+# 備考:
+# - 自明なバグ（テスト失敗等）は investigate をスキップし fix から開始可
+# - needs_audit は fix のみ true（修正内容の品質確認）
+# - 緊急バグは全 wave を同一足軽に連続実行させてよい

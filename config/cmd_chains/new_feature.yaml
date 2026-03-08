@@ -1,0 +1,61 @@
+# new_feature.yaml — 新機能実装チェーン
+# pm-skills discover/write-prd パターンを参考に設計
+# 発散(リサーチ)→収束(設計)→実行(実装)→検証(テスト+監査)
+
+name: new_feature
+description: 新機能の設計・実装・テストを段階的に実行するチェーン
+pattern_type: implementation
+
+variables:
+  $PROJECT: プロジェクトID（例: uecs-llm）
+  $TARGET: 作業対象パス（例: /home/yasu/uecs-llm）
+  $FEATURE: 機能名（例: /health エンドポイント追加）
+  $DESIGN_DOC: 設計書パス（任意。既存設計書があれば指定）
+
+steps:
+  - id: research
+    description: "$FEATURE に関する既存実装・技術選定リサーチ"
+    worker_type: heyago  # 部屋子向け調査タスク
+    blocked_by: []
+    wave: 1
+    needs_audit: false
+
+  - id: design
+    description: "$FEATURE の設計書作成（実装方針・影響範囲・テスト計画）"
+    worker_type: heyago
+    blocked_by: [research]
+    wave: 2
+    needs_audit: false
+
+  - id: impl_a
+    description: "$FEATURE のソース実装（メインロジック）"
+    worker_type: ashigaru
+    blocked_by: [design]
+    wave: 3
+    needs_audit: true
+
+  - id: impl_b
+    description: "$FEATURE のテストコード実装"
+    worker_type: ashigaru
+    blocked_by: [design]
+    wave: 3  # impl_a と並列実行可能
+    needs_audit: true
+
+  - id: integration_test
+    description: "全テスト実行 + 結合確認"
+    worker_type: ashigaru
+    blocked_by: [impl_a, impl_b]
+    wave: 4
+    needs_audit: false
+
+  - id: audit
+    description: "お針子監査（コード品質・設計書準拠・テストカバレッジ）"
+    worker_type: ohariko
+    blocked_by: [integration_test]
+    wave: 5
+    needs_audit: false  # 監査自体は監査不要
+
+# 備考:
+# - wave 3 の impl_a/impl_b は並列割当可能（同一wave・異なるblocked_by先なし）
+# - 小規模機能なら impl_a+impl_b を1つの impl に統合してよい
+# - design が不要な自明な機能なら research→impl→audit に短縮可

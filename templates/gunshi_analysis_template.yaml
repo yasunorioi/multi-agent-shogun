@@ -1,0 +1,76 @@
+# templates/gunshi_analysis_template.yaml
+# 軍師分析出力テンプレート (v1.0)
+# ─────────────────────────────────────────────────────────────
+# 使い方:
+#   軍師は分析依頼を受けたら、このテンプレートを参考に
+#   queue/inbox/gunshi_analysis.yaml に結果を書き込め。
+#
+# 必須フィールド: task_id, analysis.bloom_level, analysis.recommended_model
+# ─────────────────────────────────────────────────────────────
+
+task_id: subtask_XXX            # 必須: タスクID
+request_id: "XXXXXXXX"          # v3 Request ID（タスクYAMLと同じID。なければ省略可）
+timestamp: "YYYY-MM-DDTHH:MM:SS"  # 必須: date "+%Y-%m-%dT%H:%M:%S" で取得
+
+analysis:
+
+  # ─── Bloom ルーティング（必須） ─────────────────────────────
+  bloom_level: 4                # 必須: 1-6
+                                #   1=記憶(Recall), 2=理解(Understand),
+                                #   3=応用(Apply), 4=分析(Analyze),
+                                #   5=評価(Evaluate), 6=創造(Create)
+  bloom_reasoning: |            # 必須: bloom_levelの根拠
+    なぜこのレベルか、1-3文で説明。
+  recommended_model: claude-sonnet-4-6  # 必須: 推奨モデル
+                                #   L1-L3 → claude-haiku-4-5
+                                #   L4-L5 → claude-sonnet-4-6
+                                #   L6    → claude-opus-4-6
+  confidence: 0.85              # 必須: 0.0-1.0
+
+  # ─── 品質基準（お針子がrubricsに使う） ─────────────────────
+  quality_criteria:             # 監査判断基準を具体的に記述
+    - "既存テストが全てPASSすること"
+    - "変更箇所にユニットテストを追加すること"
+    - "コードレビューチェックリストを満たすこと"
+  qc_method: ohariko            # ohariko    → L4-L6：お針子が監査
+                                # karo_check → L1-L3：家老が簡易確認
+                                # lord_review → L6+殿裁定必要時
+
+  # ─── PDCA 判定（任意） ───────────────────────────────────
+  pdca_needed: false            # true: 反復改善サイクルが必要
+  pdca_max_iterations: 3       # pdca_needed: true の場合の最大反復数
+
+  # ─── North Star 整合（north_star指定がある場合は必須） ───
+  north_star_alignment:
+    status: aligned             # aligned | misaligned | unclear
+    reason: |
+      このタスクがNorth Starにどう寄与するか、1-2文で。
+    risks_to_north_star:        # North Starを損なうリスク（なければ []）
+      - "見落とすとNorth Starを損なうリスクの説明"
+
+  # ─── predict（Foreman方式：お針子が突合） ──────────────────
+  predicted_outcome:
+    expected_files:             # 変更・生成されるファイル一覧
+      - "src/example.py"
+      - "tests/test_example.py"
+    expected_tests: |           # テスト期待値
+      既存テスト全PASS + 新規テスト2件追加
+    expected_behavior: |        # 期待される動作
+      具体的な期待動作を記述。
+    verification_method: |      # 検証方法
+      テスト実行コマンドと確認手順。
+
+  # ─── 戦略分析（任意：詳細分析が必要な場合） ────────────────
+  # strategy_analysis:
+  #   alternatives:             # 代替案
+  #     - name: "案A"
+  #       pros: ["利点1", "利点2"]
+  #       cons: ["欠点1"]
+  #       score: 7
+  #     - name: "案B"
+  #       pros: ["利点1"]
+  #       cons: ["欠点1", "欠点2"]
+  #       score: 5
+  #   recommendation: "案A"
+  #   recommendation_reason: |
+  #     推奨理由を具体的に。

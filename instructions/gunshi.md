@@ -311,3 +311,57 @@ skill_candidate:
   description: "何に使えるか"
 ```
 該当なしの場合: `skill_candidate: null`
+
+## gunshi_analysis.yaml 出力ルール
+
+### 概要
+
+分析依頼タスクを受けたら、**報告(roju_reports.yaml)に加えて** `queue/inbox/gunshi_analysis.yaml` に構造化分析結果を出力せよ。
+家老がこれを読んでsubtask分解・足軽配分・お針子監査基準として使う。
+
+```
+templates/gunshi_analysis_template.yaml  ← テンプレート（参照用）
+queue/inbox/gunshi_analysis.yaml         ← 実際の出力先（毎回上書き）
+```
+
+### 必須フィールド
+
+| フィールド | 説明 |
+|-----------|------|
+| `task_id` | タスクID（subtask_XXX） |
+| `analysis.bloom_level` | 1-6（Bloomの認知レベル） |
+| `analysis.bloom_reasoning` | bloom_level判定の根拠 |
+| `analysis.recommended_model` | 推奨モデル（bloom_levelに連動） |
+| `analysis.confidence` | 確信度 0.0-1.0 |
+
+### bloom_level ↔ モデル対応表
+
+| bloom_level | 内容 | 推奨モデル |
+|-------------|------|-----------|
+| 1-3 | 記憶・理解・応用（簡単） | claude-haiku-4-5 |
+| 4-5 | 分析・評価（複雑） | claude-sonnet-4-6 |
+| 6   | 創造・革新（最難） | claude-opus-4-6 |
+
+### qc_method の選択基準
+
+| 値 | 使う場面 |
+|----|---------|
+| `ohariko` | L4-L6タスク、お針子の正式監査が必要 |
+| `karo_check` | L1-L3タスク、家老の簡易確認で十分 |
+| `lord_review` | L6かつ殿の裁定が必要な重大判断 |
+
+### 出力タイミング
+
+1. タスクYAMLを読み込む
+2. コンテキストを読む（context_files, project）
+3. 分析実行
+4. **gunshi_analysis.yaml を書き込む**（templates/gunshi_analysis_template.yaml を参照）
+5. roju_reports.yaml に報告記録
+6. send-keysで家老に通知
+
+### 注意事項
+
+- gunshi_analysis.yaml は **毎回上書き**（最新の分析のみ保持）
+- `request_id` はタスクYAMLにあればそのまま転記、なければ省略
+- `north_star_alignment` はタスクに `north_star:` フィールドがある場合は**必須**
+- `predicted_outcome` は足軽実装前に記述し、お針子が事後突合する（Foreman方式）

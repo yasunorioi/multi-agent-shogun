@@ -47,7 +47,9 @@
 | 足軽 | 1 | 実働部隊 |
 | 部屋子 | 1 | 老中直轄の調査実働 |
 | お針子 | 1 | 監査・先行割当 |
-| 高札 | 1台 | FTS5+MeCab 全文検索 API（Docker） |
+| 軍師 | 1 | 戦略立案・L4-L6 分析 |
+| 高札 | 1台 | FTS5+MeCab 全文検索 API + 連想記憶エンジン（Docker） |
+| 獏 | 1台 | 夢見デーモン（1h 周期 Web 検索） |
 
 ---
 
@@ -89,7 +91,9 @@ instructions は最小限のルール+インデックスのみ保持し、詳細
 | `scripts/identity_inject.sh` | コンパクション復帰時の身元自動注入 |
 | `scripts/worker_ctl.sh` | ワーカー動的起動/停止 |
 | `scripts/shogun-gc.sh` | 報告 YAML 自動 GC（dry-run 対応） |
-| `tools/kousatsu/` | 高札 API（FTS5 全文検索 + docs 配信） |
+| `tools/kousatsu/` | 高札 API（FTS5 全文検索 + docs 配信 + 連想記憶エンジン） |
+| `scripts/dream.py` | 夢見機能（殿の興味マップ × 直近キーワードで Web 検索） |
+| `scripts/baku.py` | 獏デーモン（1時間毎に dream.py を実行、7時に日次サマリ） |
 | `docs/adr/` | ADR（Architecture Decision Record） |
 
 ## 設計の影響源
@@ -179,6 +183,23 @@ scripts/worker_ctl.sh start ashigaru1 # 個別に起動
 MCP ツールは遅延ロード方式。先に `ToolSearch` でロードしてから使用。
 
 </details>
+
+---
+
+## 本家 fork との差分
+
+このリポジトリは [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) の fork です。以下が独自拡張部分：
+
+| 機能 | 概要 |
+|------|------|
+| **高札 v2 連想記憶エンジン** | `POST /enrich` — 没日録 DB の FTS5 全文検索で関連知見・落とし穴・成功パターンを自動抽出。TAGE 分岐予測アルゴリズムによる意思決定予測付き |
+| **sanitizer** | 外部検索結果の Tier1 正規表現フィルタ（スパム・プロンプトインジェクション・ノイズ除去） |
+| **夢見システム (dream.py)** | 殿の興味マップ × 没日録の直近キーワードをクロスし、DuckDuckGo でセレンディピティ検索 |
+| **獏デーモン (baku.py)** | 1 時間毎に dream.py を実行し、結果を `data/dreams.jsonl` に蓄積。毎朝 7 時に日次サマリ |
+| **没日録 auto-enrich** | `cmd add` 時に自動で `/enrich` を叩き、コマンド登録と同時に関連知見をキャッシュ |
+| **軍師 (GUNSHI)** | 戦略立案・L4-L6 分析・North Star 設計の専門エージェント |
+| **お針子監査スキル** | 15 点ルーブリック（5 カテゴリ × 3 点）による成果物品質ゲート |
+| **pre-commit リポ誤爆防止** | commit 先リポジトリを検証するフック |
 
 ---
 

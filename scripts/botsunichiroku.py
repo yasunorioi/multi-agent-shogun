@@ -38,6 +38,7 @@ Usage:
 import argparse
 import json
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -189,6 +190,24 @@ def cmd_add(args) -> None:
     conn.commit()
     conn.close()
     print(f"Created: {cmd_id}")
+
+    # --- 高札v2: 自動enrich ---
+    enrich_text = f"{args.description} {details or ''}"
+    enrich_payload = json.dumps({
+        "cmd_id": cmd_id,
+        "text": enrich_text,
+        "project": args.project,
+    })
+    try:
+        subprocess.Popen(
+            ["curl", "-s", "-X", "POST", "http://localhost:8080/enrich",
+             "-H", "Content-Type: application/json",
+             "-d", enrich_payload],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass  # 高札APIダウンでもcmd add自体は正常完了
 
 
 def cmd_update(args) -> None:

@@ -4,8 +4,13 @@ FTS5インデックスDBおよび没日録DB（読み取り専用）に対して
 全文検索・矛盾検出・カバレッジチェックを提供する。
 """
 
+import json as _json
 import os
+import re
 import sqlite3
+import time
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +18,7 @@ import MeCab
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-app = FastAPI(title="高札 - 通信ハブ+検索API", version="1.0.0")
+app = FastAPI(title="高札 - 通信ハブ+検索API", version="2.0.0")
 
 # --- 環境変数 ---
 BOTSUNICHIROKU_DB = os.environ.get("BOTSUNICHIROKU_DB", "/data/botsunichiroku.db")
@@ -957,3 +962,513 @@ def get_audit(subtask_id: str):
         }
     finally:
         conn.close()
+
+
+# ============================================================
+# 15. POST /enrich v2.0 - 連想記憶+pitfalls+prediction+positive
+# ============================================================
+
+def _now_iso() -> str:
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+class EnrichRequest(BaseModel):
+    cmd_id: str
+    text: str
+    project: str | None = None
+    include_external: bool = False
+    worker_id: str | None = None
+
+
+class PitfallItem(BaseModel):
+    pattern_id: str
+    source_id: str
+    severity: str
+    description: str
+    prevention: str
+
+
+class PositivePattern(BaseModel):
+    source_id: str
+    project: str
+    description: str
+    strength: str
+    hint: str
+
+
+class Prediction(BaseModel):
+    question: str
+    predicted_choice: str
+    confidence: str
+    basis: list[dict]
+    note: str
+
+
+@app.post("/enrich")
+def enrich(req: EnrichRequest):
+    t0 = time.monotonic()
+
+    keywords = extract_nouns(req.text)
+
+    # --- Stage 1: 同PJ内FTS5検索（局所） ---
+    local_results = []
+    t_local = 0
+    if keywords:
+        match_query = " OR ".join(f'"{kw}"' for kw in keywords[:15])
+        idx_conn = get_index_db()
+        try:
+            t1 = time.monotonic()
+            if req.project:
+                rows = idx_conn.execute("""
+                    SELECT source_type, source_id, parent_id, project,
+                           worker_id, status,
+                           snippet(search_index, 6, '...', '...', '', 64) AS snippet,
+                           rank
+                    FROM search_index
+                    WHERE search_index MATCH ? AND project = ?
+                    ORDER BY rank LIMIT 10
+                """, (match_query, req.project)).fetchall()
+            else:
+                rows = idx_conn.execute("""
+                    SELECT source_type, source_id, parent_id, project,
+                           worker_id, status,
+                           snippet(search_index, 6, '...', '...', '', 64) AS snippet,
+                           rank
+                    FROM search_index
+                    WHERE search_index MATCH ?
+                    ORDER BY rank LIMIT 10
+                """, (match_query,)).fetchall()
+            t_local = int((time.monotonic() - t1) * 1000)
+            for row in rows:
+                if row["source_id"] == req.cmd_id:
+                    continue
+                local_results.append({
+                    "source_type": row["source_type"],
+                    "source_id": row["source_id"],
+                    "project": row["project"],
+                    "snippet": row["snippet"],
+                    "score": row["rank"],
+                    "stage": "local",
+                })
+        finally:
+            idx_conn.close()
+
+    # --- Stage 2: 全PJ横断FTS5検索（拡大） ---
+    global_results = []
+    t_global = 0
+    if keywords and req.project:
+        local_ids = {r["source_id"] for r in local_results}
+        idx_conn = get_index_db()
+        try:
+            t2 = time.monotonic()
+            rows = idx_conn.execute("""
+                SELECT source_type, source_id, parent_id, project,
+                       worker_id, status,
+                       snippet(search_index, 6, '...', '...', '', 64) AS snippet,
+                       rank
+                FROM search_index
+                WHERE search_index MATCH ? AND project != ?
+                ORDER BY rank LIMIT 10
+            """, (match_query, req.project)).fetchall()
+            t_global = int((time.monotonic() - t2) * 1000)
+            for row in rows:
+                sid = row["source_id"]
+                if sid == req.cmd_id or sid in local_ids:
+                    continue
+                global_results.append({
+                    "source_type": row["source_type"],
+                    "source_id": sid,
+                    "project": row["project"],
+                    "snippet": row["snippet"],
+                    "score": row["rank"],
+                    "stage": "global",
+                    "hint": f"{row['project']}プロジェクトの類似タスク",
+                    "confidence": round(0.5 + min(abs(row["rank"]) / 20, 0.4), 2),
+                })
+        finally:
+            idx_conn.close()
+
+    # --- Stage 2b: pitfalls抽出 ---
+    t_pit = time.monotonic()
+    pitfalls = _extract_pitfalls(keywords, req.worker_id)
+    t_pitfall = int((time.monotonic() - t_pit) * 1000)
+
+    # --- Stage 2c: positive_patterns抽出 ---
+    positive_patterns = _extract_positive_patterns(keywords)
+
+    # --- Stage 2d: 直近24h SQL LIKE補完 ---
+    recent = _search_recent_cmds(keywords, req.cmd_id)
+    local_results.extend(recent)
+
+    # --- Stage 3: 外部検索（sanitized） ---
+    external = []
+    if req.include_external and len(local_results) <= 2:
+        external = _search_external_sanitized(keywords)
+
+    # --- TAGE的判断予測 ---
+    prediction = _predict_decision(keywords, req.project, req.cmd_id)
+
+    # --- キャッシュ保存 ---
+    _cache_enrichment(req.cmd_id, local_results, pitfalls,
+                      positive_patterns, prediction, global_results, external)
+
+    total_ms = int((time.monotonic() - t0) * 1000)
+    return {
+        "cmd_id": req.cmd_id,
+        "enriched_at": _now_iso(),
+        "internal": local_results[:10],
+        "pitfalls": [p if isinstance(p, dict) else p.dict() for p in pitfalls[:5]],
+        "positive_patterns": [p if isinstance(p, dict) else p.dict() for p in positive_patterns[:5]],
+        "prediction": prediction.dict() if prediction else None,
+        "cross_project": global_results[:5],
+        "external": external[:5],
+        "meta": {
+            "internal_hits": len(local_results),
+            "pitfall_hits": len(pitfalls),
+            "positive_hits": len(positive_patterns),
+            "cross_project_hits": len(global_results),
+            "prediction_table": (prediction.basis[0]["table"]
+                                 if prediction and prediction.basis else None),
+            "fts5_local_ms": t_local,
+            "fts5_global_ms": t_global,
+            "pitfall_query_ms": t_pitfall,
+            "total_ms": total_ms,
+            "keywords": keywords[:10],
+        },
+    }
+
+
+# ============================================================
+# 16. GET /enrich/{cmd_id} - キャッシュ済みenrich結果取得
+# ============================================================
+
+@app.get("/enrich/{cmd_id}")
+def get_enrichment(cmd_id: str):
+    """キャッシュ済みenrich結果を取得。"""
+    bot_conn = get_botsunichiroku_db()
+    try:
+        row = bot_conn.execute("""
+            SELECT content, created_at FROM dashboard_entries
+            WHERE cmd_id = ? AND section = 'enrich_cache'
+            ORDER BY created_at DESC LIMIT 1
+        """, (cmd_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404,
+                                detail=f"No enrichment found for {cmd_id}")
+        cached = _json.loads(row["content"])
+        return {
+            "cmd_id": cmd_id,
+            "enriched_at": row["created_at"],
+            **cached,
+            "meta": {"source": "cache"},
+        }
+    finally:
+        bot_conn.close()
+
+
+# ============================================================
+# Internal: pitfalls抽出
+# ============================================================
+
+def _extract_pitfalls(keywords: list[str], worker_id: str | None) -> list[dict]:
+    """没日録DBから失敗パターンを抽出する。"""
+    bot_conn = get_botsunichiroku_db()
+    pitfalls = []
+    try:
+        patterns = [
+            ("P001", "%コミット漏れ%", "high",
+             "commit忘れ", "inbox descriptionに「git add+commit+push」を明記"),
+            ("P002", "%ハルシネーション%", "critical",
+             "ハルシネーション", "成果物の実在確認（git ls-remote, ls -la）を必須化"),
+            ("P002", "%捏造%", "critical",
+             "捏造", "成果物の実在確認を必須化"),
+            ("P003", "%マージ%", "medium",
+             "マージ問題", "ブランチ分岐状況を事前確認"),
+            ("P004", "%差し戻%", "medium",
+             "差し戻し", "直近の差し戻し理由を確認"),
+        ]
+        seen_ids: set[str] = set()
+        for pid, like_pattern, severity, desc_label, prevention in patterns:
+            rows = bot_conn.execute("""
+                SELECT s.id, s.parent_cmd, s.worker_id,
+                       substr(s.description, 1, 100) AS description,
+                       r.summary AS report_summary
+                FROM subtasks s
+                LEFT JOIN reports r ON r.task_id = s.id
+                WHERE (r.summary LIKE ? OR s.description LIKE ?)
+                  AND s.status IN ('blocked', 'cancelled', 'done')
+                ORDER BY s.completed_at DESC LIMIT 3
+            """, (like_pattern, like_pattern)).fetchall()
+            for row in rows:
+                if row["id"] in seen_ids:
+                    continue
+                seen_ids.add(row["id"])
+                pitfalls.append({
+                    "pattern_id": pid,
+                    "source_id": row["id"],
+                    "severity": severity,
+                    "description": f"{desc_label}: {row['description']}",
+                    "prevention": prevention,
+                })
+
+        # P005: worker別の失敗パターン
+        if worker_id:
+            rows = bot_conn.execute("""
+                SELECT s.id, substr(s.description, 1, 100) AS description
+                FROM subtasks s
+                WHERE s.worker_id = ? AND s.status IN ('blocked', 'cancelled')
+                ORDER BY s.completed_at DESC LIMIT 3
+            """, (worker_id,)).fetchall()
+            for row in rows:
+                if row["id"] not in seen_ids:
+                    pitfalls.append({
+                        "pattern_id": "P005",
+                        "source_id": row["id"],
+                        "severity": "medium",
+                        "description": f"{worker_id}の過去失敗: {row['description']}",
+                        "prevention": f"{worker_id}に割り当て時は過去の失敗パターンに注意",
+                    })
+    finally:
+        bot_conn.close()
+
+    order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    pitfalls.sort(key=lambda x: order.get(x["severity"], 4))
+    return pitfalls
+
+
+# ============================================================
+# Internal: positive_patterns抽出（正の強化信号）
+# ============================================================
+
+def _extract_positive_patterns(keywords: list[str]) -> list[dict]:
+    """audit PASS済みの成功パターンを抽出する。"""
+    if not keywords:
+        return []
+    bot_conn = get_botsunichiroku_db()
+    results = []
+    seen: set[str] = set()
+    try:
+        for kw in keywords[:5]:
+            rows = bot_conn.execute("""
+                SELECT s.id, s.project, s.worker_id,
+                       substr(s.description, 1, 120) AS description,
+                       r.summary AS report_summary
+                FROM subtasks s
+                JOIN reports r ON r.task_id = s.id AND r.status = 'done'
+                WHERE s.audit_status = 'done'
+                  AND (s.description LIKE '%' || ? || '%'
+                       OR r.summary LIKE '%' || ? || '%')
+                ORDER BY s.completed_at DESC LIMIT 3
+            """, (kw, kw)).fetchall()
+            for row in rows:
+                if row["id"] in seen:
+                    continue
+                seen.add(row["id"])
+                results.append({
+                    "source_id": row["id"],
+                    "project": row["project"] or "",
+                    "description": f"{row['description']} → audit PASS",
+                    "strength": "high" if len(rows) >= 3 else "medium",
+                    "hint": "この方向を継続せよ",
+                })
+    finally:
+        bot_conn.close()
+    return results
+
+
+# ============================================================
+# Internal: TAGE的判断予測
+# ============================================================
+
+def _predict_decision(keywords: list[str], project: str | None,
+                      cmd_id: str) -> Prediction | None:
+    """殿の過去裁定履歴から判断を予測する。TAGE分岐予測器方式。"""
+    if not keywords:
+        return None
+    bot_conn = get_botsunichiroku_db()
+    try:
+        # T1: 直近cmd（最短履歴テーブル）
+        t1_rows = bot_conn.execute("""
+            SELECT c.id, c.command, c.details, c.project
+            FROM commands c
+            WHERE c.status = 'done' AND c.id != ?
+            ORDER BY c.created_at DESC LIMIT 5
+        """, (cmd_id,)).fetchall()
+
+        # T2: 同PJ内（中程度履歴テーブル）
+        t2_rows = []
+        if project:
+            t2_rows = bot_conn.execute("""
+                SELECT c.id, c.command, c.details
+                FROM commands c
+                WHERE c.project = ? AND c.status = 'done' AND c.id != ?
+                ORDER BY c.created_at DESC LIMIT 10
+            """, (project, cmd_id)).fetchall()
+
+        # T3: 全PJ（最長履歴テーブル）
+        t3_rows = bot_conn.execute("""
+            SELECT c.id, c.command, c.details
+            FROM commands c
+            WHERE c.status = 'done' AND c.id != ?
+            ORDER BY c.created_at DESC LIMIT 30
+        """, (cmd_id,)).fetchall()
+
+        # 既知の判断パターン（殿の好み）
+        known_patterns = [
+            {"question": "DBエンジン選定",
+             "keywords": ["DB", "データベース", "SQLite", "Postgres"],
+             "predicted_choice": "SQLite",
+             "reason": "殿のマクガイバー精神。月額課金回避"},
+            {"question": "言語選定",
+             "keywords": ["Python", "Go", "Rust", "言語"],
+             "predicted_choice": "Python",
+             "reason": "既存基盤がPython。Simple>Complex"},
+            {"question": "デプロイ方式",
+             "keywords": ["Docker", "デプロイ", "コンテナ"],
+             "predicted_choice": "Docker Compose",
+             "reason": "既存高札がDocker Compose"},
+            {"question": "設計方針",
+             "keywords": ["設計", "アーキテクチャ"],
+             "predicted_choice": "マクガイバー精神（ありもの活用）",
+             "reason": "新規依存最小化"},
+        ]
+
+        for pattern in known_patterns:
+            if any(kw in keywords for kw in pattern["keywords"]):
+                basis = []
+                for table_name, table_rows in [("T1", t1_rows),
+                                                ("T2", t2_rows),
+                                                ("T3", t3_rows)]:
+                    for row in table_rows:
+                        text = f"{row['command']} {row['details'] or ''}"
+                        if any(pk in text for pk in pattern["keywords"]):
+                            basis.append({
+                                "table": table_name,
+                                "source": f"{row['id']}: {row['command'][:60]}",
+                                "match": True,
+                            })
+                if basis:
+                    conf = ("high" if len(basis) >= 3
+                            else ("medium" if len(basis) >= 2 else "low"))
+                    return Prediction(
+                        question=pattern["question"],
+                        predicted_choice=pattern["predicted_choice"],
+                        confidence=conf,
+                        basis=basis[:5],
+                        note=(f"確信度{conf}。" + (
+                            "足軽は投機実行可。ミスプレディクション時はaudit FAILで巻き戻し"
+                            if conf == "high"
+                            else "家老が殿に確認推奨"
+                        )),
+                    )
+    finally:
+        bot_conn.close()
+    return None
+
+
+# ============================================================
+# Internal: 直近cmd補完
+# ============================================================
+
+def _search_recent_cmds(keywords: list[str],
+                        exclude_cmd_id: str) -> list[dict]:
+    """直近24時間のcmdをSQL LIKEで検索。"""
+    if not keywords:
+        return []
+    bot_conn = get_botsunichiroku_db()
+    results = []
+    try:
+        for kw in keywords[:5]:
+            rows = bot_conn.execute("""
+                SELECT id, project, status,
+                       substr(command || ' ' || COALESCE(details, ''), 1, 200) AS snippet
+                FROM commands
+                WHERE created_at > datetime('now', '-24 hours')
+                  AND id != ?
+                  AND (command LIKE '%' || ? || '%'
+                       OR details LIKE '%' || ? || '%')
+                LIMIT 3
+            """, (exclude_cmd_id, kw, kw)).fetchall()
+            for row in rows:
+                results.append({
+                    "source_type": "command_recent",
+                    "source_id": row["id"],
+                    "project": row["project"],
+                    "snippet": row["snippet"],
+                    "score": 0,
+                    "stage": "local",
+                })
+    finally:
+        bot_conn.close()
+    seen: set[str] = set()
+    return [r for r in results
+            if r["source_id"] not in seen and not seen.add(r["source_id"])]
+
+
+# ============================================================
+# Internal: 外部検索（sanitized）
+# ============================================================
+
+def _search_external_sanitized(keywords: list[str]) -> list[dict]:
+    """外部Web検索を実行し、sanitizerでフィルタして返す。"""
+    from sanitizer import sanitize_external_result
+
+    results = []
+    query = " ".join(keywords[:5])
+    try:
+        url = (f"https://api.duckduckgo.com/"
+               f"?q={urllib.parse.quote(query)}&format=json&no_html=1")
+        req = urllib.request.Request(url, headers={"User-Agent": "kousatsu/2.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = _json.loads(resp.read())
+            if data.get("Abstract"):
+                sanitized = sanitize_external_result({
+                    "source": "duckduckgo",
+                    "title": data.get("Heading", ""),
+                    "snippet": data["Abstract"],
+                    "url": data.get("AbstractURL", ""),
+                })
+                if sanitized:
+                    results.append(sanitized)
+            for topic in (data.get("RelatedTopics") or [])[:3]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    sanitized = sanitize_external_result({
+                        "source": "duckduckgo",
+                        "title": topic.get("Text", "")[:80],
+                        "snippet": topic.get("Text", ""),
+                        "url": topic.get("FirstURL", ""),
+                    })
+                    if sanitized:
+                        results.append(sanitized)
+    except Exception:
+        pass  # 外部検索失敗はgraceful degradation
+    return results
+
+
+# ============================================================
+# Internal: キャッシュ保存
+# ============================================================
+
+def _cache_enrichment(cmd_id, internal, pitfalls, positive_patterns,
+                      prediction, cross_project, external):
+    """結果をdashboard_entriesにキャッシュ保存。"""
+    bot_conn = get_botsunichiroku_db_rw()
+    try:
+        cache_data = _json.dumps({
+            "internal": internal[:10],
+            "pitfalls": [p if isinstance(p, dict) else p.dict()
+                         for p in pitfalls[:5]],
+            "positive_patterns": [p if isinstance(p, dict) else p.dict()
+                                  for p in positive_patterns[:5]],
+            "prediction": (prediction.dict() if prediction else None),
+            "cross_project": cross_project[:5],
+            "external": external[:5],
+        }, ensure_ascii=False)
+        bot_conn.execute("""
+            INSERT INTO dashboard_entries
+                (cmd_id, section, content, status, created_at)
+            VALUES (?, 'enrich_cache', ?, 'cached', datetime('now'))
+        """, (cmd_id, cache_data))
+        bot_conn.commit()
+    finally:
+        bot_conn.close()

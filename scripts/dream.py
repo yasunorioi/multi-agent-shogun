@@ -17,6 +17,7 @@
   python3 scripts/dream.py --topic "量子塩梅"  # 手動トピック指定
 """
 
+import html as html_mod
 import json
 import os
 import re
@@ -208,8 +209,10 @@ def search_web(query: str) -> str | None:
         for i, snippet in enumerate(snippets[:3]):
             title = links[i] if i < len(links) else ""
             title = re.sub(r"<[^>]+>", "", title).strip()
+            title = html_mod.unescape(title)
             snippet = re.sub(r"<[^>]+>", "", snippet).strip()
             snippet = re.sub(r"\s+", " ", snippet).strip()
+            snippet = html_mod.unescape(snippet)
             if snippet:
                 results.append(f"[{title}] {snippet}" if title else snippet)
 

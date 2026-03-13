@@ -72,11 +72,11 @@ script_dir = sys.argv[3]
 AGENT_MAP = {
     "shogun":    {"role": "将軍",   "pane": "shogun:main.0",       "instructions": "instructions/shogun.md"},
     "karo-roju": {"role": "老中",   "pane": "multiagent:agents.0", "instructions": "instructions/karo.md"},
-    "gunshi":    {"role": "軍師",   "pane": "multiagent:agents.1", "instructions": "instructions/gunshi.md"},
-    "ashigaru1": {"role": "足軽1",  "pane": "multiagent:agents.2", "instructions": "instructions/ashigaru.md"},
-    "ashigaru2": {"role": "足軽2",  "pane": "multiagent:agents.3", "instructions": "instructions/ashigaru.md"},
-    "ashigaru6": {"role": "部屋子1","pane": "multiagent:agents.4", "instructions": "instructions/ashigaru.md"},
-    "ohariko":   {"role": "お針子", "pane": "ooku:agents.0",       "instructions": "instructions/ohariko.md"},
+    "ashigaru1": {"role": "足軽1",  "pane": "multiagent:agents.1", "instructions": "instructions/ashigaru.md"},
+    "ashigaru2": {"role": "足軽2",  "pane": "multiagent:agents.2", "instructions": "instructions/ashigaru.md"},
+    "ashigaru6": {"role": "部屋子1","pane": "multiagent:agents.3", "instructions": "instructions/ashigaru.md"},
+    "gunshi":    {"role": "軍師",   "pane": "ooku:agents.0",       "instructions": "instructions/gunshi.md"},
+    "ohariko":   {"role": "お針子", "pane": "ooku:agents.1",       "instructions": "instructions/ohariko.md"},
 }
 
 info = AGENT_MAP.get(agent_id, {

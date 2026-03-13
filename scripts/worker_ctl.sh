@@ -26,11 +26,11 @@ DB_PATH="$PROJECT_ROOT/data/botsunichiroku.db"
 
 # Map agent_id -> tmux pane target
 declare -A PANE_MAP=(
-    [gunshi]="multiagent:agents.1"
-    [ashigaru1]="multiagent:agents.2"
-    [ashigaru2]="multiagent:agents.3"
-    [ashigaru6]="multiagent:agents.4"
-    [ohariko]="ooku:agents.0"
+    [ashigaru1]="multiagent:agents.1"
+    [ashigaru2]="multiagent:agents.2"
+    [ashigaru6]="multiagent:agents.3"
+    [gunshi]="ooku:agents.0"
+    [ohariko]="ooku:agents.1"
 )
 
 # Map agent_id -> default model

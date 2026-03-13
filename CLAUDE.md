@@ -153,3 +153,6 @@ config/settings.yaml の `language` を参照。`ja`=戦国風日本語のみ、
 ## Summary生成時の必須事項
 
 summaryには必ず含めよ: (1)エージェント役割 (2)口調 (3)禁止事項 (4)現在のタスクID
+
+#
+Add to my CLAUDE.md: Before any git merge, git rebase, or large-scale file deletion, state what you're about to do and which repo/branch you're targeting. Wait for confirmation if the operation affects >5 files.

@@ -229,12 +229,18 @@ userId が farmers_secrets.yaml に存在しない場合:
 ```
 1. follow event 受信
 2. userId を自動取得
-3. 仮登録として farmers_secrets.yaml に追記（pending状態）
-4. MBP側でWGキーペア自動生成
-5. 設定情報をBase64エンコード
-6. LINE返信:
-   「登録ありがとうございます！以下の設定コードをRPiのWeb画面に貼り付けてください。」
-   + Base64ブロック
+3. 既登録チェック:
+   - active → 「登録済みです」で案内して終了
+   - pending → 既存farmer_id/wg_ipでQR+Base64を再送（ブロック解除→再follow対応）
+4. 新規: farmers_secrets.yaml に pending 追記
+5. 設定情報をBase64エンコード（★秘密鍵は含めない★）
+6. QR PNG画像生成 → /var/www/qr/ に保存
+   ファイル名: {farmer_id}_{sha256(farmer_id:user_id)[:12]}.png
+7. LINE返信（3メッセージ）:
+   - TextMessage: 説明文
+   - ImageMessage: QR画像（https://toiso.fit/qr/...）
+   - TextMessage: Base64テキスト（QR読取不可時のフォールバック）
+   ※ QR生成失敗時はBase64テキストのみ送信
 ```
 
 ---
@@ -245,7 +251,7 @@ userId が farmers_secrets.yaml に存在しない場合:
 
 ```
 Step 1: スマホでQRコードを読み、LINE Botを友達追加
-Step 2: Botから届いたBase64設定コードをRPi Web UIに貼り付け
+Step 2: Botから届いたQR画像をRPi Web UIで読み取り（またはBase64テキスト貼り付け）
 ```
 
 ### 全体フロー（詳細）
@@ -267,9 +273,14 @@ Step 2: Botから届いたBase64設定コードをRPi Web UIに貼り付け
   │                            │    にpending追記          │
   │                            │    (公開鍵は後で受け取る)  │
   │                            │                          │
+  │                            │ 2b. 既登録チェック:         │
+  │                            │   active → 「登録済み」    │
+  │                            │   pending → QR再送        │
+  │                            │                          │
   │  3. LINE返信受信            │                          │
-  │  「設定コードをRPiに貼ってね」│                          │
-  │  + Base64ブロック           │                          │
+  │  ├ TextMessage: 説明文     │                          │
+  │  ├ ImageMessage: QR画像    │  (QR内容=Base64設定ブロック)│
+  │  └ TextMessage: Base64     │  (フォールバック用)        │
   │  (サーバ公開鍵+EP+割当IPのみ│                          │
   │   秘密鍵は含めない)         │                          │
   │                            │                          │
@@ -463,25 +474,50 @@ MBPは2つのWGインターフェースを持つ（§3参照）:
 | 殿の既存WG（wg0等・10.10.0.x） | VPS←→MBP の Webhook転送経路 |
 | wg-farmers（新規・10.20.0.1） | 農家RPi ←→ MBP の通信用WGサーバ |
 
-### VPSに残るもの
+### VPS構成（設計変更: LINE BotをVPSで直接稼働）
 
-- Webhook受信 → **殿の既存WG (10.10.0.x) 経由** でMBP:5000に転送（nginx reverse proxy）
-- VPSのnginx設定例:
+LINE Botトークン再発行に伴い、VPSを農家VPNサーバ兼LINE Botホストとして再構築。
+MBPへのWebhookリレー方式から、VPS直接稼働方式に変更。
+
+| コンポーネント | 場所 | 備考 |
+|-------------|------|------|
+| LINE Bot (app.py) | VPS `/opt/agriha-linebot/` | systemd (agriha-linebot.service) |
+| wg-farmers | VPS | 10.20.0.1/24, port 51821 |
+| nginx | VPS | toiso.fit, SSL終端, QR配信 |
+| QR画像 | VPS `/var/www/qr/` | nginx静的配信, 24hクリーンアップ |
+
+#### nginx設定 (`config/nginx-vps-toiso.conf`)
 
 ```nginx
-# /etc/nginx/sites-available/linebot-relay
-server {
-    listen 443 ssl;
-    server_name <VPS_DOMAIN>;
+# HTTP → HTTPS redirect
+# /callback, /callback/test → uvicorn:8443 (LINE Webhook)
+# /api/ → uvicorn:8443 (register_pubkey, cleanup_qr)
+# /qr/ → /var/www/qr/ (QR画像静的配信)
+# /health → uvicorn:8443
+```
 
-    location /webhook {
-        # proxy_pass先はMBPの殿用WG IP（10.10.0.x）を使用
-        # ⚠️ 10.20.0.1（farmers WG）は指定しない — VPSはfarmers WGに参加しないため到達不能
-        proxy_pass http://10.10.0.{MBP_IP}:5000/webhook;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+#### systemd (`systemd/agriha-linebot.service`)
+
+```ini
+User=www-data
+ExecStart=uvicorn app:app --host 127.0.0.1 --port 8443
+After=wg-quick@wg-farmers.service
+```
+
+#### デプロイ (`scripts/deploy_vps_linebot.sh`)
+
+```bash
+# 初回: venv作成、nginx設定、systemd登録、sudoers、cron
+bash scripts/deploy_vps_linebot.sh --setup
+
+# 更新: rsync + pip install + サービス再起動
+bash scripts/deploy_vps_linebot.sh
+```
+
+#### sudoers (`/etc/sudoers.d/agriha-wg`)
+
+```
+www-data ALL=(root) NOPASSWD: /usr/bin/wg set wg-farmers peer *
 ```
 
 ### MBP ディレクトリ構成
@@ -712,12 +748,19 @@ farmers:
 
 | ファイル | 操作 | 説明 |
 |---------|------|------|
-| `linebot/router.py` | 新規 | メッセージルーター |
-| `linebot/onboarding.py` | 新規 | follow event + Base64生成 |
-| `linebot/app.py` | 移設+改修 | VPS→MBP移設、router統合 |
-| `config/farmers.yaml` | 新規 | 農家マスタ |
+| `src/agriha/vps/app.py` | 改修 | QRクリーンアップAPI追加、onboarding統合 |
+| `src/agriha/vps/onboarding.py` | 改修 | QR PNG生成、ImageMessage送信、pending再follow対応 |
+| `src/agriha/vps/router.py` | 既存 | メッセージルーター |
+| `src/agriha/vps/requirements.txt` | 改修 | `qrcode[pil]`, `Pillow` 追加 |
+| `src/agriha/vps/.env.example` | 改修 | WG/QR関連環境変数追加 |
+| `src/agriha/vps/tests/test_onboarding.py` | 改修 | QR生成・pending再follow等6テスト追加 |
+| `config/nginx-vps-toiso.conf` | 新規 | VPS nginx設定（SSL + webhook + QR配信） |
+| `systemd/agriha-linebot.service` | 新規 | LINE Bot systemdユニット |
+| `scripts/wg_farmer_setup.sh` | 既存 | MBP WGサーバ初期設定 |
+| `scripts/wg_farmers_vps_setup.sh` | 新規 | VPS WGサーバ初期設定 |
+| `scripts/deploy_vps_linebot.sh` | 新規 | VPSデプロイスクリプト |
+| `config/farmers.yaml` | 新規 | 農家マスタ（git管理） |
 | `config/farmers_secrets.yaml` | 新規 | 秘密情報（.gitignore） |
-| `scripts/wg_farmer_setup.sh` | 新規 | MBP WGサーバ初期設定 |
 | `scripts/gen_farmer_config.sh` | 新規 | 農家追加スクリプト |
 | `scripts/setup.sh` | 改修 | WGクライアント自動設定追加 |
 | `services/agriha-chat/agriha_chat.py` | 改修 | 設定画面 + チャットAPI追加 |

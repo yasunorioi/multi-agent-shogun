@@ -40,8 +40,8 @@ DEFAULT_INTERVAL = 3600  # 1時間
 MAX_SEARCHES_PER_RUN = 5
 SUMMARY_HOUR = 7  # 朝7時にサマリ生成
 
-# === Haiku API 設定 ===
-HAIKU_BASE_URL = os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com")
+# === Anthropic API 設定 ===
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com"))
 HAIKU_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 SONNET_MODEL = "claude-sonnet-4-5-20250514"
@@ -270,7 +270,7 @@ JSON形式で出力:
     try:
         from openai import OpenAI
         client = OpenAI(
-            base_url=f"{HAIKU_BASE_URL}/v1",
+            base_url=f"{ANTHROPIC_BASE_URL}/v1",
             api_key=HAIKU_API_KEY,
         )
         response = client.chat.completions.create(
@@ -352,7 +352,7 @@ def sonnet_selection(interpreted_dreams: list[dict]) -> list[dict]:
     try:
         from openai import OpenAI
         client = OpenAI(
-            base_url=f"{HAIKU_BASE_URL}/v1",
+            base_url=f"{ANTHROPIC_BASE_URL}/v1",
             api_key=HAIKU_API_KEY,
         )
         response = client.chat.completions.create(

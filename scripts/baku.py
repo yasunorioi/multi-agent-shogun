@@ -40,6 +40,11 @@ DEFAULT_INTERVAL = 3600  # 1時間
 MAX_SEARCHES_PER_RUN = 5
 SUMMARY_HOUR = 7  # 朝7時にサマリ生成
 
+# === Haiku API 設定 ===
+HAIKU_BASE_URL = os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com")
+HAIKU_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
+
 # 殿の興味マップ — Memory MCPとauto memoryから抽出
 TONO_INTERESTS = {
     "agriculture_iot": [
@@ -139,6 +144,25 @@ def get_recent_keywords(days: int = 7) -> list[str]:
     return significant[:20]
 
 
+def get_recent_cmd_summary() -> str:
+    """直近7日のcmdタイトル一覧を返す（コンテキスト注入用）"""
+    if not DB_PATH.exists():
+        return ""
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+        rows = conn.execute(
+            "SELECT id, command, project FROM commands "
+            "WHERE created_at > ? ORDER BY created_at DESC LIMIT 15",
+            (cutoff,),
+        ).fetchall()
+        conn.close()
+        return "\n".join(f"- [{r[2]}] {r[0]}: {r[1]}" for r in rows)
+    except Exception as e:
+        print(f"WARN: get_recent_cmd_summary失敗: {e}", file=sys.stderr)
+        return ""
+
+
 def extract_nouns_simple(text: str) -> list[str]:
     """簡易名詞抽出（MeCabなし版）"""
     en_words = re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", text)
@@ -200,6 +224,70 @@ def search_kousatsu(query: str) -> str | None:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
     return None
+
+
+# === 夢解釈 ===
+
+
+def interpret_dream(dream: dict, context_snippet: str = "") -> dict | None:
+    """Haiku APIで夢を解釈する。API key未設定時はNullClawモードでスキップ。"""
+    if not HAIKU_API_KEY:
+        return None  # NullClawモード: 解釈なし
+
+    system_prompt = """あなたは獏に取り憑かれた部屋子でございます。
+夢うつつの中、ネットの海から拾い上げた情報を、
+殿のお仕事に役立つかどうか、ぼんやりと判断いたします。
+
+殿は農業IoT・LLMエッジ推論・マルチエージェントシステムを手がけておられます。
+月額忌避・マクガイバー精神（シンプル・ローコスト）がお好みでございます。
+
+判断基準:
+- 殿の現在のプロジェクト（農業制御、shogun、温室LLM）に関連するか
+- 既存の設計思想（三層構造、FTS5、SQLite完結）に影響するか
+- 技術的に新しい知見や代替案を含むか
+- 「ちょうどいい精度」の塩梅で判断してくださいませ
+
+蔵書拡充フェーズにつき、判断は**ゆるめ**に。迷ったらarchiveにしてくださいませ。
+
+JSON形式で出力:
+{
+  "relevance": "high|medium|low|none",
+  "connection": "既存知見との接続点（1文）",
+  "insight": "得られる知見（1文。なければnull）",
+  "action": "archive|investigate|ignore",
+  "tags": ["ドメインタグ", "キーワード"]
+}"""
+
+    user_msg = f"""## 夢データ
+ドメイン: {dream.get('domain', '?')}
+クエリ: {dream.get('query', '?')}
+外部検索結果: {dream.get('external_result', '')[:400] if dream.get('external_result') else '(なし)'}
+
+## 直近の殿のお仕事（参考）
+{context_snippet[:500]}"""
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(
+            base_url=f"{HAIKU_BASE_URL}/v1",
+            api_key=HAIKU_API_KEY,
+        )
+        response = client.chat.completions.create(
+            model=HAIKU_MODEL,
+            max_tokens=300,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        result_text = response.choices[0].message.content
+        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        return {"raw_interpretation": result_text}
+    except Exception as e:
+        print(f"  WARN: 夢解釈失敗: {e}", file=sys.stderr)
+        return None
 
 
 # === クエリ生成 ===
@@ -284,6 +372,9 @@ def dream_once(manual_topic: str | None = None) -> int:
     # 重複チェック（6時間以内の同一クエリはスキップ）
     recent_dreams = load_recent_dreams(hours=6)
     recent_queries = {d.get("query", "") for d in recent_dreams}
+    recent_interpreted_queries = {
+        d.get("query", "") for d in recent_dreams if d.get("status") == "interpreted"
+    }
     queries = [q for q in queries if q["query"] not in recent_queries]
 
     if not queries:
@@ -295,6 +386,7 @@ def dream_once(manual_topic: str | None = None) -> int:
         print(f"  {i}. [{q['domain']}] {q['query']} (relevance: {q['relevance_score']})")
 
     dreams_found = []
+    context_snippet = get_recent_cmd_summary() if HAIKU_API_KEY else ""
     for q in queries:
         print(f"  夢見中: {q['query']}...")
         internal = search_kousatsu(q["query"])
@@ -313,6 +405,14 @@ def dream_once(manual_topic: str | None = None) -> int:
             "external_result": external[:500] if external else None,
             "status": "raw",
         }
+
+        # Haiku解釈（6時間以内に解釈済みのクエリはスキップ）
+        if q["query"] not in recent_interpreted_queries:
+            interpretation = interpret_dream(dream_entry, context_snippet)
+            if interpretation:
+                dream_entry["interpretation"] = interpretation
+                dream_entry["status"] = "interpreted"
+                dream_entry["interpreted_at"] = datetime.now().isoformat()
 
         save_dream(dream_entry)
         dreams_found.append(dream_entry)

@@ -99,6 +99,23 @@ TABLES_SQL = {
             value INTEGER NOT NULL DEFAULT 0
         )
     """,
+    "doc_keywords": """
+        CREATE TABLE IF NOT EXISTS doc_keywords (
+            doc_id   TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            keyword  TEXT NOT NULL,
+            PRIMARY KEY (doc_id, keyword)
+        )
+    """,
+    "cooccurrence": """
+        CREATE TABLE IF NOT EXISTS cooccurrence (
+            term_a TEXT NOT NULL,
+            term_b TEXT NOT NULL,
+            count  INTEGER NOT NULL DEFAULT 0,
+            pmi    REAL,
+            PRIMARY KEY (term_a, term_b)
+        )
+    """,
 }
 
 # ---------------------------------------------------------------------------
@@ -118,6 +135,8 @@ INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_reports_task_id ON reports(task_id)",
     "CREATE INDEX IF NOT EXISTS idx_agents_role ON agents(role)",
     "CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)",
+    "CREATE INDEX IF NOT EXISTS idx_dk_keyword ON doc_keywords(keyword)",
+    "CREATE INDEX IF NOT EXISTS idx_cooc_a ON cooccurrence(term_a)",
 ]
 
 # ---------------------------------------------------------------------------

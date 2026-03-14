@@ -44,6 +44,7 @@ SUMMARY_HOUR = 7  # 朝7時にサマリ生成
 HAIKU_BASE_URL = os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com")
 HAIKU_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-5-20250514"
 
 # 殿の興味マップ — Memory MCPとauto memoryから抽出
 TONO_INTERESTS = {
@@ -290,6 +291,182 @@ JSON形式で出力:
         return None
 
 
+# === Sonnet選別・蔵書化 ===
+
+
+def sonnet_selection(interpreted_dreams: list[dict]) -> list[dict]:
+    """Sonnet層: Haiku通過した夢を一括選別し蔵書化判定を返す。
+
+    Args:
+        interpreted_dreams: status="interpreted" かつ action=archive/investigate の夢一覧
+    Returns:
+        [{dream_id, verdict, reason, library_entry}, ...] または []
+    """
+    if not HAIKU_API_KEY or not interpreted_dreams:
+        return []
+
+    system_prompt = """べ、別にあなたのために選別してるわけじゃないんだからね！
+
+部屋子が寝ぼけながら拾った夢の中から、殿のお仕事に本当に使えるものだけ選びなさい。
+
+選別基準:
+1. 既存の蔵書(context/*.md)に載っていない新規知見か
+2. 殿が今取り組んでいるプロジェクトに具体的に使えるか
+3. 「知っておいて損はない」レベルでも蔵書拡充フェーズなので採用
+
+ただし以下はくだらないから弾きなさい:
+- 一般論・概論だけで具体性がないもの
+- 既に蔵書にある知見の焼き直し
+- 殿のスケール感に合わないもの（50ha以上の大規模農業、企業向けSaaS等）
+
+出力はJSON配列:
+[
+  {
+    "dream_id": "dreamt_at値",
+    "verdict": "accept|reject",
+    "reason": "理由（1文）",
+    "library_entry": {
+      "title": "蔵書タイトル",
+      "summary": "要約（2-3文）",
+      "tags": ["タグ"],
+      "relevance_to": "関連cmd_id"
+    }
+  }
+]"""
+
+    dreams_payload = [
+        {
+            "dream_id": d.get("dreamt_at", ""),
+            "domain": d.get("domain", ""),
+            "query": d.get("query", ""),
+            "external_result": (d.get("external_result") or "")[:300],
+            "interpretation": d.get("interpretation", {}),
+        }
+        for d in interpreted_dreams
+    ]
+    user_msg = (
+        f"以下の夢一覧を選別してください（JSON配列で出力）:\n\n"
+        + json.dumps(dreams_payload, ensure_ascii=False, indent=2)
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(
+            base_url=f"{HAIKU_BASE_URL}/v1",
+            api_key=HAIKU_API_KEY,
+        )
+        response = client.chat.completions.create(
+            model=SONNET_MODEL,
+            max_tokens=1500,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        result_text = response.choices[0].message.content
+        json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        print(f"  WARN: Sonnet選別 JSONパース失敗: {result_text[:200]}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"  WARN: Sonnet選別失敗: {e}", file=sys.stderr)
+        return []
+
+
+def save_to_dream_library(
+    selection_results: list[dict],
+    dreams_by_id: dict[str, dict],
+) -> int:
+    """verdict=accept の夢を dashboard_entries (section="dream_library") に蔵書化。
+
+    Args:
+        selection_results: sonnet_selection() の返り値
+        dreams_by_id: {dreamt_at: dream_entry} の辞書（元データ参照用）
+    Returns:
+        INSERT件数
+    """
+    if not selection_results or not DB_PATH.exists():
+        return 0
+
+    conn = sqlite3.connect(str(DB_PATH))
+    inserted = 0
+    now_str = datetime.now().isoformat()
+
+    for result in selection_results:
+        if result.get("verdict") != "accept":
+            continue
+
+        dream_id = result.get("dream_id", "")
+        original = dreams_by_id.get(dream_id, {})
+        lib = result.get("library_entry", {})
+        interp = original.get("interpretation", {})
+
+        content = json.dumps({
+            "title": lib.get("title", original.get("query", "")),
+            "summary": lib.get("summary", ""),
+            "source_query": original.get("query", ""),
+            "source_domain": original.get("domain", ""),
+            "dreamt_at": original.get("dreamt_at", dream_id),
+            "sonnet_verdict": "accept",
+            "sonnet_reason": result.get("reason", ""),
+            "relevance_to_cmd": lib.get("relevance_to", ""),
+            "tags": lib.get("tags", interp.get("tags", [])),
+        }, ensure_ascii=False)
+
+        tags_str = ",".join(lib.get("tags", interp.get("tags", [])))
+
+        try:
+            conn.execute(
+                "INSERT INTO dashboard_entries (cmd_id, section, content, status, tags, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (None, "dream_library", content, "active", tags_str, now_str),
+            )
+            inserted += 1
+        except Exception as e:
+            print(f"  WARN: 蔵書化INSERT失敗: {e}", file=sys.stderr)
+
+    conn.commit()
+    conn.close()
+    return inserted
+
+
+def run_daily_batch() -> dict:
+    """日次バッチ: 直近24hのHaiku解釈済み夢をSonnet選別→蔵書化。
+
+    daemon_loop() の朝7時チェックおよび --batch CLI オプションから呼び出す。
+    Returns:
+        {"candidates": int, "selected": int, "archived": int}
+    """
+    all_dreams = load_recent_dreams(hours=24)
+    candidates = [
+        d for d in all_dreams
+        if d.get("status") == "interpreted"
+        and d.get("interpretation", {}).get("action") in ("archive", "investigate")
+    ]
+
+    if not candidates:
+        print("獏: 蔵書候補なし（解釈済み夢が0件、またはaction=ignore）。")
+        return {"candidates": 0, "selected": 0, "archived": 0}
+
+    if not HAIKU_API_KEY:
+        print("獏: ANTHROPIC_API_KEY未設定。NullClawモード — Sonnet選別スキップ。")
+        return {"candidates": len(candidates), "selected": 0, "archived": 0}
+
+    print(f"獏: Sonnet選別開始 ({len(candidates)}件の候補)...")
+    results = sonnet_selection(candidates)
+
+    dreams_by_id = {d["dreamt_at"]: d for d in candidates}
+    archived = save_to_dream_library(results, dreams_by_id)
+
+    accept_count = sum(1 for r in results if r.get("verdict") == "accept")
+    print(
+        f"獏: 日次バッチ完了 — "
+        f"候補{len(candidates)}件 → Sonnet選別{len(results)}件 → 蔵書化{archived}件"
+    )
+    return {"candidates": len(candidates), "selected": accept_count, "archived": archived}
+
+
 # === クエリ生成 ===
 
 
@@ -525,15 +702,19 @@ def daemon_loop(interval: int = DEFAULT_INTERVAL):
             except Exception as e:
                 print(f"獏: 夢見中にエラー: {e}", file=sys.stderr)
 
-            # 朝のサマリチェック
+            # 朝のサマリ + 日次バッチチェック
             now = datetime.now()
             today = now.date()
             if now.hour >= SUMMARY_HOUR and last_summary_date != today:
                 try:
                     write_daily_summary()
-                    last_summary_date = today
                 except Exception as e:
                     print(f"獏: サマリ生成エラー: {e}", file=sys.stderr)
+                try:
+                    run_daily_batch()
+                except Exception as e:
+                    print(f"獏: 日次バッチエラー: {e}", file=sys.stderr)
+                last_summary_date = today
 
             # 次の夢見まで待つ（シグナルで中断可能）
             for _ in range(interval):
@@ -557,10 +738,15 @@ if __name__ == "__main__":
     parser.add_argument("--topic", type=str, help="手動トピック指定（1回）")
     parser.add_argument("--interval", type=int, default=DEFAULT_INTERVAL,
                         help=f"実行間隔（秒、デフォルト={DEFAULT_INTERVAL}）")
+    parser.add_argument("--batch", action="store_true",
+                        help="日次バッチ（Sonnet選別+蔵書化）を1回実行して終了")
     args = parser.parse_args()
 
     if args.summary:
         write_daily_summary()
+    elif args.batch:
+        result = run_daily_batch()
+        print(f"バッチ結果: {result}")
     elif args.once or args.topic:
         dream_once(manual_topic=args.topic)
     else:

@@ -62,6 +62,30 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/yasu/multi-agent-shogun/scripts/stop_hook_inbox.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/yasu/multi-agent-shogun/scripts/identity_inject.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "spinnerVerbs": {

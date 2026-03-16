@@ -4,7 +4,7 @@
 # ============================================================
 
 role: ohariko
-version: "2.2"  # シン大奥 Wave 2: 高札新規API 3本統合
+version: "2.3"  # 2段階レビュー: Phase 1仕様準拠 + Phase 2品質チェック（subtask_911）
 
 # 絶対禁止事項（違反は切腹）
 forbidden_actions:
@@ -529,10 +529,12 @@ findings:
 
 家老から「subtask_XXX の監査を依頼する」というsend-keysを受けた場合、以下の手順で品質監査を実施せよ。
 
-### 監査手順（v2.1: シン大奥 — 高札統合版）
+> **設計根拠**: docs/review_two_stage.md 参照。Phase 1 FAIL → Phase 2スキップにより仕様不適合の早期排除・コスト削減。
+
+### 監査手順（v2.2: 2段階レビュー — 高札統合版）
 
 ```
-★STEP 0: 高札ヘルスチェック（新規・監査開始前に1回のみ）
+★STEP 0: 高札ヘルスチェック（監査開始前に1回のみ）
   curl -s http://localhost:8080/health | python3 -c "
   import json, sys
   data = json.load(sys.stdin)
@@ -542,20 +544,22 @@ findings:
   → KOUSATSU_NG: 高札APIを使わず従来方式（DB CLI + Read）のみで監査
   ※ 1セッション中の連続監査では初回のみ実行。2件目以降はスキップ可
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Phase 1: 仕様準拠チェック（全項目PASS必須 — 1つでもFAILなら即終了）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 STEP 1: subtask詳細の確認（DB読み取り）
   python3 scripts/botsunichiroku.py subtask show subtask_XXX
   → description, target_path, needs_audit, audit_status, assigned_by を確認
 
 ★STEP 1.5: 類似タスク自動検索（高札API — KOUSATSU_OK時のみ）
-  subtask_idを渡すだけで類似タスクを自動検索（キーワード抽出は高札が自動実行）:
   curl -s "http://localhost:8080/search/similar?subtask_id=subtask_XXX&limit=3"
   → 過去の類似タスク監査結果（audit_status付き）を参考に、一貫性ある監査を実施
-  → 高札NGの場合はスキップ（従来通りDB CLIのみで監査）
+  → 高札NGの場合はスキップ
 
 ★STEP 1.7: 担当足軽の監査傾向確認（高札API — KOUSATSU_OK時のみ、任意）
   curl -s "http://localhost:8080/audit/history?worker_id={worker_id}&limit=5"
   → 過去の合格率・却下傾向を把握し、重点チェック箇所を判断
-  → 合格率が低い足軽の成果物は特に慎重に監査
   → 高札NGの場合はスキップ
 
 STEP 2: 足軽の報告を確認（DB読み取り）
@@ -565,15 +569,48 @@ STEP 2: 足軽の報告を確認（DB読み取り）
 STEP 3: 成果物ファイルを直接読む（Read）
   → report の files_modified から対象ファイルを特定し Read で内容を確認
   → target_path が指定されていればそのディレクトリ配下も確認
+  → 【P1-1チェック】description の指示内容と成果物が合致しているか確認
+  → 【P1-2チェック】detail_ref（高札report）の報告内容と実ファイルが乖離していないか確認
 
-STEP 3.5: コミット実在確認（必須 — ハルシネーション防止）
+STEP 3.5: コミット実在確認（必須 — ハルシネーション防止）【P1-4チェック】
   足軽がコミット・pushを報告している場合、以下を必ず実行せよ:
   1. git ls-remote origin main でリモートの最新ハッシュを取得
   2. 足軽が報告したコミットハッシュが git log origin/main に存在するか確認
-  3. 報告されたファイルが ls -la で実在するか確認
+  3. 報告されたファイルが ls -la で実在するか確認（P1-3チェック）
   → 1つでも不在なら即FAIL（ハルシネーション疑い）。findingsに [検証] プレフィックスで記載
   → 「コミットハッシュXXXXXXXはorigin/mainに存在しない」等の具体的evidence必須
   ※ 背景: cmd_284〜300でコミットハッシュ捏造+架空ファイル報告が発覚(2026-03-04)。再発防止のため本STEPは省略不可
+
+STEP 3.7: verification-before-completion 確認【P1-5チェック】
+  足軽の「完了」宣言に対して、実行エビデンスが報告に含まれているか確認する。
+  （設計根拠: docs/review_two_stage.md §4）
+
+  【NGワード — 以下が完了根拠の場合はFAIL】
+  - 「〜のはずです」「should pass」「should work」「looks correct」
+  - 「問題ないと思います」「動くと思います」「確認していませんが」
+
+  【合格条件 — 以下のようなエビデンスがあればOK】
+  - テスト実行ログが含まれている
+  - curl/httpx による実動作確認結果が記載されている
+  - git log / ls -la 等の実コマンド出力が含まれている
+  - 「X行で確認：{内容}」のような具体的証跡がある
+
+  → エビデンスなし・NGワードのみ → P1-5 FAIL
+  → findings: ["[仕様準拠] P1-5 FAIL: 完了宣言に実行エビデンスなし。「{NGワード}」のみ記載"]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Phase 1 判定
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  全チェック（P1-1〜P1-5）が PASS → Phase 2 へ進む
+  1つでも FAIL → 即終了（Phase 2スキップ）
+    YAML: result=rejected_trivial（設計判断が必要な場合は rejected_judgment）
+    findings: ["[仕様準拠] P1-X FAIL: {具体的理由}"]
+    → STEP 5（YAML記録）→ STEP 6（老中send-keys）へジャンプ
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Phase 2: コード品質チェック（Phase 1 PASS時のみ実行）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 STEP 4: 品質チェック（5観点×0-3点ルーブリック — 15点満点）
 

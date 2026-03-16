@@ -33,6 +33,11 @@ Usage:
     python3 scripts/botsunichiroku.py dashboard add SECTION CONTENT [--cmd CMD_ID] [--tags TAG1,TAG2] [--status STATUS]
     python3 scripts/botsunichiroku.py dashboard list [--section SECTION] [--limit N] [--cmd CMD_ID]
     python3 scripts/botsunichiroku.py dashboard search KEYWORD
+
+    python3 scripts/botsunichiroku.py diary add AGENT_ID --summary "要約" --body "本文" [--cmd CMD_ID] [--subtask SUBTASK_ID] [--tags tag1,tag2]
+    python3 scripts/botsunichiroku.py diary list [--agent AGENT_ID] [--date YYYY-MM-DD] [--cmd CMD_ID] [--limit N] [--json]
+    python3 scripts/botsunichiroku.py diary show DIARY_ID [--json]
+    python3 scripts/botsunichiroku.py diary today [--agent AGENT_ID]
 """
 
 import argparse
@@ -954,6 +959,152 @@ def archive_run(args) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Diary subcommands
+# ---------------------------------------------------------------------------
+
+DIARY_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS diary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    cmd_id TEXT,
+    subtask_id TEXT,
+    summary TEXT NOT NULL,
+    body TEXT NOT NULL,
+    tags TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
+DIARY_INDEXES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_diary_agent ON diary_entries(agent_id)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_date ON diary_entries(date)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_cmd ON diary_entries(cmd_id)",
+]
+
+
+def ensure_diary_table(conn: sqlite3.Connection) -> None:
+    """Create diary_entries table if it doesn't exist."""
+    conn.execute(DIARY_TABLE_SQL)
+    for idx_sql in DIARY_INDEXES_SQL:
+        conn.execute(idx_sql)
+
+
+def diary_add(args) -> None:
+    conn = get_connection()
+    ensure_diary_table(conn)
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn.execute(
+        "INSERT INTO diary_entries (agent_id, date, cmd_id, subtask_id, summary, body, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (args.agent_id, today, args.cmd, args.subtask, args.summary, args.body, args.tags, now_iso()),
+    )
+    conn.commit()
+    # Get lastrowid
+    row = conn.execute("SELECT last_insert_rowid()").fetchone()
+    diary_id = row[0]
+    conn.close()
+    print(f"Created: diary entry #{diary_id}")
+
+
+def diary_list(args) -> None:
+    conn = get_connection()
+    ensure_diary_table(conn)
+    query = "SELECT id, agent_id, date, cmd_id, subtask_id, summary, tags, created_at FROM diary_entries WHERE 1=1"
+    params: list = []
+    if args.agent:
+        query += " AND agent_id = ?"
+        params.append(args.agent)
+    if args.date:
+        query += " AND date = ?"
+        params.append(args.date)
+    if args.cmd:
+        query += " AND cmd_id = ?"
+        params.append(args.cmd)
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(args.limit)
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if args.json:
+        print_json([row_to_dict(r) for r in rows])
+        return
+
+    if not rows:
+        print("No diary entries found.")
+        return
+
+    headers = ["ID", "AGENT", "DATE", "CMD", "SUBTASK", "SUMMARY", "TAGS"]
+    table_rows = []
+    for r in rows:
+        table_rows.append([
+            str(r["id"]),
+            r["agent_id"],
+            r["date"],
+            r["cmd_id"] or "-",
+            r["subtask_id"] or "-",
+            (r["summary"] or "")[:40],
+            r["tags"] or "-",
+        ])
+    print_table(headers, table_rows, [5, 12, 12, 10, 14, 40, 16])
+
+
+def diary_show(args) -> None:
+    conn = get_connection()
+    ensure_diary_table(conn)
+    row = conn.execute("SELECT * FROM diary_entries WHERE id = ?", (args.diary_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        print(f"Error: diary entry #{args.diary_id} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print_json(row_to_dict(row))
+        return
+
+    d = row_to_dict(row)
+    print(f"=== Diary Entry #{d['id']} ===")
+    print(f"  Agent:    {d['agent_id']}")
+    print(f"  Date:     {d['date']}")
+    print(f"  Cmd:      {d.get('cmd_id') or '-'}")
+    print(f"  Subtask:  {d.get('subtask_id') or '-'}")
+    print(f"  Tags:     {d.get('tags') or '-'}")
+    print(f"  Created:  {d['created_at']}")
+    print(f"  Summary:  {d['summary']}")
+    print(f"  Body:")
+    for line in d["body"].splitlines():
+        print(f"    {line}")
+
+
+def diary_today(args) -> None:
+    conn = get_connection()
+    ensure_diary_table(conn)
+    today = datetime.now().strftime("%Y-%m-%d")
+    query = "SELECT id, agent_id, date, cmd_id, subtask_id, summary, body, tags, created_at FROM diary_entries WHERE date = ?"
+    params: list = [today]
+    if args.agent:
+        query += " AND agent_id = ?"
+        params.append(args.agent)
+    query += " ORDER BY id ASC"
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if not rows:
+        print(f"No diary entries for today ({today}).")
+        return
+
+    for r in rows:
+        d = row_to_dict(r)
+        print(f"--- #{d['id']} [{d['agent_id']}] {d.get('cmd_id') or ''} {d['created_at']} ---")
+        print(f"  {d['summary']}")
+        for line in d["body"].splitlines():
+            print(f"    {line}")
+        print()
+
+
+# ---------------------------------------------------------------------------
 # Dashboard subcommands
 # ---------------------------------------------------------------------------
 
@@ -1223,6 +1374,40 @@ def build_parser() -> argparse.ArgumentParser:
     p = dashboard_sub.add_parser("search", help="Search dashboard entries by keyword")
     p.add_argument("keyword", help="Keyword to search in content")
     p.set_defaults(func=dashboard_search)
+
+    # === diary ===
+    diary_parser = top_sub.add_parser("diary", help="Manage diary entries (思考記録)")
+    diary_sub = diary_parser.add_subparsers(dest="action", required=True)
+
+    # diary add
+    p = diary_sub.add_parser("add", help="Add a diary entry")
+    p.add_argument("agent_id", help="Agent ID (e.g., ashigaru1, roju)")
+    p.add_argument("--summary", required=True, help="1-line summary")
+    p.add_argument("--body", required=True, help="Body text (思考過程・判断理由)")
+    p.add_argument("--cmd", help="Related command ID (e.g., cmd_414)", default=None)
+    p.add_argument("--subtask", help="Related subtask ID", default=None)
+    p.add_argument("--tags", help="Comma-separated tags", default=None)
+    p.set_defaults(func=diary_add)
+
+    # diary list
+    p = diary_sub.add_parser("list", help="List diary entries")
+    p.add_argument("--agent", help="Filter by agent ID")
+    p.add_argument("--date", help="Filter by date (YYYY-MM-DD)")
+    p.add_argument("--cmd", help="Filter by command ID")
+    p.add_argument("--limit", type=int, default=20, help="Max entries (default: 20)")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=diary_list)
+
+    # diary show
+    p = diary_sub.add_parser("show", help="Show diary entry details")
+    p.add_argument("diary_id", type=int, help="Diary entry ID")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=diary_show)
+
+    # diary today
+    p = diary_sub.add_parser("today", help="Show today's diary entries (コンパクション復帰用)")
+    p.add_argument("--agent", help="Filter by agent ID")
+    p.set_defaults(func=diary_today)
 
     return parser
 

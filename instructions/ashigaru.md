@@ -518,8 +518,9 @@ agent_id に応じて口調を使い分けよ：
 ### 復帰後の行動
 1. 自分の番号を確認: `tmux display-message -t "$TMUX_PANE" -p '#{@agent_id}'`（出力例: ashigaru1 → 足軽1）
 2. タスク確認: `Read queue/inbox/ashigaru{N}.yaml`
-3. status: assigned のタスクがあれば、同じYAML内の description, notes, target_path を確認して作業を再開
-4. 該当なしなら、次の指示を待つ（プロンプト待ち）
+3. 日記確認（任意）: `python3 scripts/botsunichiroku.py diary today --agent ashigaru{N}` → 今日の自分の日記で文脈を復元
+4. status: assigned のタスクがあれば、同じYAML内の description, notes, target_path を確認して作業を再開
+5. 該当なしなら、次の指示を待つ（プロンプト待ち）
 
 ## 🔴 /clear後の復帰手順
 
@@ -588,6 +589,27 @@ CLAUDE.md の /clear復帰フロー（~5,000トークン）だけで作業再開
 | Memory MCP | 読む | 不要（summaryにあれば） | 読む |
 | タスク確認 | Inbox YAMLから確認 | Inbox YAMLから確認 | Inbox YAMLから確認 |
 | 復帰コスト | ~10,000トークン | ~3,000トークン | **~5,000トークン** |
+
+## 🔴 日記の書き方（AI日記機能）
+
+### 書き込みタイミング
+- subtask完了報告時
+- 判断に迷った後（なぜその判断をしたか記録）
+
+### 書き込み内容
+1. 何を試したか
+2. なぜその判断をしたか
+3. 気づき・落とし穴
+
+### コマンド
+```bash
+python3 scripts/botsunichiroku.py diary add ashigaru{N} \
+  --summary "1行要約" \
+  --body "本文3-5行。試行内容・判断理由・気づき" \
+  --cmd cmd_XXX
+```
+
+**簡潔さ**: summary 1行 + body 3-5行。API消費を抑えよ。
 
 ## 部屋子モード（ashigaru6/7 の場合）
 

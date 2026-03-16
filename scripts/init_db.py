@@ -116,6 +116,19 @@ TABLES_SQL = {
             PRIMARY KEY (term_a, term_b)
         )
     """,
+    "diary_entries": """
+        CREATE TABLE IF NOT EXISTS diary_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            cmd_id TEXT,
+            subtask_id TEXT,
+            summary TEXT NOT NULL,
+            body TEXT NOT NULL,
+            tags TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """,
 }
 
 # ---------------------------------------------------------------------------
@@ -137,6 +150,9 @@ INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)",
     "CREATE INDEX IF NOT EXISTS idx_dk_keyword ON doc_keywords(keyword)",
     "CREATE INDEX IF NOT EXISTS idx_cooc_a ON cooccurrence(term_a)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_agent ON diary_entries(agent_id)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_date ON diary_entries(date)",
+    "CREATE INDEX IF NOT EXISTS idx_diary_cmd ON diary_entries(cmd_id)",
 ]
 
 # ---------------------------------------------------------------------------

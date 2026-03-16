@@ -70,6 +70,7 @@ docs/letter_to_dario.md
 **/hf-token.sh
 **/*token*.sh
 **/*secret*.sh
+config/notify_auth.env
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Generated / Build artifacts

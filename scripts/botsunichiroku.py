@@ -38,15 +38,35 @@ Usage:
     python3 scripts/botsunichiroku.py diary list [--agent AGENT_ID] [--date YYYY-MM-DD] [--cmd CMD_ID] [--limit N] [--json]
     python3 scripts/botsunichiroku.py diary show DIARY_ID [--json]
     python3 scripts/botsunichiroku.py diary today [--agent AGENT_ID]
+
+    python3 scripts/botsunichiroku.py kenchi add ID NAME --category CATEGORY --description DESC --path PATH [--depends-on DEPS] [--called-by CALLERS] [--notes NOTES]
+    python3 scripts/botsunichiroku.py kenchi list [--category CATEGORY] [--json]
+    python3 scripts/botsunichiroku.py kenchi show ID [--json]
+    python3 scripts/botsunichiroku.py kenchi update ID [--name NAME] [--description DESC] [--depends-on DEPS] [--called-by CALLERS] [--notes NOTES]
+    python3 scripts/botsunichiroku.py kenchi search KEYWORD [--json]
+    python3 scripts/botsunichiroku.py kenchi delete ID
 """
 
 import argparse
 import json
+import os
 import sqlite3
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+def _try_notify(message: str, title: str = "", tags: str = "") -> None:
+    """通知を試みる。失敗しても握りつぶす。"""
+    try:
+        subprocess.Popen(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "notify.py"),
+             message, "--title", title, "--tags", tags],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -213,6 +233,8 @@ def cmd_add(args) -> None:
         )
     except Exception:
         pass  # 高札APIダウンでもcmd add自体は正常完了
+
+    _try_notify(f"📌 {cmd_id} 登録: {args.description[:60]}", title="New Command", tags="cmd_add")
 
 
 def cmd_update(args) -> None:
@@ -619,6 +641,8 @@ def report_add(args) -> None:
     report_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
     print(f"Created: report #{report_id} (task={args.task_id}, worker={args.worker_id})")
+    _try_notify(f"📋 report #{report_id} ({args.status}) — {args.summary[:50]}",
+                title=f"subtask {args.task_id}", tags=args.status)
 
 
 def report_list(args) -> None:
@@ -1105,6 +1129,214 @@ def diary_today(args) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Kenchi (検地帳) subcommands — 藩のリソース台帳
+# ---------------------------------------------------------------------------
+
+KENCHI_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS kenchi (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    description TEXT NOT NULL,
+    path        TEXT NOT NULL,
+    depends_on  TEXT,
+    called_by   TEXT,
+    added_at    TEXT NOT NULL,
+    updated_at  TEXT,
+    notes       TEXT
+)
+"""
+
+KENCHI_INDEXES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_kenchi_category ON kenchi(category)",
+    "CREATE INDEX IF NOT EXISTS idx_kenchi_name ON kenchi(name)",
+]
+
+
+def ensure_kenchi_table(conn: sqlite3.Connection) -> None:
+    """Create kenchi table if it doesn't exist."""
+    conn.execute(KENCHI_TABLE_SQL)
+    for idx_sql in KENCHI_INDEXES_SQL:
+        conn.execute(idx_sql)
+
+
+def kenchi_add(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+
+    # Check for duplicates
+    existing = conn.execute("SELECT id FROM kenchi WHERE id = ?", (args.id,)).fetchone()
+    if existing:
+        conn.close()
+        print(f"Error: kenchi '{args.id}' already exists. Use 'kenchi update' to modify.", file=sys.stderr)
+        sys.exit(1)
+
+    ts = now_iso()
+    conn.execute(
+        "INSERT INTO kenchi (id, name, category, description, path, depends_on, called_by, added_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (args.id, args.name, args.category, args.description, args.path, args.depends_on, args.called_by, ts, args.notes),
+    )
+    conn.commit()
+    conn.close()
+    print(f"Created: kenchi '{args.id}' ({args.category})")
+
+
+def kenchi_list(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+    query = "SELECT id, name, category, description, path, depends_on, called_by, added_at, updated_at FROM kenchi WHERE 1=1"
+    params: list = []
+
+    if args.category:
+        query += " AND category = ?"
+        params.append(args.category)
+
+    query += " ORDER BY category, id"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if args.json:
+        print_json([row_to_dict(r) for r in rows])
+        return
+
+    if not rows:
+        print("No kenchi entries found.")
+        return
+
+    headers = ["ID", "NAME", "CATEGORY", "DESCRIPTION", "PATH"]
+    table_rows = []
+    for r in rows:
+        table_rows.append([
+            r["id"],
+            r["name"],
+            r["category"],
+            (r["description"] or "")[:40],
+            r["path"],
+        ])
+    print_table(headers, table_rows, [28, 20, 10, 40, 30])
+
+
+def kenchi_show(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+    row = conn.execute("SELECT * FROM kenchi WHERE id = ?", (args.id,)).fetchone()
+    conn.close()
+
+    if not row:
+        print(f"Error: kenchi '{args.id}' not found.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print_json(row_to_dict(row))
+        return
+
+    d = row_to_dict(row)
+    print(f"=== 検地帳: {d['id']} ===")
+    print(f"  Name:        {d['name']}")
+    print(f"  Category:    {d['category']}")
+    print(f"  Description: {d['description']}")
+    print(f"  Path:        {d['path']}")
+    print(f"  Depends on:  {d.get('depends_on') or '-'}")
+    print(f"  Called by:    {d.get('called_by') or '-'}")
+    print(f"  Added:       {d['added_at']}")
+    print(f"  Updated:     {d.get('updated_at') or '-'}")
+    print(f"  Notes:       {d.get('notes') or '-'}")
+
+
+def kenchi_update(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+
+    existing = conn.execute("SELECT id FROM kenchi WHERE id = ?", (args.id,)).fetchone()
+    if not existing:
+        conn.close()
+        print(f"Error: kenchi '{args.id}' not found.", file=sys.stderr)
+        sys.exit(1)
+
+    updates = []
+    params: list = []
+
+    if args.name:
+        updates.append("name = ?")
+        params.append(args.name)
+    if args.category:
+        updates.append("category = ?")
+        params.append(args.category)
+    if args.description:
+        updates.append("description = ?")
+        params.append(args.description)
+    if args.path:
+        updates.append("path = ?")
+        params.append(args.path)
+    if args.depends_on is not None:
+        updates.append("depends_on = ?")
+        params.append(args.depends_on)
+    if args.called_by is not None:
+        updates.append("called_by = ?")
+        params.append(args.called_by)
+    if args.notes is not None:
+        updates.append("notes = ?")
+        params.append(args.notes)
+
+    if not updates:
+        conn.close()
+        print("Nothing to update.")
+        return
+
+    updates.append("updated_at = ?")
+    params.append(now_iso())
+    params.append(args.id)
+
+    conn.execute(f"UPDATE kenchi SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    print(f"Updated: kenchi '{args.id}'")
+
+
+def kenchi_search(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+    keyword = f"%{args.keyword}%"
+    rows = conn.execute(
+        "SELECT id, name, category, description, path, depends_on, called_by, added_at FROM kenchi WHERE id LIKE ? OR name LIKE ? OR description LIKE ? OR notes LIKE ? ORDER BY category, id",
+        (keyword, keyword, keyword, keyword),
+    ).fetchall()
+    conn.close()
+
+    if args.json:
+        print_json([row_to_dict(r) for r in rows])
+        return
+
+    if not rows:
+        print(f"No kenchi entries found for: {args.keyword}")
+        return
+
+    headers = ["ID", "NAME", "CATEGORY", "DESCRIPTION", "PATH"]
+    table_rows = []
+    for r in rows:
+        table_rows.append([
+            r["id"],
+            r["name"],
+            r["category"],
+            (r["description"] or "")[:40],
+            r["path"],
+        ])
+    print_table(headers, table_rows, [28, 20, 10, 40, 30])
+
+
+def kenchi_delete(args) -> None:
+    conn = get_connection()
+    ensure_kenchi_table(conn)
+    cursor = conn.execute("DELETE FROM kenchi WHERE id = ?", (args.id,))
+    conn.commit()
+    conn.close()
+    if cursor.rowcount == 0:
+        print(f"Error: kenchi '{args.id}' not found.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Deleted: kenchi '{args.id}'")
+
+
+# ---------------------------------------------------------------------------
 # Dashboard subcommands
 # ---------------------------------------------------------------------------
 
@@ -1408,6 +1640,57 @@ def build_parser() -> argparse.ArgumentParser:
     p = diary_sub.add_parser("today", help="Show today's diary entries (コンパクション復帰用)")
     p.add_argument("--agent", help="Filter by agent ID")
     p.set_defaults(func=diary_today)
+
+    # === kenchi (検地帳) ===
+    kenchi_parser = top_sub.add_parser("kenchi", help="検地帳 — リソース台帳管理")
+    kenchi_sub = kenchi_parser.add_subparsers(dest="action", required=True)
+
+    # kenchi add
+    p = kenchi_sub.add_parser("add", help="Register a resource")
+    p.add_argument("id", help="Resource ID (e.g. scripts/notify.py)")
+    p.add_argument("name", help="Human-readable name")
+    p.add_argument("--category", required=True, choices=["script", "config", "api", "lib", "db", "doc", "infra"], help="Resource category")
+    p.add_argument("--description", required=True, help="What it does")
+    p.add_argument("--path", required=True, help="File path")
+    p.add_argument("--depends-on", help="Dependencies (JSON array or comma-separated)")
+    p.add_argument("--called-by", help="Callers (JSON array or comma-separated)")
+    p.add_argument("--notes", help="Additional notes")
+    p.set_defaults(func=kenchi_add)
+
+    # kenchi list
+    p = kenchi_sub.add_parser("list", help="List resources")
+    p.add_argument("--category", help="Filter by category")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=kenchi_list)
+
+    # kenchi show
+    p = kenchi_sub.add_parser("show", help="Show resource details")
+    p.add_argument("id", help="Resource ID")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=kenchi_show)
+
+    # kenchi update
+    p = kenchi_sub.add_parser("update", help="Update a resource")
+    p.add_argument("id", help="Resource ID")
+    p.add_argument("--name", help="New name")
+    p.add_argument("--category", help="New category")
+    p.add_argument("--description", help="New description")
+    p.add_argument("--path", help="New path")
+    p.add_argument("--depends-on", help="New dependencies")
+    p.add_argument("--called-by", help="New callers")
+    p.add_argument("--notes", help="New notes")
+    p.set_defaults(func=kenchi_update)
+
+    # kenchi search
+    p = kenchi_sub.add_parser("search", help="Search resources by keyword")
+    p.add_argument("keyword", help="Search keyword")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=kenchi_search)
+
+    # kenchi delete
+    p = kenchi_sub.add_parser("delete", help="Delete a resource")
+    p.add_argument("id", help="Resource ID")
+    p.set_defaults(func=kenchi_delete)
 
     return parser
 

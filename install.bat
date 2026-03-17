@@ -126,11 +126,14 @@ echo   ^|                                                            ^|
 echo   ^|  First time only / 初回のみ:                               ^|
 echo   ^|    1. Set username and password when prompted              ^|
 echo   ^|       ユーザー名とパスワードを設定                        ^|
-echo   ^|    2. cd /mnt/c/tools/feature-shogun                      ^|
-echo   ^|    3. ./first_setup.sh                                    ^|
+echo   ^|    2. git clone the repo:                                  ^|
+echo   ^|       git clone https://github.com/yasunorioi/             ^|
+echo   ^|         multi-agent-shogun.git ~/multi-agent-shogun        ^|
+echo   ^|    3. cd ~/multi-agent-shogun                              ^|
+echo   ^|    4. chmod +x *.sh ^&^& ./first_setup.sh                  ^|
 echo   ^|                                                            ^|
 echo   ^|  Every time you use / 使うたびに:                          ^|
-echo   ^|    cd /mnt/c/tools/feature-shogun                          ^|
+echo   ^|    cd ~/multi-agent-shogun                                  ^|
 echo   ^|    ./shutsujin_departure.sh                                ^|
 echo   ^|                                                            ^|
 echo   +------------------------------------------------------------+

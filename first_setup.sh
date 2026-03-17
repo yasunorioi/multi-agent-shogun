@@ -612,6 +612,18 @@ for script in "${SCRIPTS[@]}"; do
     fi
 done
 
+# scripts/ 配下の .sh ファイルにも実行権限付与
+SH_COUNT=0
+for sh_file in "$SCRIPT_DIR"/scripts/*.sh; do
+    if [ -f "$sh_file" ]; then
+        chmod +x "$sh_file"
+        SH_COUNT=$((SH_COUNT + 1))
+    fi
+done
+if [ $SH_COUNT -gt 0 ]; then
+    log_info "scripts/*.sh ($SH_COUNT 件) に実行権限を付与しました"
+fi
+
 RESULTS+=("実行権限: OK")
 
 # ============================================================

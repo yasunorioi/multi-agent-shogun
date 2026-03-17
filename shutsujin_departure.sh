@@ -976,10 +976,10 @@ BOTSU_EOF
     sleep 1
     log_info "  └─ 高札（kousatsu）を放流中..."
     p=$((PANE_BASE + 2))
-    tmux send-keys -t "ooku:agents.${p}" "cd tools/kousatsu && docker compose up --build 2>&1"
+    tmux send-keys -t "ooku:agents.${p}" "cd tools/kousatsu && docker compose up --build -d && echo '高札起動完了' && docker compose logs -f"
     sleep 0.3
     tmux send-keys -t "ooku:agents.${p}" Enter
-    log_success "  └─ 高札（通信ハブ+検索API）、放流完了"
+    log_success "  └─ 高札（通信ハブ+検索API）、放流完了（バックグラウンド起動+ログ表示）"
 
     log_success "✅ 全軍に指示書伝達完了 + 高札放流完了"
     echo ""

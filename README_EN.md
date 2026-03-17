@@ -134,6 +134,30 @@ Instructions hold minimal rules + index only. Detailed procedures are fetched on
 |-----------|-------------|
 | `scripts/audit_grading.py` | Ohariko rubric scoring (5 categories x 3 points = 15 max) |
 | `scripts/gatekeeper_f006.sh` | Pre-commit hook — prevents accidental GitHub Issue/PR creation |
+| `context/ohariko-kenchi.md` | Kenchi audit procedures (K-1 to K-5: existence, description accuracy, dependency integrity) |
+
+### Kenchi (Resource Registry)
+
+> *Kenchi* = land survey — a comprehensive registry of all resources (scripts, configs, APIs, etc.) in the domain.
+
+| Component | Description |
+|-----------|-------------|
+| `botsunichiroku.py kenchi` | Kenchi CLI — register, search & manage domain resources |
+
+```bash
+python3 scripts/botsunichiroku.py kenchi add --path scripts/notify.py --category script --description "External notification sender"
+python3 scripts/botsunichiroku.py kenchi list
+python3 scripts/botsunichiroku.py kenchi search "notify"
+```
+
+### External Notifications
+
+| Component | Description |
+|-----------|-------------|
+| `scripts/notify.py` | Multi-backend notifications (ntfy/Discord/Slack/MQTT). No external deps, non-blocking |
+| `config/notify_auth.env.sample` | Auth template |
+
+Enable with `notify.enable: true` in `config/settings.yaml`. Auto-notifies on command registration and report submission.
 
 ### Diary & Matome
 
@@ -277,6 +301,9 @@ This repository is a fork of [yohey-w/multi-agent-shogun](https://github.com/yoh
 | **Communication Protocol v3** | Request ID correlation, Drain-on-Read, Kousatsu API report registration |
 | **Identity Re-injection** | Auto-inject agent identity and tasks on compaction recovery |
 | **Pre-commit Gatekeeper** | Prevents accidental GitHub Issue/PR creation and repo misfires |
+| **External Notifications** | Four backends (ntfy/Discord/Slack/MQTT). No external deps, non-blocking fire-and-forget |
+| **Kenchi (Resource Registry)** | Domain resource registration & search. Ohariko Kenchi Audit (K-1 to K-5) verifies existence & integrity |
+| **Slash Commands** | Custom skills: `/md2pdf` (Japanese PDF), `/audit` (audit), and more |
 
 ---
 

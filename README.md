@@ -125,6 +125,28 @@ instructions は最小限のルール+インデックスのみ保持し、詳細
 |--------------|------|
 | `scripts/audit_grading.py` | お針子ルーブリック採点（5カテゴリ × 3点 = 15点満点） |
 | `scripts/gatekeeper_f006.sh` | pre-commit フック — GitHub Issue/PR 誤投稿防止 |
+| `context/ohariko-kenchi.md` | 検地監査手順書（K-1〜K-5の5観点でリソース実在性・記述精度を検証） |
+
+### 検地帳（リソースレジストリ）
+
+| コンポーネント | 説明 |
+|--------------|------|
+| `botsunichiroku.py kenchi` | 検地帳CLI — 藩内リソース（スクリプト・設定・API等）の登録・検索・管理 |
+
+```bash
+python3 scripts/botsunichiroku.py kenchi add --path scripts/notify.py --category script --description "外部通知送信"
+python3 scripts/botsunichiroku.py kenchi list
+python3 scripts/botsunichiroku.py kenchi search "notify"
+```
+
+### 外部通知
+
+| コンポーネント | 説明 |
+|--------------|------|
+| `scripts/notify.py` | マルチバックエンド通知（ntfy/Discord/Slack/MQTT）。外部依存なし、非ブロッキング |
+| `config/notify_auth.env.sample` | 認証テンプレート |
+
+`config/settings.yaml` の `notify.enable: true` で有効化。没日録の cmd 登録・report 追加時に自動通知。
 
 ### 日記・まとめ
 
@@ -266,6 +288,9 @@ curl -s http://localhost:8080/health        # ヘルスチェック
 | **通信プロトコル v3** | Request ID相関、Drain-on-Read、高札API報告登録 |
 | **Identity Re-injection** | コンパクション復帰時の身元・タスク自動注入 |
 | **pre-commit Gatekeeper** | GitHub Issue/PR 誤投稿・リポ誤爆の自動防止 |
+| **外部通知システム** | ntfy/Discord/Slack/MQTT の4系統対応。外部依存なし・非ブロッキング |
+| **検地帳（リソースレジストリ）** | 藩内リソースの登録・検索。お針子検地監査（K-1〜K-5）で実在性・整合性を検証 |
+| **スラッシュコマンド** | `/md2pdf`（日本語PDF変換）、`/audit`（監査）等のカスタムスキル |
 
 ---
 

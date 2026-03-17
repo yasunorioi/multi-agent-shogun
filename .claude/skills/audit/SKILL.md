@@ -1,9 +1,17 @@
+---
+name: audit
+description: >
+  Use when: (1) お針子がsubtaskの成果物を監査する時、(2) 老中が監査依頼を発行した時、
+  (3) 足軽のコミットを15点ルーブリックで採点する時、(4) /audit コマンドが呼ばれた時。
+  NOT for: コードレビュー以外の一般的なファイル確認。
+---
+
 # audit - Skill Definition
 
 **Skill ID**: `audit`
 **Trigger**: `/audit`
 **Category**: Quality Assurance / Code Review
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Created**: 2026-03-11
 
 ---

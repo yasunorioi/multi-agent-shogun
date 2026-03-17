@@ -62,9 +62,10 @@ status/
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Personal / Internal documents
 # ─────────────────────────────────────────────────────────────────────────────
-# 個人的文書・内部指示
+# 個人的文書・内部指示（docs/philosophy.md のみ本家由来で追跡）
 claude-shogun-orders.md
-docs/letter_to_dario.md
+docs/*
+!docs/philosophy.md
 
 # トークン・認証情報（絶対にpushするな）
 **/hf-token.sh
@@ -97,7 +98,6 @@ hf/
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. External repos / environments inside this tree
 # ─────────────────────────────────────────────────────────────────────────────
-docs/rotation_planner_ui/
-docs/rotation_planner_ui_v2/
+# docs/rotation_planner_ui/ は docs/* でカバー済み
 archive/
 bin/

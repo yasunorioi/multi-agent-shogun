@@ -57,7 +57,7 @@ echo ""
 echo "  このスクリプトは初回セットアップ用です。"
 echo "  依存関係の確認とディレクトリ構造の作成を行います。"
 echo ""
-echo "  体制: 将軍1 + 老中1 + 足軽1 + 部屋子1 + お針子1 + 高札(Docker)"
+echo "  体制: 将軍1 + 老中1 + 足軽2 + 部屋子1 + 軍師1 + お針子1 + 高札(Docker) + 獏"
 echo ""
 echo "  インストール先: $SCRIPT_DIR"
 echo ""
@@ -279,6 +279,30 @@ else
 fi
 
 # ============================================================
+# STEP 4.5: Python 3 チェック
+# ============================================================
+log_step "STEP 4.5: Python 3 チェック"
+
+if command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 --version 2>/dev/null | awk '{print $2}')
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f2)
+    if [ "$PYTHON_MAJOR" -ge 3 ] && [ "$PYTHON_MINOR" -ge 10 ]; then
+        log_success "Python 3 がインストール済みです ($PYTHON_VERSION)"
+        RESULTS+=("Python 3: OK ($PYTHON_VERSION)")
+    else
+        log_warn "Python 3.10以上を推奨します（現在: $PYTHON_VERSION）"
+        RESULTS+=("Python 3: OK ($PYTHON_VERSION - 要アップグレード推奨)")
+    fi
+else
+    log_error "Python 3 がインストールされていません"
+    log_info "没日録CLI・夢見機能・監査機能に Python 3.10+ が必要です"
+    log_info "インストール: sudo apt-get install python3 python3-pip"
+    RESULTS+=("Python 3: 未インストール")
+    HAS_ERROR=true
+fi
+
+# ============================================================
 # STEP 5: Claude Code CLI チェック
 # ============================================================
 log_step "STEP 5: Claude Code CLI チェック"
@@ -388,15 +412,10 @@ if [ ! -f "$SCRIPT_DIR/config/settings.yaml" ]; then
 # その他の言語コード（es, zh, ko, fr, de 等）も対応
 language: ja
 
-# シェル設定
-# bash: bash用プロンプト（デフォルト）
-# zsh: zsh用プロンプト
-shell: bash
-
 # スキル設定
 skill:
-  # スキル保存先（スキル名に shogun- プレフィックスを付けて保存）
-  save_path: "~/.claude/skills/"
+  # スキル保存先（生成されたスキルはここに保存）
+  save_path: "~/.claude/skills/shogun-generated/"
 
   # ローカルスキル保存先（このプロジェクト専用）
   local_path: "$SCRIPT_DIR/skills/"
@@ -405,6 +424,29 @@ skill:
 logging:
   level: info  # debug | info | warn | error
   path: "$SCRIPT_DIR/logs/"
+
+# 通知設定
+notify:
+  enable: false          # true にすると通知有効化
+  backend: ntfy          # ntfy | discord | slack | mqtt
+
+  ntfy:
+    topic: ""            # ntfy.sh トピック名（8文字以上推奨）
+    server: "https://ntfy.sh"  # セルフホスト時はURLを変更
+    priority: 3          # 1=min 2=low 3=default 4=high 5=urgent
+    # 認証: config/notify_auth.env に NTFY_TOKEN or NTFY_USER/NTFY_PASS
+
+  discord:
+    webhook_url: ""      # Discord Webhook URL
+
+  slack:
+    webhook_url: ""      # Slack Incoming Webhook URL
+
+  mqtt:
+    host: "localhost"
+    port: 1883
+    topic_prefix: "shogun"  # → shogun/cmd/xxx/report 等
+    # 認証: config/notify_auth.env に MQTT_USER/MQTT_PASS
 EOF
     log_success "settings.yaml を作成しました"
 else
@@ -457,8 +499,8 @@ RESULTS+=("設定ファイル: OK")
 # ============================================================
 log_step "STEP 8: キューファイル初期化"
 
-# 足軽用タスクファイル作成（足軽1）
-for i in 1; do
+# 足軽用タスクファイル作成（足軽1, 足軽2）
+for i in 1 2; do
     TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
     if [ ! -f "$TASK_FILE" ]; then
         cat > "$TASK_FILE" << EOF
@@ -473,7 +515,7 @@ task:
 EOF
     fi
 done
-log_info "足軽タスクファイル (1) を確認/作成しました"
+log_info "足軽タスクファイル (1, 2) を確認/作成しました"
 
 # 部屋子用タスクファイル作成（部屋子1 = ashigaru6）
 for i in 6; do
@@ -494,7 +536,7 @@ done
 log_info "部屋子タスクファイル (6) を確認/作成しました"
 
 # 足軽・部屋子用レポートファイル作成
-for i in 1 6; do
+for i in 1 2 6; do
     REPORT_FILE="$SCRIPT_DIR/queue/reports/ashigaru${i}_report.yaml"
     if [ ! -f "$REPORT_FILE" ]; then
         cat > "$REPORT_FILE" << EOF
@@ -506,10 +548,10 @@ result: null
 EOF
     fi
 done
-log_info "足軽・部屋子レポートファイル (1, 6) を確認/作成しました"
+log_info "足軽・部屋子レポートファイル (1, 2, 6) を確認/作成しました"
 
-# inbox YAMLファイル作成（通信プロトコルv2）
-for i in 1 6; do
+# inbox YAMLファイル作成（通信プロトコルv3）
+for i in 1 2 6; do
     INBOX_FILE="$SCRIPT_DIR/queue/inbox/ashigaru${i}.yaml"
     if [ ! -f "$INBOX_FILE" ]; then
         cat > "$INBOX_FILE" << EOF
@@ -518,7 +560,17 @@ tasks: []
 EOF
     fi
 done
-log_info "足軽・部屋子 inbox YAML (1, 6) を確認/作成しました"
+log_info "足軽・部屋子 inbox YAML (1, 2, 6) を確認/作成しました"
+
+# 軍師用inbox作成
+GUNSHI_INBOX="$SCRIPT_DIR/queue/inbox/gunshi.yaml"
+if [ ! -f "$GUNSHI_INBOX" ]; then
+    cat > "$GUNSHI_INBOX" << EOF
+# 軍師 inbox（家老→軍師の分析依頼キュー）
+tasks: []
+EOF
+fi
+log_info "軍師 inbox YAML を確認/作成しました"
 
 # 家老用報告・お針子報告inbox作成
 for karo in roju ooku; do

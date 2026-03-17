@@ -17,6 +17,16 @@
 
 複数の Claude Code インスタンスを tmux 上で同時に実行し、戦国時代の軍制のように階層的に統率するシステムです。コマンド1つで最大8体のAIエージェントが並列稼働し、タスク分解・実行・監査・戦略立案を自律的に行います。
 
+### スクリーンショット
+
+**multiagent セッション** — 老中（タスク管理）+ 足軽2体（実装）+ 部屋子（調査）
+
+![multiagent session](assets/screenshot-multiagent.png)
+
+**ooku セッション** — 軍師（戦略）+ お針子（監査）+ 高札API（Docker）+ 獏（夢見デーモン）
+
+![ooku session](assets/screenshot-ooku.png)
+
 ## 階層構造
 
 ```

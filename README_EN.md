@@ -17,6 +17,16 @@
 
 Run multiple Claude Code instances simultaneously on tmux, orchestrated in a feudal military hierarchy. A single command launches up to 8 AI agents that autonomously decompose tasks, execute, audit, and strategize.
 
+### Screenshots
+
+**multiagent session** — Roju (task management) + 2 Ashigaru (implementation) + Heyago (research)
+
+![multiagent session](assets/screenshot-multiagent.png)
+
+**ooku session** — Gunshi (strategy) + Ohariko (audit) + Kousatsu API (Docker) + Baku (dream daemon)
+
+![ooku session](assets/screenshot-ooku.png)
+
 ## Hierarchy
 
 ```

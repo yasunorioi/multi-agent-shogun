@@ -57,6 +57,11 @@ if [ -z "$AGENT_ID" ]; then
     exit 1
 fi
 
+# ─── HealthCheck（老中のみ） ───
+if [ "$AGENT_ID" = "karo-roju" ]; then
+    bash "$SCRIPT_DIR/scripts/healthcheck.sh" 2>/dev/null || true
+fi
+
 # ─── Python で身元情報を生成 ───
 python3 - "$AGENT_ID" "$FORMAT" "$SCRIPT_DIR" <<'PYEOF'
 import sys

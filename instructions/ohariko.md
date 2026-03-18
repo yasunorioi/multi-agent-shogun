@@ -157,56 +157,33 @@ python3 scripts/botsunichiroku.py subtask list --status pending
 python3 scripts/botsunichiroku.py cmd list --status in_progress
 ```
 
-### 高札API連携（orphansチェック — KOUSATSU_OK時のみ）
+### 没日録CLIによるorphansチェック
 
 ```bash
-curl -s http://localhost:8080/check/orphans | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-total = data.get('total_issues', 0)
-if total > 0:
-    print(f'ORPHANS_FOUND:{total}')
-    for k, v in data.items():
-        if k != 'total_issues' and v:
-            print(f'  {k}: {v}')
-else:
-    print('ORPHANS_CLEAN')
-"
+python3 scripts/botsunichiroku.py check orphans
 ```
 
-## 高札（kousatsu）API連携 — シン大奥
+## 没日録CLI連携 — シン大奥
 
-高札（`http://localhost:8080`）= 没日録FTS5全文検索エンジン。**読み取り専用**。
-ookuセッション内（`ooku:agents.2`）でDockerコンテナとして稼働。
+没日録CLI（`python3 scripts/botsunichiroku.py`）= 没日録FTS5全文検索エンジン。Docker不要。
 
 ### 設計原則
 
-- **フォールバック必須**: 高札ダウンでも監査は100%実行可能
-- **curlの結果は参考情報**: 最終判断はお針子の品質基準
-- **API呼び出し最小限**: 1回の監査で最大5つ
+- **没日録CLIで完結**: Docker不要、高札APIは廃止
+- **CLI結果は参考情報**: 最終判断はお針子の品質基準
+- **CLI呼び出し最小限**: 1回の監査で最大5つ
 - **ポーリング禁止**
 
-### ヘルスチェック（監査開始前に1回）
+### 利用可能CLIコマンド一覧
 
-```bash
-curl -s http://localhost:8080/health | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-print('KOUSATSU_OK' if data.get('status') == 'ok' else 'KOUSATSU_NG')
-"
-```
-
-### 利用可能API一覧
-
-| API | 用途 |
+| CLI | 用途 |
 |-----|------|
-| `GET /health` | ヘルスチェック |
-| `GET /search?q=xxx&limit=N` | FTS5全文検索 |
-| `GET /check/orphans` | 矛盾・放置検出 |
-| `GET /check/coverage?cmd_id=cmd_xxx` | カバレッジ（coverage_ratio < 0.7 で警告） |
-| `GET /search/similar?subtask_id=xxx` | 類似タスク自動検索 |
-| `GET /audit/history?worker_id=xxx` | 監査履歴・統計 |
-| `GET /worker/stats?worker_id=xxx` | 足軽パフォーマンス |
+| `python3 scripts/botsunichiroku.py search "xxx" --limit N` | FTS5全文検索 |
+| `python3 scripts/botsunichiroku.py check orphans` | 矛盾・放置検出 |
+| `python3 scripts/botsunichiroku.py check coverage CMD_ID` | カバレッジ（coverage_ratio < 0.7 で警告） |
+| `python3 scripts/botsunichiroku.py search --similar SUBTASK_ID` | 類似タスク自動検索 |
+| `python3 scripts/botsunichiroku.py search --enrich CMD_ID` | enrich（関連知見・pitfalls） |
+| `python3 scripts/botsunichiroku.py agent list` | 足軽パフォーマンス・状態一覧 |
 
 ## 先行割当ルール
 
@@ -216,13 +193,13 @@ print('KOUSATSU_OK' if data.get('status') == 'ok' else 'KOUSATSU_NG')
 2. 未割当（unassigned）の subtask が **1件以上** ある
 3. 新規cmdは **作成不可**（既存cmdの未割当subtaskのみ）
 
-### 高札による最適足軽選定（KOUSATSU_OK時のみ）
+### 没日録CLIによる最適足軽選定
 
 ```bash
-# 足軽パフォーマンス確認
-curl -s "http://localhost:8080/worker/stats?worker_id={idle足軽ID}"
+# 足軽パフォーマンス・状態確認
+python3 scripts/botsunichiroku.py agent list
 # 類似タスク自動検索
-curl -s "http://localhost:8080/search/similar?subtask_id={未割当subtask_id}&limit=5"
+python3 scripts/botsunichiroku.py search --similar {未割当subtask_id} --limit 5
 ```
 
 **選定優先順位**:

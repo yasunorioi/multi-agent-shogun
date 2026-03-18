@@ -35,7 +35,7 @@ workflow:
   - step: 1    # 将軍からwake-up受信
   - step: 2    # queue/shogun_to_karo.yaml を読む（detail_ref方式）
   - step: 3    # dashboard.md「進行中」更新
-  - step: 3.5  # 高札で類似タスク検索: curl -s --get "http://localhost:8080/search" --data-urlencode "q=キーワード"
+  - step: 3.5  # 類似タスク検索: python3 scripts/botsunichiroku.py search "キーワード"
   - step: 4    # 実行計画を自ら設計（横流し禁止）
   - step: 5    # タスク分解（五つの問い適用）
   - step: 6    # subtask add + taskYAML作成（通信プロトコルv2）
@@ -55,7 +55,7 @@ files:
   db: data/botsunichiroku.db
   db_cli: scripts/botsunichiroku.py
   dashboard: dashboard.md
-  kousatsu_api: "http://localhost:8080"
+  kousatsu_cli: "python3 scripts/botsunichiroku.py"
 
 # ペイン設定（3セッション構成）
 panes:
@@ -247,22 +247,22 @@ date "+%Y-%m-%d %H:%M"      # dashboard用
 詳細手順は高札からオンデマンドで取得せよ。コンテキストに読み込む必要はない。
 
 ```bash
-# 必要時に curl で取得:
-curl -s http://localhost:8080/docs/context/karo-sendkeys.md       # send-keys詳細手順
-curl -s http://localhost:8080/docs/context/karo-botsunichiroku.md # 没日録CLI操作
-curl -s http://localhost:8080/docs/context/karo-audit.md          # 監査トリガー手順
-curl -s http://localhost:8080/docs/context/karo-clear.md          # /clearプロトコル
-curl -s http://localhost:8080/docs/context/karo-model.md          # モデル選定・動的切替
-curl -s http://localhost:8080/docs/context/karo-dashboard.md      # dashboard更新手順
-curl -s http://localhost:8080/docs/context/karo-parallel.md       # 並列化ルール詳細
-curl -s http://localhost:8080/docs/context/karo-yaml-format.md    # YAML形式リファレンス
+# 必要時に Read ツールまたは cat で取得:
+cat context/karo-sendkeys.md       # send-keys詳細手順
+cat context/karo-botsunichiroku.md # 没日録CLI操作
+cat context/karo-audit.md          # 監査トリガー手順
+cat context/karo-clear.md          # /clearプロトコル
+cat context/karo-model.md          # モデル選定・動的切替
+cat context/karo-dashboard.md      # dashboard更新手順
+cat context/karo-parallel.md       # 並列化ルール詳細
+cat context/karo-yaml-format.md    # YAML形式リファレンス
 ```
 
 高札がダウン（NG）の場合はスキップしてよい。補助機能であり、必須ではない。
 
 ## コンパクション復帰手順（骨格）
 
-1. 高札で文脈復元: `curl -s --get "http://localhost:8080/search" --data-urlencode "q=キーワード"`
+1. 文脈復元: `python3 scripts/botsunichiroku.py search "キーワード"`
 2. `queue/shogun_to_karo.yaml` で現在のcmd確認
 3. `python3 scripts/botsunichiroku.py subtask list --status assigned` で足軽割当確認
 4. 未処理報告スキャン: `bash scripts/inbox_read.sh roju_reports --unread-only`（v3）/ `Read queue/inbox/roju_reports.yaml`（v2）
@@ -333,4 +333,4 @@ python3 scripts/botsunichiroku.py diary add roju \
 | 軍師 | Opus Thinking | ooku:agents.0（戦略分析・L4-L6） |
 | お針子 | Sonnet Thinking | ooku:agents.1（監査・先行割当） |
 
-モデル動的切替の詳細: `curl -s http://localhost:8080/docs/context/karo-model.md`
+モデル動的切替の詳細: `cat context/karo-model.md`

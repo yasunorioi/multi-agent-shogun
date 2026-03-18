@@ -311,28 +311,22 @@ tmux capture-pane -t multiagent:agents.0 -p | tail -5
 全ての足軽・部屋子の報告先は **老中（multiagent:agents.0）** である。
 報告をinbox YAMLに記録した後の send-keys も、老中ペインに送ること。
 
-## 報告の書き方（高札API + inbox YAML）
+## 報告の書き方（没日録CLI + inbox YAML）
 
-タスク完了時は以下の3ステップで報告せよ（Phase 2: 高札API登録 + YAMLサマリ方式）。
+タスク完了時は以下の2ステップで報告せよ。
 
-### STEP 1: 高札APIで報告本文をDB登録
+### STEP 1: 没日録CLIで報告本文をDB登録
 
 ```bash
-curl -s -X POST http://localhost:8080/reports \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subtask_id": "subtask_XXX",
-    "worker_id": "ashigaru{N}",
-    "status": "done",
-    "summary": "1行サマリ（老中が最初に読む要点）",
-    "body": "報告全文。実装内容、コミット番号、テスト結果、注意事項等を詳細に記載。"
-  }'
+python3 scripts/botsunichiroku.py report add \
+  --task subtask_XXX \
+  --worker ashigaru{N} \
+  --status done \
+  --summary "1行サマリ（老中が最初に読む要点）" \
+  --findings "報告全文。実装内容、コミット番号、テスト結果、注意事項等を詳細に記載。"
 ```
 
-成功時のレスポンス例: `{"report_id": 42, "status": "created"}`
-
-> **高札ダウン時（フォールバック）**: curlが失敗した場合は report_id なしで STEP 2 に進み、
-> YAMLの body フィールドに報告全文をインライン記載せよ（旧方式）。
+成功時の出力例: `Created: report #42 (task=subtask_XXX, worker=ashigaru{N})`
 
 ### STEP 2: roju_reports.yaml にサマリ + 参照のみ記載
 

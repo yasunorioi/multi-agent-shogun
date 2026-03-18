@@ -84,7 +84,7 @@ config/notify_auth.env
 # テスト・デモ出力
 test_output/
 demo_output/
-tests/
+# tests/ は統合テストスクリプトを含むため追跡対象
 
 # 生成スクリプト
 scripts/generate_dashboard.py

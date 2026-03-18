@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""botsunichiroku_2ch.py — 没日録データの2ch DAT表示レイヤー (subtask_922/cmd_419 W5-a)
+"""botsunichiroku_2ch.py — 没日録データの2ch DAT表示レイヤー (subtask_922+923/cmd_419 W5-a+b)
 
 没日録DB (data/botsunichiroku.db) のデータを2ch DAT形式でレンダリングする。
 スキーマ変更ゼロ、既存CLI完全互換。
@@ -9,9 +9,13 @@
 
 使用方法:
   python3 scripts/botsunichiroku_2ch.py cmd_419         # 管理板: CMDスレッド表示
-  python3 scripts/botsunichiroku_2ch.py --board kanri   # 管理板: スレッド一覧
+  python3 scripts/botsunichiroku_2ch.py --board kanri   # 管理板: スレッド一覧 (dat落ち含む)
   python3 scripts/botsunichiroku_2ch.py --board kanri --limit 10
   python3 scripts/botsunichiroku_2ch.py --board dreams  # 夢見板
+  python3 scripts/botsunichiroku_2ch.py --board docs    # 書庫板
+  python3 scripts/botsunichiroku_2ch.py --board docs --limit 20
+  python3 scripts/botsunichiroku_2ch.py --board diary   # 日記板
+  python3 scripts/botsunichiroku_2ch.py --board audit   # 監査板
 """
 
 from __future__ import annotations
@@ -237,14 +241,20 @@ def show_cmd_thread(cmd_id: str) -> None:
 def show_kanri_board(limit: int = 20) -> None:
     conn = get_conn()
     try:
+        # 通常スレッド (archived 以外)
         cmds = conn.execute(
             "SELECT id, command, project, status, priority, created_at, timestamp"
-            " FROM commands ORDER BY id DESC LIMIT ?",
+            " FROM commands WHERE status != 'archived' ORDER BY id DESC LIMIT ?",
             (limit,),
+        ).fetchall()
+        # dat落ちスレッド (archived)
+        archived_cmds = conn.execute(
+            "SELECT id, command, project, status, priority, created_at, timestamp"
+            " FROM commands WHERE status = 'archived' ORDER BY id DESC LIMIT 10",
         ).fetchall()
         # 各CMDのレス数（subtask数 + report数）
         counts: dict[str, int] = {}
-        for cmd in cmds:
+        for cmd in list(cmds) + list(archived_cmds):
             n_sub = conn.execute(
                 "SELECT COUNT(*) FROM subtasks WHERE parent_cmd = ?", (cmd["id"],)
             ).fetchone()[0]
@@ -257,7 +267,7 @@ def show_kanri_board(limit: int = 20) -> None:
     print(RULE)
     print()
 
-    if not cmds:
+    if not cmds and not archived_cmds:
         print("  (スレッドなし)")
         return
 
@@ -270,8 +280,26 @@ def show_kanri_board(limit: int = 20) -> None:
         res_count = counts.get(cmd_id, 1)
         print(f"{i:3d}. [{cmd_id}] {command}")
         print(f"       [{project}] status:{status}  {ts}  ({res_count}レス)")
+
+    if archived_cmds:
+        print()
+        print("  ── dat落ち ──")
+        for cmd in archived_cmds:
+            cmd_id = cmd["id"]
+            command = (cmd["command"] or "")[:38]
+            project = cmd["project"] or "-"
+            ts = fmt_ts(cmd["created_at"] or cmd["timestamp"])[:16]
+            res_count = counts.get(cmd_id, 1)
+            print(f"  [dat落ち] [{cmd_id}] {command}")
+            print(f"            [{project}] archived  {ts}  ({res_count}レス)")
+
     print()
-    print(f"  {len(cmds)}スレッド表示中")
+    active_count = len(cmds)
+    dat_count = len(archived_cmds)
+    summary = f"{active_count}スレッド表示中"
+    if dat_count:
+        summary += f" + dat落ち{dat_count}件"
+    print(f"  {summary}")
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +382,237 @@ def show_dreams_board() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 書庫板: doc_keywords → ドキュメント索引スレッド
+# ---------------------------------------------------------------------------
+
+def show_docs_board(limit: int = 20) -> None:
+    conn = get_conn()
+    try:
+        # 存在チェック
+        tbl = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='doc_keywords'"
+        ).fetchone()
+        if not tbl:
+            print(RULE)
+            print("【書庫板】ドキュメント索引")
+            print(RULE)
+            print()
+            print("  書庫板: doc_keywords テーブルが存在しません")
+            return
+
+        # doc_id 一覧 (keyword数降順)
+        doc_rows = conn.execute(
+            "SELECT doc_id, doc_type, COUNT(*) AS kw_cnt"
+            " FROM doc_keywords GROUP BY doc_id ORDER BY doc_id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+        # 各 doc_id のキーワード取得
+        kw_map: dict[str, list[str]] = {}
+        for dr in doc_rows:
+            kws = conn.execute(
+                "SELECT keyword FROM doc_keywords WHERE doc_id = ? ORDER BY keyword",
+                (dr["doc_id"],),
+            ).fetchall()
+            kw_map[dr["doc_id"]] = [r["keyword"] for r in kws]
+
+        total_docs = conn.execute(
+            "SELECT COUNT(DISTINCT doc_id) FROM doc_keywords"
+        ).fetchone()[0]
+
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【書庫板】ドキュメント索引")
+    print(RULE)
+    print()
+
+    if not doc_rows:
+        print("  書庫板: まだドキュメントがありません")
+        return
+
+    for i, dr in enumerate(doc_rows, 1):
+        doc_id = dr["doc_id"]
+        doc_type = dr["doc_type"] or "-"
+        kw_cnt = dr["kw_cnt"]
+        kws = kw_map.get(doc_id, [])
+
+        print(f"{i:3d}. 【{doc_id}】 (type:{doc_type}  キーワード:{kw_cnt}件)")
+        # キーワードを1行に並べて表示（最大10件）
+        kw_line = " / ".join(kws[:10])
+        if len(kws) > 10:
+            kw_line += f" ... (+{len(kws) - 10})"
+        print(f"       {kw_line}")
+        print(f"       {THIN_RULE}")
+        print()
+
+    print(f"  {len(doc_rows)}件表示中 (全{total_docs}件)")
+
+
+# ---------------------------------------------------------------------------
+# 日記板: diary_entries → エージェント別日記スレッド
+# ---------------------------------------------------------------------------
+
+def show_diary_board() -> None:
+    conn = get_conn()
+    try:
+        # テーブル存在チェック
+        tbl = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='diary_entries'"
+        ).fetchone()
+        if not tbl:
+            print(RULE)
+            print("【日記板】エージェント日記")
+            print(RULE)
+            print()
+            print("  日記板: diary_entries テーブルが存在しません")
+            return
+
+        total = conn.execute("SELECT COUNT(*) FROM diary_entries").fetchone()[0]
+        if total == 0:
+            print(RULE)
+            print("【日記板】エージェント日記")
+            print(RULE)
+            print()
+            print("  日記板: まだ記録がありません")
+            return
+
+        # エージェント別に取得
+        agents = conn.execute(
+            "SELECT DISTINCT agent_id FROM diary_entries ORDER BY agent_id"
+        ).fetchall()
+
+        agent_entries: dict[str, list] = {}
+        for ag in agents:
+            aid = ag["agent_id"]
+            rows = conn.execute(
+                "SELECT * FROM diary_entries WHERE agent_id = ? ORDER BY id DESC LIMIT 20",
+                (aid,),
+            ).fetchall()
+            agent_entries[aid] = list(rows)
+
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【日記板】エージェント日記")
+    print(RULE)
+    print()
+
+    for aid, entries in agent_entries.items():
+        print(f"── {nametrip(aid)} の日記スレ ({len(entries)}件) ──")
+        print()
+        for i, e in enumerate(entries, 1):
+            ts = fmt_ts(e["created_at"])
+            cmd_ref = f" [{e['cmd_id']}]" if e["cmd_id"] else ""
+            subtask_ref = f" [{e['subtask_id']}]" if e["subtask_id"] else ""
+            tags_str = f" #{'  #'.join(e['tags'].split(','))}" if e["tags"] else ""
+            print(f"{i} 名前：{nametrip(aid)} {ts}")
+            print(f"  【{e['date']}】{cmd_ref}{subtask_ref} {e['summary']}")
+            # body を最大2行
+            for line in (e["body"] or "").strip().split("\n")[:2]:
+                print(f"  {line[:80]}")
+            if tags_str:
+                print(f"  {tags_str}")
+            print(f"  {THIN_RULE}")
+            print()
+        print()
+
+    print(f"  合計 {total} 件の日記エントリ")
+
+
+# ---------------------------------------------------------------------------
+# 監査板: needs_audit=1 subtask → 監査結果スレッド
+# ---------------------------------------------------------------------------
+
+_AUDIT_ICON = {
+    "approved":           "✅",
+    "done":               "✅",
+    "rejected":           "❌",
+    "rejected_trivial":   "❌",
+    "rejected_judgment":  "❌",
+    "in_progress":        "🔍",
+    "pending":            "⏳",
+}
+
+
+def _audit_icon(status: str | None) -> str:
+    if not status:
+        return "⏳"
+    return _AUDIT_ICON.get(status, "⏳")
+
+
+def show_audit_board(limit: int = 20) -> None:
+    conn = get_conn()
+    try:
+        subtasks = conn.execute(
+            "SELECT s.*, c.command AS cmd_title"
+            " FROM subtasks s"
+            " LEFT JOIN commands c ON c.id = s.parent_cmd"
+            " WHERE s.needs_audit = 1"
+            " ORDER BY s.id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+        # 各subtaskの監査レポート（ohariko）
+        audit_reports: dict[str, list] = {}
+        for st in subtasks:
+            reps = conn.execute(
+                "SELECT * FROM reports WHERE task_id = ? AND worker_id = 'ohariko'"
+                " ORDER BY id DESC",
+                (st["id"],),
+            ).fetchall()
+            audit_reports[st["id"]] = list(reps)
+
+        total_needs = conn.execute(
+            "SELECT COUNT(*) FROM subtasks WHERE needs_audit = 1"
+        ).fetchone()[0]
+
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【監査板】お針子の目")
+    print(RULE)
+    print()
+
+    if not subtasks:
+        print("  監査板: 監査対象タスクがありません")
+        return
+
+    for i, st in enumerate(subtasks, 1):
+        st_id = st["id"]
+        audit_st = st["audit_status"]
+        icon = _audit_icon(audit_st)
+        worker = st["worker_id"] or "未割当"
+        ts = fmt_ts(st["assigned_at"])
+        desc = (st["description"] or "")[:70]
+        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
+        audit_label = f" audit:{audit_st}" if audit_st else " audit:pending"
+
+        print(f"{i} 名前：{nametrip(worker)} {ts}")
+        print(f"  {icon} [{st_id}] {cmd_ref} {desc}")
+        print(f"  status:{st['status'] or '-'}{audit_label}")
+
+        # 監査レポートがあれば1件表示
+        reps = audit_reports.get(st_id, [])
+        if reps:
+            rep = reps[0]
+            rep_ts = fmt_ts(rep["timestamp"])
+            summary = (rep["summary"] or "")[:70]
+            print(f"  お針子 {rep_ts}: {summary}")
+            print("  べ、別にあなたのために監査したんじゃないんだからね！")
+        else:
+            print("  （監査レポートなし）")
+
+        print(f"  {THIN_RULE}")
+        print()
+
+    print(f"  {len(subtasks)}件表示中 (全{total_needs}件要監査)")
+
+
+# ---------------------------------------------------------------------------
 # エントリポイント
 # ---------------------------------------------------------------------------
 
@@ -377,8 +636,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--board",
-        choices=["kanri", "dreams"],
-        help="板を指定 (kanri=管理板一覧, dreams=夢見板)",
+        choices=["kanri", "dreams", "docs", "diary", "audit"],
+        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板)",
     )
     parser.add_argument(
         "--limit",
@@ -393,6 +652,12 @@ def main() -> None:
         show_kanri_board(args.limit)
     elif args.board == "dreams":
         show_dreams_board()
+    elif args.board == "docs":
+        show_docs_board(args.limit)
+    elif args.board == "diary":
+        show_diary_board()
+    elif args.board == "audit":
+        show_audit_board(args.limit)
     elif args.cmd_id:
         show_cmd_thread(args.cmd_id)
     else:

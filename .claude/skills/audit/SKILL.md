@@ -119,17 +119,38 @@ fi
 
 | カテゴリ | 3点（PASS） | 2点（MINOR） | 1点（FAIL） |
 |---------|------------|-------------|------------|
-| **correctness**（正確性） | 要件通り動作。インボックスの `description` と一致 | 軽微な不備あり。動作はする | 要件未達。主要機能が動かない |
+| **correctness**（正確性） | 要件通り動作。インボックスの `description` と一致 ※1 | 軽微な不備あり。動作はする | 要件未達。主要機能が動かない |
 | **tests**（テスト） | テスト全PASS / テスト不要な変更 | 一部スキップ or 警告あり | テスト失敗 / 実装コードに対しテスト未実装 |
 | **code_quality**（品質） | 可読性・命名良好。殿の「シンプル志向」に沿う | 軽微な改善余地（命名・コメント等） | 保守困難。過剰抽象化・意味不明命名・重複コード |
 | **completeness**（完全性） | 全要件カバー。`notes` の全指示を実施 | 一部未対応（軽微） | 主要要件欠落 |
 | **no_regressions**（回帰なし） | 既存機能への影響なし | 軽微な副作用（動作には影響しない） | 既存機能を破壊 |
+
+> ※1 **「動けば合格」原則（correctness 3点）**: コードの美しさ・アーキテクチャの洗練は評価対象外。
+> 動作し、要件を満たし、既存を壊さなければ3点。過剰に厳しく採点しない。
 
 **殿の判断基準（採点時に参照）**:
 - 「動けば合格」: correctness 3点の条件を厳しくしすぎない
 - 「過剰設計は不合格」: code_quality で抽象化過多・設定項目多すぎは減点
 - 「テストは書け」: 実装変更にテストなしは tests 2点以下
 - 「ドキュメントは最小限」: ドキュメント過多で実装が薄い場合は completeness 減点
+
+#### Few-shot Examples（判定例）
+
+**事例A — 14/15 approved**: subtask_786（ルール2ピタゴラスイッチ書き換え）
+- correctness(3): 温度段階・ch番号・緊急停止ライン全て殿指定と完全一致
+- code_quality(3): rule_engineとの整合性旧版より向上 / completeness(3): 全要件カバー
+- no_regressions(3): commit acb9056・push確認済み / tests(2): 軽微な懸念1点減
+→ **要件完全充足・証跡あり → 典型的合格例**
+
+**事例B — 11/15 rejected_trivial**: subtask_755（OpenAI SDK互換化）
+- correctness(3): SDK差し替え全形式正確、pytest 455件PASS
+- code_quality(2)/completeness(2)/no_regressions(2)/tests(2): 空行重複1箇所が複数カテゴリに波及
+→ **動作・要件充足だが書式軽微問題 → 空行削除のみで再提出可能**
+
+**事例C — 6/15 rejected_judgment**: subtask_829（統合テスト）
+- correctness(2): bloom_router.sh 16件PASSはお針子実機確認済み
+- completeness(1)/no_regressions(1)/tests(0): コミットなし・report addなし・証跡ゼロ
+→ **実装は動くが証跡完全欠落 → エビデンス再整備が必要**
 
 ### Step 6: 監査レポート出力
 

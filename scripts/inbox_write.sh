@@ -80,6 +80,11 @@ try:
         'type': msg_type,
         'read': False
     }
+    # Summary length validation: 80文字制限（stophook_notification は対象外）
+    if msg_type != 'stophook_notification' and len(content) > 80:
+        print(f'[inbox_write] WARNING: summary truncated ({len(content)}→80 chars)', file=sys.stderr)
+        new_entry['full_summary'] = content
+        new_entry['summary'] = content[:80] + '\u2026'
     # v3: request_idが指定された場合は先頭に付与
     if request_id:
         new_entry = {'request_id': request_id, **new_entry}

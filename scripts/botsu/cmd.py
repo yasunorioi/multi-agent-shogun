@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 
-from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, _try_notify
+from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert
 
 
 def cmd_list(args) -> None:
@@ -66,6 +66,9 @@ def cmd_add(args) -> None:
         (cmd_id, ts, args.description, args.project, args.priority, args.karo, ts, details),
     )
     conn.commit()
+    raw_text = f"{args.description} {details or ''}".strip()
+    fts5_upsert(conn, "command", cmd_id, "", args.project or "", args.karo or "", "pending", raw_text)
+    conn.commit()
     conn.close()
     print(f"Created: {cmd_id}")
 
@@ -103,6 +106,17 @@ def cmd_update(args) -> None:
     query = f"UPDATE commands SET {', '.join(updates)} WHERE id = ?"
     cursor = conn.execute(query, params)
     conn.commit()
+
+    if cursor.rowcount > 0:
+        row = conn.execute(
+            "SELECT command, details, project, assigned_karo FROM commands WHERE id = ?",
+            (args.cmd_id,),
+        ).fetchone()
+        if row:
+            raw_text = f"{row['command'] or ''} {row['details'] or ''}".strip()
+            fts5_upsert(conn, "command", args.cmd_id, "", row["project"] or "", row["assigned_karo"] or "", args.status, raw_text)
+            conn.commit()
+
     conn.close()
 
     if cursor.rowcount == 0:

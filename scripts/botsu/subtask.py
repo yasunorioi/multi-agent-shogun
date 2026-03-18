@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from collections import deque
 
-from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict
+from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, fts5_upsert
 
 
 def _parse_blocked_by(blocked_by_str: str | None) -> list[str]:
@@ -169,6 +169,9 @@ def subtask_add(args) -> None:
         (subtask_id, args.cmd_id, args.worker, args.project, args.description, args.target_path, status, args.wave, needs_audit, blocked_by_str, assigned_at),
     )
     conn.commit()
+    raw_text = f"{args.description or ''}".strip()
+    fts5_upsert(conn, "subtask", subtask_id, args.cmd_id, args.project or "", args.worker or "", status, raw_text)
+    conn.commit()
     conn.close()
     blocked_info = f", blocked_by={blocked_by_str}" if blocked_by_str else ""
     print(f"Created: {subtask_id} (parent={args.cmd_id}, wave={args.wave}{blocked_info})")
@@ -237,6 +240,16 @@ def subtask_update(args) -> None:
         unblocked = auto_unblock(conn, args.subtask_id)
 
     conn.commit()
+
+    row = conn.execute(
+        "SELECT description, notes, parent_cmd, project, worker_id, status FROM subtasks WHERE id = ?",
+        (args.subtask_id,),
+    ).fetchone()
+    if row:
+        raw_text = f"{row['description'] or ''} {row['notes'] or ''}".strip()
+        fts5_upsert(conn, "subtask", args.subtask_id, row["parent_cmd"] or "", row["project"] or "", row["worker_id"] or "", row["status"] or "", raw_text)
+        conn.commit()
+
     conn.close()
 
     changes = []

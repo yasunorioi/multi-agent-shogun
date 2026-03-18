@@ -129,6 +129,19 @@ TABLES_SQL = {
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """,
+    "audit_history": """
+        CREATE TABLE IF NOT EXISTS audit_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subtask_id TEXT NOT NULL,          -- FK to subtasks.id
+            attempt INTEGER NOT NULL DEFAULT 1, -- 監査試行回数（1=初回, 2=1回目修正後, ...）
+            score INTEGER,                      -- 0-15点
+            verdict TEXT,                       -- approved|rejected_trivial|rejected_judgment
+            failure_category TEXT,              -- prompt不足|要件誤解|技術的誤り|回帰|フォーマット不備|NULL
+            findings_summary TEXT,              -- findingsの要約（≤200文字推奨）
+            worker_id TEXT,                     -- 担当足軽
+            timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """,
 }
 
 # ---------------------------------------------------------------------------
@@ -153,6 +166,9 @@ INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_diary_agent ON diary_entries(agent_id)",
     "CREATE INDEX IF NOT EXISTS idx_diary_date ON diary_entries(date)",
     "CREATE INDEX IF NOT EXISTS idx_diary_cmd ON diary_entries(cmd_id)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_history_subtask ON audit_history(subtask_id)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_history_category ON audit_history(failure_category)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_history_verdict ON audit_history(verdict)",
 ]
 
 # ---------------------------------------------------------------------------

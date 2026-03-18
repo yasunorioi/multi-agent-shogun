@@ -61,7 +61,7 @@ from botsu.subtask import subtask_list, subtask_add, subtask_update, subtask_sho
 from botsu.report import report_add, report_list
 from botsu.agent import agent_list, agent_update
 from botsu.counter import counter_next, counter_show
-from botsu.audit import audit_list, stats_show
+from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show
 from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
@@ -204,6 +204,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--all", action="store_true", help="Show all audit items (not just pending)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=audit_list)
+
+    p = audit_sub.add_parser("record", help="Record a retry-loop audit result to audit_history")
+    p.add_argument("subtask_id", help="Subtask ID (e.g. subtask_XXX)")
+    p.add_argument("--attempt", type=int, default=1, help="Attempt number (1=first audit, 2=after 1st retry, ...)")
+    p.add_argument("--score", type=int, help="Score (0-15)")
+    p.add_argument("--verdict", choices=["approved", "rejected_trivial", "rejected_judgment"], help="Audit verdict")
+    p.add_argument("--failure-category", dest="failure_category",
+                   choices=["prompt不足", "要件誤解", "技術的誤り", "回帰", "フォーマット不備"],
+                   help="Failure category (for rejected cases)")
+    p.add_argument("--findings-summary", dest="findings_summary", help="Short summary of findings (≤200 chars)")
+    p.add_argument("--worker", help="Worker ID (e.g. ashigaru1)")
+    p.set_defaults(func=audit_record)
+
+    p = audit_sub.add_parser("stats", help="Show failure_category stats (retry-loop recurrence tracking)")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.set_defaults(func=audit_history_stats)
 
     # === stats ===
     p = top_sub.add_parser("stats", help="Show database statistics")

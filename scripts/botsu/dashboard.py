@@ -1,6 +1,6 @@
 """dashboard サブコマンド — ダッシュボードエントリ管理。"""
 
-from . import get_connection, now_iso, print_table
+from . import get_connection, now_iso, print_table, fts5_upsert
 
 
 def dashboard_add(args) -> None:
@@ -10,8 +10,19 @@ def dashboard_add(args) -> None:
         "INSERT INTO dashboard_entries (cmd_id, section, content, status, tags, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (args.cmd, args.section, args.content, args.status, args.tags, ts),
     )
-    conn.commit()
     entry_id = cursor.lastrowid
+    raw_text = " ".join(filter(None, [args.section, args.content]))
+    fts5_upsert(
+        conn,
+        source_type="dashboard",
+        source_id=str(entry_id),
+        parent_id=args.cmd or "",
+        project="",
+        worker_id=args.tags or "",
+        status=args.status or "",
+        raw_text=raw_text,
+    )
+    conn.commit()
     conn.close()
     print(f"Created: dashboard entry #{entry_id}")
 

@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from datetime import datetime
 
-from . import get_connection, now_iso, print_table, print_json, row_to_dict
+from . import get_connection, now_iso, print_table, print_json, row_to_dict, fts5_upsert
 
 
 DIARY_TABLE_SQL = """
@@ -43,9 +43,20 @@ def diary_add(args) -> None:
         "INSERT INTO diary_entries (agent_id, date, cmd_id, subtask_id, summary, body, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (args.agent_id, today, args.cmd, args.subtask, args.summary, args.body, args.tags, now_iso()),
     )
-    conn.commit()
     row = conn.execute("SELECT last_insert_rowid()").fetchone()
     diary_id = row[0]
+    raw_text = " ".join(filter(None, [args.summary, args.body]))
+    fts5_upsert(
+        conn,
+        source_type="diary",
+        source_id=str(diary_id),
+        parent_id=args.cmd or args.subtask or "",
+        project="",
+        worker_id=args.agent_id or "",
+        status="",
+        raw_text=raw_text,
+    )
+    conn.commit()
     conn.close()
     print(f"Created: diary entry #{diary_id}")
 

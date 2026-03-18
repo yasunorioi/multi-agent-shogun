@@ -17,7 +17,8 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent  # scripts/
 PROJECT_ROOT = SCRIPT_DIR.parent
-DB_PATH = PROJECT_ROOT / "data" / "botsunichiroku.db"
+SHOGUN_ROOT = Path(os.environ.get("SHOGUN_ROOT", str(PROJECT_ROOT)))
+DB_PATH = SHOGUN_ROOT / "data" / "botsunichiroku.db"
 
 
 # ---------------------------------------------------------------------------

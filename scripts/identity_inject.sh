@@ -20,7 +20,7 @@
 
 set -u
 
-SCRIPT_DIR="${__STOP_HOOK_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_DIR="${__STOP_HOOK_SCRIPT_DIR:-${SHOGUN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 
 # ─── 引数パース ───
 AGENT_ID=""

@@ -47,6 +47,10 @@ Usage:
     python3 scripts/botsunichiroku.py kenchi delete ID
 
     python3 scripts/botsunichiroku.py search QUERY [--limit N] [--project PROJECT]
+    python3 scripts/botsunichiroku.py search --similar SUBTASK_ID [--limit N]
+
+    python3 scripts/botsunichiroku.py check orphans
+    python3 scripts/botsunichiroku.py check coverage CMD_ID
 """
 
 import argparse
@@ -63,6 +67,7 @@ from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
 from botsu.dashboard import dashboard_add, dashboard_list, dashboard_search
 from botsu.search import search
+from botsu.check import check_orphans, check_coverage
 
 
 # ---------------------------------------------------------------------------
@@ -313,10 +318,22 @@ def build_parser() -> argparse.ArgumentParser:
         "search",
         help="FTS5全文検索 (search_index テーブル)",
     )
-    p.add_argument("query", help="検索クエリ")
+    p.add_argument("query", nargs="?", default=None, help="検索クエリ (--similar 指定時は省略可)")
     p.add_argument("--limit", type=int, default=20, metavar="N", help="最大返却件数 (デフォルト: 20)")
     p.add_argument("--project", metavar="PROJECT", help="projectで絞り込み")
+    p.add_argument("--similar", metavar="SUBTASK_ID", help="指定subtaskのdescriptionで類似タスクを検索")
     p.set_defaults(func=search)
+
+    # === check ===
+    check_parser = top_sub.add_parser("check", help="矛盾・放置検出 / カバレッジチェック")
+    check_sub = check_parser.add_subparsers(dest="action", required=True)
+
+    p = check_sub.add_parser("orphans", help="矛盾・放置タスクを検出する（4種類のチェック）")
+    p.set_defaults(func=check_orphans)
+
+    p = check_sub.add_parser("coverage", help="cmd指示文と報告文のキーワードカバレッジを検出する")
+    p.add_argument("cmd_id", help="対象コマンドID (例: cmd_419)")
+    p.set_defaults(func=check_coverage)
 
     return parser
 

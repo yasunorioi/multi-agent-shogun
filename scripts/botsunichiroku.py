@@ -45,6 +45,8 @@ Usage:
     python3 scripts/botsunichiroku.py kenchi update ID [--name NAME] [--description DESC] [--depends-on DEPS] [--called-by CALLERS] [--notes NOTES]
     python3 scripts/botsunichiroku.py kenchi search KEYWORD [--json]
     python3 scripts/botsunichiroku.py kenchi delete ID
+
+    python3 scripts/botsunichiroku.py search QUERY [--limit N] [--project PROJECT]
 """
 
 import argparse
@@ -60,6 +62,7 @@ from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
 from botsu.dashboard import dashboard_add, dashboard_list, dashboard_search
+from botsu.search import search
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +307,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = kenchi_sub.add_parser("delete", help="Delete a resource")
     p.add_argument("id", help="Resource ID")
     p.set_defaults(func=kenchi_delete)
+
+    # === search ===
+    p = top_sub.add_parser(
+        "search",
+        help="FTS5全文検索 (search_index テーブル)",
+    )
+    p.add_argument("query", help="検索クエリ")
+    p.add_argument("--limit", type=int, default=20, metavar="N", help="最大返却件数 (デフォルト: 20)")
+    p.add_argument("--project", metavar="PROJECT", help="projectで絞り込み")
+    p.set_defaults(func=search)
 
     return parser
 

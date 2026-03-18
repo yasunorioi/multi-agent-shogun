@@ -7,6 +7,11 @@
 # Example (v3): bash scripts/inbox_write.sh roju_reports "ashigaru1完了" report_completed ashigaru1 a3f7b2c1
 # Example (v3+subtask): bash scripts/inbox_write.sh roju_reports "ashigaru1完了" report_completed ashigaru1 a3f7b2c1 subtask_830
 #
+# Retry fields (env vars, optional):
+#   RETRY_COUNT=0|1|2    — retry回数（0=初回、最大2。3以上はエラー）
+#   FAILURE_CATEGORY=... — prompt不足|要件誤解|技術的誤り|回帰|フォーマット不備|null
+#   RETRY_OF=...         — 前回audit結果への参照（例: subtask_XXX_attempt_1）
+#
 # 書き込み先: queue/inbox/{target_inbox}.yaml の reports:[] セクション
 # 排他制御: flock -w 5（5秒タイムアウト、最大3回リトライ）
 # atomic write: tmpfile + os.replace（部分読み取り防止）
@@ -26,6 +31,10 @@ FROM="${4:-unknown}"
 REQUEST_ID="${5:-}"  # v3: optional request_id (UUID 8文字)
 SUBTASK_ID="${6:-stophook_notification}"  # optional: 未指定時は後方互換
 
+RETRY_COUNT="${RETRY_COUNT:-}"
+FAILURE_CATEGORY="${FAILURE_CATEGORY:-}"
+RETRY_OF="${RETRY_OF:-}"
+
 INBOX="$SCRIPT_DIR/queue/inbox/${TARGET}.yaml"
 LOCKFILE="${INBOX}.lock"
 
@@ -33,6 +42,25 @@ LOCKFILE="${INBOX}.lock"
 if [ -z "$TARGET" ] || [ -z "$CONTENT" ]; then
     echo "Usage: inbox_write.sh <target_inbox> <content> [type] [from] [request_id] [subtask_id]" >&2
     exit 1
+fi
+
+# Validate retry_count (max 2)
+if [ -n "$RETRY_COUNT" ] && [ "$RETRY_COUNT" -gt 2 ] 2>/dev/null; then
+    echo "[inbox_write] ERROR: retry_count=$RETRY_COUNT exceeds max (2). Escalate to 老中." >&2
+    exit 1
+fi
+
+# Validate failure_category
+VALID_CATEGORIES="prompt不足 要件誤解 技術的誤り 回帰 フォーマット不備"
+if [ -n "$FAILURE_CATEGORY" ] && [ "$FAILURE_CATEGORY" != "null" ]; then
+    _valid=false
+    for _cat in $VALID_CATEGORIES; do
+        if [ "$FAILURE_CATEGORY" = "$_cat" ]; then _valid=true; break; fi
+    done
+    if [ "$_valid" = false ]; then
+        echo "[inbox_write] ERROR: invalid failure_category='$FAILURE_CATEGORY'" >&2
+        exit 1
+    fi
 fi
 
 # Initialize inbox if not exists
@@ -61,6 +89,9 @@ msg_type = '$TYPE'
 from_agent = '$FROM'
 request_id = '$REQUEST_ID'  # v3: empty string if not provided
 subtask_id = '$SUBTASK_ID'
+retry_count = '$RETRY_COUNT'  # empty string if not provided
+failure_category = '$FAILURE_CATEGORY'
+retry_of = '$RETRY_OF'
 
 try:
     with open(inbox_path) as f:
@@ -85,6 +116,13 @@ try:
         print(f'[inbox_write] WARNING: summary truncated ({len(content)}→80 chars)', file=sys.stderr)
         new_entry['full_summary'] = content
         new_entry['summary'] = content[:80] + '\u2026'
+    # retry fields (optional)
+    if retry_count:
+        new_entry['retry_count'] = int(retry_count)
+    if failure_category and failure_category != 'null':
+        new_entry['failure_category'] = failure_category
+    if retry_of:
+        new_entry['retry_of'] = retry_of
     # v3: request_idが指定された場合は先頭に付与
     if request_id:
         new_entry = {'request_id': request_id, **new_entry}

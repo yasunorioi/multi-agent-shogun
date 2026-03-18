@@ -1,7 +1,5 @@
 """cmd サブコマンド — コマンド管理。"""
 
-import json
-import subprocess
 import sys
 
 from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert
@@ -72,21 +70,10 @@ def cmd_add(args) -> None:
     conn.close()
     print(f"Created: {cmd_id}")
 
-    # --- 高札v2: 自動enrich ---
-    enrich_text = f"{args.description} {details or ''}"
-    enrich_payload = json.dumps({
-        "cmd_id": cmd_id,
-        "text": enrich_text,
-        "project": args.project,
-    })
+    # --- 高札v2: 自動enrich (CLI直接呼び出し、Docker不要) ---
     try:
-        subprocess.Popen(
-            ["curl", "-s", "-X", "POST", "http://localhost:8080/enrich",
-             "-H", "Content-Type: application/json",
-             "-d", enrich_payload],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        from botsu.search import enrich_data as _enrich_data
+        _enrich_data(cmd_id)
     except Exception:
         pass
 

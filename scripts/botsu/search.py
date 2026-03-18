@@ -1,10 +1,11 @@
 """botsu.search — 没日録DB FTS5全文検索サブコマンド (subtask_915/cmd_419 W2-a)
+                + enrichサブコマンド (subtask_919/cmd_419 W3-c)
 
-tools/kousatsu/main.py GET /search, GET /search/similar のロジックをCLI化。
+tools/kousatsu/main.py GET /search, GET /search/similar, POST /enrich のロジックをCLI化。
 Docker不要で没日録DB内のsearch_index FTS5テーブルを直接検索する。
 
 参照:
-  - tools/kousatsu/main.py : GET /search, GET /search/similar エンドポイント（ロジック移植元）
+  - tools/kousatsu/main.py : GET /search, GET /search/similar, POST /enrich（ロジック移植元）
   - docs/shogun/2ch_integration_design.md 付録B : CLI置換対応表
 """
 
@@ -409,3 +410,305 @@ def search_similar(args) -> None:
             f"{(item.get('status')  or ''):<{STATUS_W}}  "
             f"{snip}{audit_tag}"
         )
+
+
+# ---------------------------------------------------------------------------
+# enrich  (main.py POST /enrich 移植 — subtask_919/cmd_419 W3-c)
+# ---------------------------------------------------------------------------
+
+_PITFALL_PATTERNS = [
+    ("P001", "%コミット漏れ%",    "high",     "commit忘れ",        "inbox descriptionに「git add+commit+push」を明記"),
+    ("P001", "%git add%",          "high",     "commit忘れ",        "inbox descriptionに「git add+commit+push」を明記"),
+    ("P002", "%ハルシネーション%", "critical", "ハルシネーション",  "成果物の実在確認（git ls-remote, ls -la）を必須化"),
+    ("P002", "%捏造%",             "critical", "捏造",              "成果物の実在確認を必須化"),
+    ("P003", "%マージ%",           "medium",   "マージ問題",        "ブランチ分岐状況を事前確認"),
+    ("P004", "%差し戻%",           "medium",   "差し戻し",          "直近の差し戻し理由を確認"),
+]
+
+
+def _enrich_extract_pitfalls(conn, worker_id: str | None) -> list[dict]:
+    """没日録DBから失敗パターンを抽出する（main.py _extract_pitfalls 移植）。"""
+    pitfalls: list[dict] = []
+    seen_ids: set[str] = set()
+    for pid, like_pat, severity, desc_label, prevention in _PITFALL_PATTERNS:
+        rows = conn.execute(
+            """
+            SELECT s.id, substr(s.description, 1, 100) AS description,
+                   r.summary AS report_summary
+            FROM subtasks s
+            LEFT JOIN reports r ON r.task_id = s.id
+            WHERE (r.summary LIKE ? OR s.description LIKE ?)
+              AND s.status IN ('blocked', 'cancelled', 'done')
+            ORDER BY s.completed_at DESC LIMIT 3
+            """,
+            (like_pat, like_pat),
+        ).fetchall()
+        for row in rows:
+            if row["id"] in seen_ids:
+                continue
+            seen_ids.add(row["id"])
+            pitfalls.append({
+                "pattern_id": pid,
+                "source_id":  row["id"],
+                "severity":   severity,
+                "description": f"{desc_label}: {row['description']}",
+                "prevention": prevention,
+            })
+
+    # P005: worker別の失敗パターン
+    if worker_id:
+        rows = conn.execute(
+            """
+            SELECT s.id, substr(s.description, 1, 100) AS description
+            FROM subtasks s
+            WHERE s.worker_id = ? AND s.status IN ('blocked', 'cancelled')
+            ORDER BY s.completed_at DESC LIMIT 3
+            """,
+            (worker_id,),
+        ).fetchall()
+        for row in rows:
+            if row["id"] not in seen_ids:
+                pitfalls.append({
+                    "pattern_id": "P005",
+                    "source_id":  row["id"],
+                    "severity":   "medium",
+                    "description": f"{worker_id}の過去失敗: {row['description']}",
+                    "prevention": f"{worker_id}に割り当て時は過去の失敗パターンに注意",
+                })
+
+    order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    pitfalls.sort(key=lambda x: order.get(x["severity"], 4))
+    return pitfalls
+
+
+def _enrich_extract_positive(conn, keywords: list[str]) -> list[dict]:
+    """audit PASS済みの成功パターンを抽出する（main.py _extract_positive_patterns 移植）。"""
+    if not keywords:
+        return []
+    results: list[dict] = []
+    seen: set[str] = set()
+    for kw in keywords[:5]:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.project, s.worker_id,
+                   substr(s.description, 1, 120) AS description,
+                   r.summary AS report_summary
+            FROM subtasks s
+            JOIN reports r ON r.task_id = s.id AND r.status = 'done'
+            WHERE s.audit_status = 'done'
+              AND (s.description LIKE '%' || ? || '%'
+                   OR r.summary LIKE '%' || ? || '%')
+            ORDER BY s.completed_at DESC LIMIT 3
+            """,
+            (kw, kw),
+        ).fetchall()
+        for row in rows:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            results.append({
+                "source_id":   row["id"],
+                "project":     row["project"] or "",
+                "description": f"{row['description']} → audit PASS",
+                "strength":    "high" if len(rows) >= 3 else "medium",
+                "hint":        "この方向を継続せよ",
+            })
+    return results
+
+
+def enrich_data(cmd_id: str, worker_id: str | None = None) -> dict:
+    """cmd_idに対してenrichデータを生成して返す（main.py POST /enrich 相当）。
+
+    Stage1: 同PJ内FTS5検索（局所）
+    Stage2: 全PJ横断FTS5検索（拡大）
+    Stage2b: pitfalls抽出
+    Stage2c: positive_patterns抽出
+    Stage3: 外部検索 — TODO: 未実装（Docker不要CLI版ではスキップ）
+    """
+    conn = get_connection()
+    try:
+        # 対象コマンド取得
+        cmd_row = conn.execute(
+            "SELECT command, details, project FROM commands WHERE id = ?",
+            (cmd_id,),
+        ).fetchone()
+        if cmd_row is None:
+            return {"error": f"command '{cmd_id}' not found"}
+
+        project = cmd_row["project"] or None
+        raw_text = f"{cmd_row['command'] or ''} {cmd_row['details'] or ''}".strip()
+        keywords = _extract_keywords(raw_text, max_kw=15)
+
+        # search_index存在チェック
+        has_fts = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='search_index'"
+        ).fetchone() is not None
+
+        # Stage1: 同PJ内FTS5検索
+        local_results: list[dict] = []
+        global_results: list[dict] = []
+        if has_fts and keywords:
+            match_query = " OR ".join(f'"{kw}"' for kw in keywords)
+            if project:
+                rows = conn.execute(
+                    """
+                    SELECT source_type, source_id, project, status,
+                           snippet(search_index, 6, '...', '...', '', 32) AS snippet, rank
+                    FROM search_index
+                    WHERE search_index MATCH ? AND project = ?
+                    ORDER BY rank LIMIT 10
+                    """,
+                    (match_query, project),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT source_type, source_id, project, status,
+                           snippet(search_index, 6, '...', '...', '', 32) AS snippet, rank
+                    FROM search_index
+                    WHERE search_index MATCH ?
+                    ORDER BY rank LIMIT 10
+                    """,
+                    (match_query,),
+                ).fetchall()
+            local_ids: set[str] = set()
+            for row in rows:
+                if row["source_id"] == cmd_id:
+                    continue
+                local_ids.add(row["source_id"])
+                local_results.append({
+                    "source_type": row["source_type"],
+                    "source_id":   row["source_id"],
+                    "project":     row["project"],
+                    "status":      row["status"],
+                    "snippet":     row["snippet"],
+                    "stage":       "local",
+                })
+
+            # Stage2: クロスプロジェクトFTS5検索
+            if project:
+                rows2 = conn.execute(
+                    """
+                    SELECT source_type, source_id, project, status,
+                           snippet(search_index, 6, '...', '...', '', 32) AS snippet, rank
+                    FROM search_index
+                    WHERE search_index MATCH ? AND project != ?
+                    ORDER BY rank LIMIT 10
+                    """,
+                    (match_query, project),
+                ).fetchall()
+                for row in rows2:
+                    if row["source_id"] == cmd_id or row["source_id"] in local_ids:
+                        continue
+                    global_results.append({
+                        "source_type": row["source_type"],
+                        "source_id":   row["source_id"],
+                        "project":     row["project"],
+                        "status":      row["status"],
+                        "snippet":     row["snippet"],
+                        "stage":       "global",
+                        "hint":        f"{row['project']}プロジェクトの類似タスク",
+                    })
+
+        # Stage2b: pitfalls
+        pitfalls = _enrich_extract_pitfalls(conn, worker_id)
+
+        # Stage2c: positive_patterns
+        positive = _enrich_extract_positive(conn, keywords)
+
+        # Stage3: 外部検索 — TODO: 未実装（Docker不要CLI版ではスキップ）
+
+    finally:
+        conn.close()
+
+    return {
+        "cmd_id":           cmd_id,
+        "project":          project,
+        "keywords":         keywords,
+        "internal":         local_results[:10],
+        "cross_project":    global_results[:5],
+        "pitfalls":         pitfalls[:5],
+        "positive_patterns": positive[:5],
+        "meta": {
+            "internal_hits":      len(local_results),
+            "cross_project_hits": len(global_results),
+            "pitfall_hits":       len(pitfalls),
+            "positive_hits":      len(positive),
+            "keywords":           keywords[:10],
+            "fts5_available":     has_fts,
+        },
+    }
+
+
+def enrich_cmd(args) -> None:
+    """search --enrich CMD_ID のエントリポイント。
+
+    Args:
+        args: argparse.Namespace
+            - enrich : cmd_id (str)
+    """
+    cmd_id: str = args.enrich
+
+    data = enrich_data(cmd_id)
+
+    if "error" in data:
+        print(f"Error: {data['error']}", file=sys.stderr)
+        sys.exit(1)
+
+    kw_str = ", ".join(data["keywords"][:10]) or "(なし)"
+    print(f"Enrich: {cmd_id}  project={data['project'] or '-'}")
+    print(f"Keywords: {kw_str}")
+    print()
+
+    # Internal
+    internal = data["internal"]
+    print(f"=== Internal hits ({len(internal)}) ===")
+    if internal:
+        TYPE_W = 10; ID_W = 16; PROJ_W = 14; STATUS_W = 12; SNIP_W = 50
+        print(f"{'TYPE':<{TYPE_W}}  {'ID':<{ID_W}}  {'PROJECT':<{PROJ_W}}  {'STATUS':<{STATUS_W}}  SNIPPET")
+        print(f"{'-'*TYPE_W}  {'-'*ID_W}  {'-'*PROJ_W}  {'-'*STATUS_W}  {'-'*SNIP_W}")
+        for item in internal:
+            snip = (item.get("snippet") or "").replace("\n", " ").strip()
+            if len(snip) > SNIP_W:
+                snip = snip[:SNIP_W - 1] + "…"
+            print(
+                f"{(item['source_type'] or '')[:TYPE_W]:<{TYPE_W}}  "
+                f"{(item['source_id']   or '')[:ID_W]:<{ID_W}}  "
+                f"{(item.get('project') or '')[:PROJ_W]:<{PROJ_W}}  "
+                f"{(item.get('status')  or '')[:STATUS_W]:<{STATUS_W}}  {snip}"
+            )
+    else:
+        print("  (なし)")
+    print()
+
+    # Cross-project
+    cross = data["cross_project"]
+    print(f"=== Cross-project hits ({len(cross)}) ===")
+    if cross:
+        for item in cross:
+            snip = (item.get("snippet") or "").replace("\n", " ").strip()[:60]
+            print(f"  [{item['project']}] {item['source_id']} ({item['source_type']})  {snip}")
+    else:
+        print("  (なし)")
+    print()
+
+    # Pitfalls
+    pitfalls = data["pitfalls"]
+    print(f"=== Pitfalls ({len(pitfalls)}) ===")
+    if pitfalls:
+        for p in pitfalls:
+            print(f"  [{p['severity'].upper():8s}] {p['pattern_id']} {p['source_id']}")
+            print(f"           {p['description']}")
+            print(f"           → {p['prevention']}")
+    else:
+        print("  (なし)")
+    print()
+
+    # Positive patterns
+    positive = data["positive_patterns"]
+    print(f"=== Positive patterns ({len(positive)}) ===")
+    if positive:
+        for pp in positive:
+            print(f"  [{pp['strength']:6s}] {pp['source_id']}  {pp['description'][:60]}")
+    else:
+        print("  (なし)")

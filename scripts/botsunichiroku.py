@@ -66,7 +66,7 @@ from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
 from botsu.dashboard import dashboard_add, dashboard_list, dashboard_search
-from botsu.search import search
+from botsu.search import search, enrich_cmd
 from botsu.check import check_orphans, check_coverage
 
 
@@ -318,11 +318,12 @@ def build_parser() -> argparse.ArgumentParser:
         "search",
         help="FTS5全文検索 (search_index テーブル)",
     )
-    p.add_argument("query", nargs="?", default=None, help="検索クエリ (--similar 指定時は省略可)")
+    p.add_argument("query", nargs="?", default=None, help="検索クエリ (--similar/--enrich 指定時は省略可)")
     p.add_argument("--limit", type=int, default=20, metavar="N", help="最大返却件数 (デフォルト: 20)")
     p.add_argument("--project", metavar="PROJECT", help="projectで絞り込み")
     p.add_argument("--similar", metavar="SUBTASK_ID", help="指定subtaskのdescriptionで類似タスクを検索")
-    p.set_defaults(func=search)
+    p.add_argument("--enrich", metavar="CMD_ID", help="cmd_idに対してenrich（関連知見・pitfalls・成功パターン）を表示")
+    p.set_defaults(func=lambda args: enrich_cmd(args) if getattr(args, "enrich", None) else search(args))
 
     # === check ===
     check_parser = top_sub.add_parser("check", help="矛盾・放置検出 / カバレッジチェック")

@@ -224,14 +224,10 @@ def search_web(query: str) -> str | None:
 
 
 def search_web_curl(query: str) -> str | None:
-    """高札API経由の検索（高札v2実装後に使用）"""
+    """没日録CLI経由の内部検索"""
     try:
         result = subprocess.run(
-            [
-                "curl", "-s", "--get",
-                "http://localhost:8080/search",
-                "--data-urlencode", f"q={query}",
-            ],
+            [sys.executable, str(PROJECT_ROOT / "scripts" / "botsunichiroku.py"), "search", query],
             capture_output=True,
             text=True,
             timeout=10,

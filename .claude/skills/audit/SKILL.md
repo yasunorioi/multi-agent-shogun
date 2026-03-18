@@ -61,9 +61,9 @@ repo_path="."               # 省略可（デフォルト: カレント）
 
 roju_reports.yaml から commit_hash を探す場合:
 ```bash
-# 高札API経由で報告詳細を取得
-curl -s localhost:8080/reports/<report_id>
-# → body フィールドにコミット番号が記載されている
+# 没日録CLI経由で報告詳細を取得
+python3 scripts/botsunichiroku.py report list --subtask subtask_XXX --json
+# → summary/detail_ref フィールドにコミット番号が記載されている
 ```
 
 ### Step 2: コミット実在確認
@@ -178,16 +178,10 @@ audit:
 ### Step 8: 高札API登録
 
 ```bash
-curl -s -X POST http://localhost:8080/audit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subtask_id": "subtask_XXX",
-    "result": "approved",
-    "summary": "1行サマリ（監査結果の要点）",
-    "findings": "詳細findings..."
-  }'
-# 成功: {"subtask_id": "subtask_XXX", "audit_status": "done", "status": "updated"}
-# 高札ダウン（接続失敗）: → Step 8をスキップしてStep 9へ（YAMLにインライン記載）
+python3 scripts/botsunichiroku.py subtask update subtask_XXX --audit-status done
+# approved → --audit-status done
+# rejected_trivial/rejected_judgment → --audit-status rejected（YAMLにfindings記載）
+# 失敗時: → Step 8をスキップしてStep 9へ（YAMLにインライン記載）
 ```
 
 `result` の値: `approved` / `rejected_trivial` / `rejected_judgment`
@@ -203,7 +197,7 @@ Read queue/inbox/roju_ohariko.yaml
 # 追記内容（audit_reports リストの末尾に追加）
   - subtask_id: subtask_XXX
     summary: "監査合格(14/15): correctness・completeness完全。コード品質良好。"
-    detail_ref: "curl -s localhost:8080/audit/subtask_XXX"
+    detail_ref: "python3 scripts/botsunichiroku.py audit list --subtask subtask_XXX"
     timestamp: "YYYY-MM-DDTHH:MM:SS"   # date "+%Y-%m-%dT%H:%M:%S" で取得
     read: false
 ```
@@ -233,7 +227,7 @@ Step 4: pytest（なければスキップ）
 Step 5: 5カテゴリ × 3点 採点
 Step 6: YAMLレポート出力
 Step 7: 13点未満→修正指示（ファイル・行・修正案）
-Step 8: POST localhost:8080/audit
+Step 8: subtask update --audit-status
 Step 9: Edit queue/inbox/roju_ohariko.yaml
 ```
 

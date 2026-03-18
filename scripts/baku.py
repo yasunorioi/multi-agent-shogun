@@ -75,6 +75,8 @@ TONO_INTERESTS = {
         "FTS5 associative memory pattern",
         "SQLite knowledge graph lightweight",
         "spreading activation memory retrieval",
+        "Claude agent orchestration MCP best practice",
+        "agentic architecture context handoff pattern",
     ],
     "philosophy": [
         "quantum decision theory uncertainty",
@@ -213,16 +215,15 @@ def search_ddg(query: str) -> str | None:
 
 
 def search_kousatsu(query: str) -> str | None:
-    """高札API経由の内部検索"""
+    """没日録CLI経由の内部検索"""
     try:
         result = subprocess.run(
-            ["curl", "-s", "--get", "http://localhost:8080/search",
-             "--data-urlencode", f"q={query}"],
+            [sys.executable, str(PROJECT_ROOT / "scripts" / "botsunichiroku.py"), "search", query],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired:
         pass
     return None
 

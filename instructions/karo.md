@@ -334,3 +334,40 @@ python3 scripts/botsunichiroku.py diary add roju \
 | お針子 | Sonnet Thinking | ooku:agents.1（監査・先行割当） |
 
 モデル動的切替の詳細: `cat context/karo-model.md`
+
+## worktree判定（タスク分解時）
+
+### 衝突リスク判定基準
+
+| 条件 | worktree | 理由 |
+|------|:--------:|------|
+| 2名以上の足軽が同一ファイルを編集 | **必須** | ファイル衝突リスク高 |
+| 2名以上が同一ディレクトリ内の異なるファイルを編集 | 推奨（任意） | 衝突リスク中程度 |
+| 足軽が既存コードを大規模リファクタリング | **必須** | mainへの影響が広範 |
+| 完全に異なるディレクトリで作業 | 不要 | 衝突なし |
+| 1名の足軽のみ作業中 | 不要 | 並列なし |
+| ドキュメント・設計書のみの作業 | 不要 | docs/は各自別ファイル |
+
+### inbox YAMLへの指示フォーマット
+
+worktree必要と判断した場合、タスクに以下フィールドを追加:
+
+```yaml
+- subtask_id: subtask_XXX
+  cmd_id: cmd_YYY
+  status: assigned
+  description: |
+    ■ 実装: ...
+  worktree: true                     # ← 追加
+  worktree_name: "subtask-XXX"       # ← 追加（EnterWorktreeのname引数）
+  project: shogun
+  assigned_by: roju
+```
+
+### 完了報告受領後（監査PASS後のマージ）
+
+1. `git merge worktree-subtask-XXX`（fast-forward推奨）
+2. コンフリクト時 → 手動解決 or 足軽に差し戻し
+3. `git worktree remove .claude/worktrees/subtask-XXX`
+4. `git branch -d worktree-subtask-XXX`
+5. `git push private main`

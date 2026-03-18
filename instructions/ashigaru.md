@@ -688,3 +688,38 @@ skill_candidate:
 ### 異常時の自己判断
 - 自身のコンテキストが30%を切ったら → Edit queue/inbox/ashigaru{N}.yaml で progress フィールドに進捗を記録し、家老に「コンテキスト残量少」と報告
 - タスクが想定より大きいと判明したら → 分割案を報告に含める
+
+## worktreeモード（条件発動）
+
+タスクYAMLに `worktree: true` がある場合のみ以下の手順で作業せよ。ない場合は従来通り。
+
+### 判定
+inbox YAMLの当該タスクに `worktree: true` フィールドがある → worktreeモード。
+
+### 作業開始
+1. `EnterWorktree(name: タスクYAMLのworktree_name)` を実行
+2. CWDがworktreeに移動したことを確認
+3. 以降、コードファイルは相対パスで編集可能
+
+### 運用データアクセス（SHOGUN_ROOT経由の絶対パス）
+
+worktree内では `queue/` や `data/` が存在しない。以下の絶対パスを使え:
+
+| 対象 | アクセス方法 |
+|------|------------|
+| inbox | `/home/yasu/multi-agent-shogun/queue/inbox/ashigaru{N}.yaml` |
+| 報告 | `/home/yasu/multi-agent-shogun/queue/inbox/roju_reports.yaml` |
+| 没日録CLI | `python3 /home/yasu/multi-agent-shogun/scripts/botsunichiroku.py ...` |
+| context | `/home/yasu/multi-agent-shogun/context/{project}.md` |
+
+環境変数 `SHOGUN_ROOT` が設定されていれば `${SHOGUN_ROOT}/queue/inbox/...` でもよい。
+
+### 作業完了
+1. worktreeブランチに git commit（通常通り）
+2. `ExitWorktree(action: "keep")` — worktreeを保持して抜ける
+3. 報告記録 + send-keys（従来通り、絶対パスで roju_reports.yaml に記録）
+
+### 注意
+- worktree内で `queue/` や `data/` を探すな（存在しない）
+- `git add -f` が必要な場合がある（`.claude/*` gitignoreの影響）
+- worktreeなしのタスクは従来通り（この手順は不要）

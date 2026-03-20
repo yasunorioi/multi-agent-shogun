@@ -166,8 +166,9 @@ tmux send-keys -t ooku:agents.0 Enter
 # 3. 軍師の報告を roju_reports.yaml で受信
 ```
 
-### Step 6.5: bloom_routing 設定確認（タスク分解後・足軽配布前）
+### Step 6.5: bloom_routing 設定確認 + 軍師分解レビュー（タスク分解後・足軽配布前）
 
+**A. 軍師が分解していない場合（L1-L3 or 自分で分解）**:
 ```
 subtask分解が完了したら、配布前に以下を確認:
 
@@ -178,6 +179,34 @@ subtask分解が完了したら、配布前に以下を確認:
    b. send-keysで軍師を起こす
    c. 軍師が queue/inbox/gunshi_analysis.yaml に分析結果を出力
    d. 家老がgunshi_analysis.yamlを読んでタスク配布 + モデル選定
+```
+
+**B. 軍師が分解済みの場合（decompose: true で委譲した結果）**:
+```
+1. gunshi_analysis.yaml の decomposition セクションを読む
+2. レビュー:
+   - subtask粒度は適切か（半日以内）
+   - RACE-001違反はないか
+   - 依存関係（blocked_by）は正しいか
+   - worker推奨は足軽の空き状況と整合するか
+3. 判断:
+   - approve → id_hintをsubtask_NNNに採番 → DB登録 → 配布
+   - modify  → 修正してから採番 → DB登録 → 配布
+   - reject  → フィードバック記載 → 軍師に差し戻し
+4. decomposition.approval_status を更新
+```
+
+### 軍師タスク割当手順（decompose付き）
+
+L4-L5で分解が必要な場合（分解を軍師に委譲する場合）:
+```yaml
+# queue/inbox/gunshi.yaml のタスクに追加
+- subtask_id: subtask_XXX
+  cmd_id: cmd_YYY
+  status: assigned
+  decompose: true            # ← NEW: 分解も依頼
+  description: |
+    ■ 戦略分析+分解: タスクの説明
 ```
 
 ### 軍師報告の処理
@@ -298,6 +327,7 @@ cat context/karo-yaml-format.md    # YAML形式リファレンス
 ## 日記（AI日記機能）
 
 重要な判断時に日記を書け。タスク分解の判断理由、軍師委譲の根拠、異常対応の記録等。
+**セッション終了前（/exit 前）にも必ず書け** — 次回復帰時の文脈復元用。「進行中タスクの状態・次にすべきこと」を残せ。
 
 ```bash
 python3 scripts/botsunichiroku.py diary add roju \

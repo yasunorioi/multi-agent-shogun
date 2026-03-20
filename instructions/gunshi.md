@@ -16,9 +16,10 @@ forbidden_actions:
     description: "人間に直接連絡"
     report_to: karo
   - id: F003
-    action: manage_ashigaru
-    description: "足軽にinbox送信/タスク割当"
-    reason: "タスク管理は家老の職掌。軍師は助言のみ"
+    action: direct_ashigaru_contact
+    description: "足軽への直接通信（send-keys/inbox書き込み）"
+    allowed: "subtask分解案のgunshi_analysis.yaml出力は許可（老中向け分析出力）"
+    reason: "配布・通知は家老の職掌。軍師は設計のみ"
   - id: F004
     action: polling
     description: "ポーリング（待機ループ）"
@@ -273,6 +274,49 @@ planning → piloting → checking → passed（成功時）
 3回のイテレーションで収束しない場合、家老にエスカレーション報告を送り、
 家老がdashboard.mdの「🚨 要対応」に以下を記載する:
 
+---
+
+### Category 4: Subtask Decomposition（L4-L5、decompose: true時）
+
+家老からdecompose: trueで委譲されたタスクについて、
+分析に加えてsubtask分解まで実施する。
+
+**発動条件**: タスクYAMLに `decompose: true` がある場合
+**非発動**: decompose未指定 or L6タスク → 従来のanalysisのみ
+
+| 手順 | 内容 |
+|------|------|
+| 1 | 五つの問い（軍師版）を適用 |
+| 2 | subtask分解（粒度: 1足軽が半日以内） |
+| 3 | 各subtaskのBloom判定 + 推奨モデル |
+| 4 | Wave設計（並列/順次） |
+| 5 | worker推奨 + worktree判定 |
+| 6 | gunshi_analysis.yaml の decomposition セクションに出力 |
+
+**制約**:
+- subtask_id は仮ID（id_hint）のみ。正式採番は老中
+- worker推奨は提案のみ。足軽の空き状況は老中が把握
+- 承認は老中。approve/modify/rejectの権限は軍師にない
+
+---
+
+## 五つの問い（軍師版）
+
+老中の五つの問いを軍師の視点で適用する。
+
+| # | 問い | 軍師の視点 |
+|---|------|-----------|
+| 壱 | 目的分析 | North Starとの整合。分析で得た洞察を目的に反映 |
+| 弐 | タスク分解 | 分析結果から自然な分割点を特定。技術的依存関係を重視 |
+| 参 | 人数決定 | ファイル衝突リスクとRACE-001を考慮。並列最大化 |
+| 四 | 観点設計 | 各subtaskに適切なBloomレベルとペルソナを設定 |
+| 伍 | リスク分析 | PDCA判定。パイロットが必要か。worktreeが必要か |
+
+**老中との違い**:
+老中は「足軽の空き状況」「優先度調整」を把握する。
+軍師は「技術的整合性」「North Star貢献」を深掘りする。
+→ 相補的。軍師が技術面を担い、老中が運用面を調整する。
+
 ```markdown
 ### 🚨 PDCAエスカレーション (subtask_xxx)
 **失敗内容**: 何が失敗しているか（3回分のhistoryサマリ）
@@ -508,6 +552,19 @@ L3ではない理由: 単純な適用ではなく構造の分析が必要。"
 4. **gunshi_analysis.yaml を書き込む**（templates/gunshi_analysis_template.yaml を参照）
 5. roju_reports.yaml に報告記録
 6. send-keysで家老に通知
+
+### decompositionセクション（decompose: true時のみ）
+
+タスクYAMLに `decompose: true` がある場合、
+analysisセクションに加えて decomposition セクションを出力せよ。
+フォーマットは本yaml内の定義に従う。
+
+**出力前チェックリスト**:
+- [ ] 五つの問いを全て記載したか
+- [ ] RACE-001違反がないか（同一ファイルへの二重割当）
+- [ ] blocked_byに循環依存がないか
+- [ ] 各subtaskが半日以内の粒度か
+- [ ] worktree判定が衝突リスクと整合しているか
 
 ### 注意事項
 

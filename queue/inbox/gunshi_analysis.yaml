@@ -1,0 +1,114 @@
+# queue/inbox/gunshi_analysis.yaml
+# 軍師（gunshi）の分析出力。家老が読む一方向通信。
+# ─────────────────────────────────────────────────────────────
+task_id: subtask_945
+cmd_id: cmd_424
+timestamp: "2026-03-21T02:02:08"
+
+analysis:
+
+  # ─── Bloom ルーティング ───────────────────────────────────
+  bloom_level: 5
+  bloom_reasoning: |
+    「2つの新機能（Agent Teams/Channels）を現行システムと比較評価し、移行パス・推奨案を策定」
+    = Bloom L5（評価）。複数選択肢のトレードオフ比較・ROI判定・段階的移行計画の策定が中心。
+    L6ではない理由: ゼロからの新アーキテクチャ設計ではなく、既存3要素の比較評価。
+    L4ではない理由: 単なる分析ではなく、Phase 0-2の移行判断・「やる/やらない」の最終判定を含む。
+  recommended_model: claude-sonnet-4-6
+  confidence: 0.88
+
+  # ─── 品質基準 ───────────────────────────────────────────
+  quality_criteria:
+    - "Agent Teams / Claude Channels 両方の仕様サマリが正確であること"
+    - "現行shogunとの対応表が5項目全て（send-keys, inbox, 没日録, お針子, ペルソナ）カバーされていること"
+    - "段階的移行プラン（Phase 0-2）が具体的な手順を含むこと"
+    - "リスク・制約が技術/コスト/運用の3軸で整理されていること"
+    - "推奨案がNorth Star（老中負荷分散）に直結する根拠を示していること"
+    - "老中ボトルネックの真因分析（分解 vs 配布）が明示されていること"
+    - "冒険的な案が最低1つ含まれていること"
+  qc_method: lord_review
+
+  # ─── PDCA判定 ───────────────────────────────────────────
+  pdca_needed: false
+
+  # ─── North Star整合 ─────────────────────────────────────
+  north_star_alignment:
+    status: aligned
+    reason: |
+      North Star「老中を殺すな — 通信ハブ負荷の分散が目的」に対し、
+      老中の負荷を(A)タスク分解(知的)と(B-E)機械的作業に分解。
+      Agent Teamsが解消できるのは(B)配布の20%のみと冷静に評価。
+      真の解は軍師権限拡大・パターン化・retry自動化と結論。
+      「技術的に面白い」で飛びつかず、ROIベースで選択的採用を推奨。
+    risks_to_north_star:
+      - "Phase 0試行のトークンコスト増がProプラン上限に抵触する可能性"
+      - "Agent Teams安定化を待つ間に老中負荷が悪化し続けるリスク"
+      - "既存改善（軍師権限拡大等）を先行した場合、Agent Teams導入の動機が薄れて検証が後回しになるリスク"
+
+  # ─── 予測成果物（Foreman方式） ─────────────────────────
+  predicted_outcome:
+    expected_files:
+      - path: "context/agent-teams-channels.md"
+        change_type: "new"
+        description: "統合分析書。仕様サマリ・対応表・移行プラン・リスク・推奨案"
+    expected_tests: |
+      テストなし（分析ドキュメント成果物）
+    expected_behavior: |
+      context/agent-teams-channels.md を老中が読み、
+      Phase 0試行の可否を殿に上申するための判断材料とする。
+    verification_method: |
+      1. 対応表5項目が全てカバーされていること（目視確認）
+      2. Phase 0-2の各フェーズに開始条件・撤退条件があること
+      3. 老中ボトルネックの定量分析（負荷比率）が含まれていること
+
+  # ─── 戦略分析 ────────────────────────────────────────────
+  strategy_analysis:
+    alternatives:
+      - name: "案A: Agent Teams全面移行"
+        pros:
+          - "self-claimで老中の配布負荷をほぼゼロに"
+          - "native messagingでsend-keysの不安定性を解消"
+        cons:
+          - "没日録DB永続化が失われる（致命的）"
+          - "お針子の独立監査ループが解体される"
+          - "実験的機能のため仕様変更リスク"
+          - "セッション復元不可"
+          - "トークンコスト増大"
+        score: 3
+      - name: "案B: 選択的採用（Phase 0 + Channels通知）【推奨】"
+        pros:
+          - "リスク最小化（L1-L3のみ、従来フロー維持）"
+          - "self-claimの実用性を検証可能"
+          - "Channelsで殿への通知経路を確保"
+          - "撤退容易（没日録+YAMLが健在）"
+        cons:
+          - "老中負荷削減効果は20-30%に限定"
+          - "Phase 0の検証コスト（1-2週間）"
+        score: 8
+      - name: "案C: Agent Teams不採用（既存改善のみ）"
+        pros:
+          - "移行リスクゼロ"
+          - "既存アーキテクチャの知見を最大活用"
+          - "軍師権限拡大・retry自動化で30-40%の負荷削減可能"
+        cons:
+          - "Agent Teamsの進化を見逃す可能性"
+          - "self-claimの恩恵を得られない"
+        score: 7
+      - name: "案D: Hybrid Lead構想（冒険的）"
+        pros:
+          - "足軽のself-claimと軍師・お針子の独立性を両立"
+          - "段階的移行の最終形態として合理的"
+        cons:
+          - "tmux paneとTeammates paneの混在が複雑"
+          - "前例なし。デバッグが困難"
+          - "Phase 0の実測なしには判断不可"
+        score: 5
+    recommendation: "案B: 選択的採用（Phase 0 + Channels通知）"
+    recommendation_reason: |
+      老中負荷の真因は配布ではなくタスク分解。Agent Teamsは配布を自動化するが、
+      分解は自動化しない。したがって全面移行は過剰投資。
+      Phase 0でself-claimの実用性を低リスクに検証しつつ、
+      既存改善（案C）も並行して進めるのが最善。
+      Channels通知は殿の利便性向上に直結し、投資対効果が高い。
+
+skill_candidate: null

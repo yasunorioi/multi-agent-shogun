@@ -24,6 +24,25 @@
 set -e
 
 SCRIPT_DIR="${__STOP_HOOK_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+# ─── (C) Batch mode: --targets ashigaru1,ashigaru2 ───
+# Usage: bash inbox_write.sh --targets ashigaru1,ashigaru2 <content> [type] [from] ...
+if [ "${1:-}" = "--targets" ]; then
+    _TARGETS_LIST="$2"
+    shift 2
+    IFS=',' read -ra _TARGETS_ARRAY <<< "$_TARGETS_LIST"
+    _BATCH_STATUS=0
+    for _tgt in "${_TARGETS_ARRAY[@]}"; do
+        _tgt="$(echo "$_tgt" | tr -d ' ')"  # trim whitespace
+        [ -z "$_tgt" ] && continue
+        bash "${BASH_SOURCE[0]}" "$_tgt" "$@" || {
+            echo "[inbox_write] WARNING: failed to write to $_tgt" >&2
+            _BATCH_STATUS=1
+        }
+    done
+    exit $_BATCH_STATUS
+fi
+
 TARGET="$1"
 CONTENT="$2"
 TYPE="${3:-wake_up}"

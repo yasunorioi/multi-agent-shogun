@@ -50,9 +50,128 @@ if [ -z "$AGENT_ID" ]; then
     exit 0
 fi
 
-# 4. shogun / ohariko は常にapprove
+# 4. shogun は常にapprove。ohariko は (A) rejected_trivial 自動差し戻し後にapprove
 case "$AGENT_ID" in
-    shogun|ohariko)
+    shogun)
+        exit 0
+        ;;
+    ohariko)
+        # (A) rejected_trivial 自動差し戻し（老中不介入）
+        # roju_ohariko.yaml の rejected_trivial かつ auto_requeued 未処理エントリを足軽に自動再割当
+        python3 -c "
+import yaml, os, tempfile, subprocess, sys
+from datetime import datetime
+
+script_dir = '$SCRIPT_DIR'
+inbox_dir = os.path.join(script_dir, 'queue', 'inbox')
+ohariko_path = os.path.join(inbox_dir, 'roju_ohariko.yaml')
+
+if not os.path.exists(ohariko_path):
+    sys.exit(0)
+
+with open(ohariko_path) as f:
+    data = yaml.safe_load(f) or {}
+
+pane_map = {
+    'ashigaru1': 'multiagent:agents.1',
+    'ashigaru2': 'multiagent:agents.2',
+    'ashigaru3': 'multiagent:agents.3',
+    'ashigaru4': 'multiagent:agents.4',
+    'ashigaru6': 'multiagent:agents.3',
+}
+
+modified = False
+for entry in (data.get('audit_requests') or []):
+    if (entry.get('judgement') == 'rejected_trivial'
+            and not entry.get('auto_requeued')
+            and entry.get('worker', '').startswith('ashigaru')
+            and entry.get('subtask_id')):
+
+        worker     = entry['worker']
+        subtask_id = entry['subtask_id']
+        cmd_id     = entry.get('cmd_id', '')
+        recommend  = entry.get('recommendation', entry.get('summary', '指摘事項を修正せよ'))
+        score      = entry.get('score', '?')
+
+        num = worker.replace('ashigaru', '')
+        worker_inbox = os.path.join(inbox_dir, f'ashigaru{num}.yaml')
+        if not os.path.exists(worker_inbox):
+            continue
+
+        with open(worker_inbox) as f:
+            wdata = yaml.safe_load(f) or {}
+
+        existing_retries = sum(
+            1 for t in (wdata.get('tasks') or [])
+            if t.get('retry_of') == subtask_id
+        )
+        retry_count = existing_retries + 1
+
+        # retry上限(2回)超過 → エスカレーション（自動ループ停止）
+        if retry_count > 2:
+            entry['auto_requeued'] = 'escalated'
+            modified = True
+            continue
+
+        now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        retry_task = {
+            'subtask_id'  : f'{subtask_id}_retry_{retry_count}',
+            'cmd_id'      : cmd_id,
+            'assigned_by' : 'ohariko_auto',
+            'assigned_at' : now,
+            'status'      : 'assigned',
+            'retry_count' : retry_count,
+            'retry_of'    : subtask_id,
+            'description' : f'【自動差し戻し rejected_trivial {score}点 retry_{retry_count}】\n{recommend}',
+        }
+
+        if 'tasks' not in wdata:
+            wdata['tasks'] = []
+        wdata['tasks'].append(retry_task)
+
+        # Atomic write: worker inbox 更新
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(worker_inbox), suffix='.tmp')
+        try:
+            with os.fdopen(tmp_fd, 'w') as f:
+                yaml.dump(wdata, f, default_flow_style=False,
+                          allow_unicode=True, indent=2)
+            os.replace(tmp_path, worker_inbox)
+        except Exception as e:
+            try: os.unlink(tmp_path)
+            except: pass
+            print(f'[auto_requeue] ERROR writing {worker}: {e}', file=sys.stderr)
+            continue
+
+        entry['auto_requeued']    = True
+        entry['auto_requeued_at'] = now
+        modified = True
+
+        # ashigaruをtmux send-keysで起こす
+        pane = pane_map.get(worker)
+        if pane:
+            subprocess.run(
+                ['tmux', 'send-keys', '-t', pane,
+                 f'{worker}、rejected_trivial自動差し戻し（retry_{retry_count}）。inbox確認されよ。'],
+                check=False)
+            subprocess.run(
+                ['tmux', 'send-keys', '-t', pane, 'Enter'],
+                check=False)
+
+# roju_ohariko.yaml に auto_requeued フラグを保存
+if modified:
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(ohariko_path), suffix='.tmp')
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False,
+                      allow_unicode=True, indent=2)
+        os.replace(tmp_path, ohariko_path)
+    except Exception as e:
+        try: os.unlink(tmp_path)
+        except: pass
+        print(f'[auto_requeue] ERROR saving ohariko: {e}', file=sys.stderr)
+" 2>/dev/null
         exit 0
         ;;
 esac
@@ -86,6 +205,63 @@ if [ -n "$LAST_MSG" ]; then
     if [ -n "$NOTIFY_TYPE" ] && [ "$AGENT_ID" != "karo-roju" ]; then
         bash "$SCRIPT_DIR/scripts/inbox_write.sh" roju_reports \
             "$NOTIFY_CONTENT" "$NOTIFY_TYPE" "$AGENT_ID" &
+    fi
+
+    # (B) お針子auto-trigger: report_completed + needs_audit=true → ohariko.yaml に自動監査依頼
+    if [ "$NOTIFY_TYPE" = "report_completed" ] && [ "$AGENT_ID" != "karo-roju" ]; then
+        _AGENT_ID_B="$AGENT_ID"
+        _SCRIPT_DIR_B="$SCRIPT_DIR"
+        python3 -c "
+import yaml, os, subprocess, sys, tempfile
+
+script_dir = '$_SCRIPT_DIR_B'
+worker     = '$_AGENT_ID_B'
+inbox_dir  = os.path.join(script_dir, 'queue', 'inbox')
+reports_path  = os.path.join(inbox_dir, 'roju_reports.yaml')
+ohariko_path  = os.path.join(inbox_dir, 'ohariko.yaml')
+
+if not os.path.exists(reports_path):
+    sys.exit(0)
+
+with open(reports_path) as f:
+    rdata = yaml.safe_load(f) or {}
+
+# 最新の未処理 needs_audit=true エントリを探す（このworker限定）
+target = None
+for entry in reversed(rdata.get('reports') or []):
+    if (entry.get('worker') == worker
+            and entry.get('needs_audit')
+            and not entry.get('audit_triggered')):
+        target = entry
+        break
+
+if not target:
+    sys.exit(0)
+
+subtask_id = target.get('subtask_id', '')
+cmd_id     = target.get('cmd_id', '')
+summary    = target.get('summary', '')
+
+# ohariko.yaml に audit_request を書き込む
+subprocess.run([
+    'bash', os.path.join(script_dir, 'scripts', 'inbox_write.sh'),
+    'ohariko',
+    f'{subtask_id} の監査を依頼する（auto-trigger by stop_hook）。担当: {worker}。cmd: {cmd_id}。{summary[:60]}',
+    'audit_request', 'stop_hook_auto'
+], check=False)
+
+# audit_triggered フラグを立てて roju_reports.yaml を更新
+target['audit_triggered'] = True
+tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(reports_path), suffix='.tmp')
+try:
+    with os.fdopen(tmp_fd, 'w') as f:
+        yaml.dump(rdata, f, default_flow_style=False, allow_unicode=True, indent=2)
+    os.replace(tmp_path, reports_path)
+except Exception as e:
+    try: os.unlink(tmp_path)
+    except: pass
+    print(f'[auto_trigger] ERROR: {e}', file=sys.stderr)
+" 2>/dev/null &
     fi
 fi
 
@@ -132,11 +308,21 @@ print(count)
         INBOX_FILES="roju_reports.yaml, roju_ohariko.yaml"
         ;;
     ashigaru[1-8])
-        # 足軽/部屋子: ashigaru{N}.yaml の status: assigned
+        # 足軽/部屋子: ashigaru{N}.yaml の tasks[].status == "assigned" をYAMLパースでカウント
+        # NOTE: grep 'status: assigned' はfull_summary/description内の文字列を誤検知するため廃止
         NUM="${AGENT_ID#ashigaru}"
         INBOX_FILE="$INBOX_DIR/ashigaru${NUM}.yaml"
         if [ -f "$INBOX_FILE" ]; then
-            UNREAD=$(grep -c 'status: assigned' "$INBOX_FILE" 2>/dev/null) || UNREAD=0
+            UNREAD=$(python3 -c "
+import yaml, sys
+try:
+    with open('$INBOX_FILE') as f:
+        data = yaml.safe_load(f) or {}
+    count = sum(1 for t in (data.get('tasks') or []) if t.get('status') == 'assigned')
+    print(count)
+except Exception:
+    print(0)
+" 2>/dev/null) || UNREAD=0
         fi
         INBOX_FILES="ashigaru${NUM}.yaml"
         ;;

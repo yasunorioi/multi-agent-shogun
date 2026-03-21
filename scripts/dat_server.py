@@ -421,7 +421,7 @@ def dat_audit(thread_id: str) -> str | None:
         if not st:
             return None
         reps = conn.execute(
-            "SELECT * FROM reports WHERE task_id = ? AND worker_id = 'ohariko' ORDER BY id DESC LIMIT 5",
+            "SELECT * FROM audit_history WHERE subtask_id = ? ORDER BY id DESC LIMIT 5",
             (thread_id,),
         ).fetchall()
     finally:
@@ -433,9 +433,11 @@ def dat_audit(thread_id: str) -> str | None:
     lines = [dat_line(worker, "", ts, body, title)]
     for rep in reps:
         ts2 = fmt_ts(rep["timestamp"])
-        rbody = f"[監査] {rep['summary'] or ''}"
-        if rep["findings"]:
-            rbody += f"\n{rep['findings'][:150]}"
+        verdict = rep["verdict"] or "pending"
+        score = rep["score"]
+        rbody = f"[監査] {verdict}({score}/15)"
+        if rep["findings_summary"]:
+            rbody += f"\n{rep['findings_summary'][:150]}"
         lines.append(dat_line("お針子 ◆OHRK", "", ts2, rbody))
     return "\n".join(lines) + "\n"
 

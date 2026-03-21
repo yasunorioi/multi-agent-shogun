@@ -558,11 +558,11 @@ def show_audit_board(limit: int = 20) -> None:
             (limit,),
         ).fetchall()
 
-        # 各subtaskの監査レポート（ohariko）
+        # 各subtaskの監査履歴（audit_historyテーブル）
         audit_reports: dict[str, list] = {}
         for st in subtasks:
             reps = conn.execute(
-                "SELECT * FROM reports WHERE task_id = ? AND worker_id = 'ohariko'"
+                "SELECT * FROM audit_history WHERE subtask_id = ?"
                 " ORDER BY id DESC",
                 (st["id"],),
             ).fetchall()
@@ -598,13 +598,15 @@ def show_audit_board(limit: int = 20) -> None:
         print(f"  {icon} [{st_id}] {cmd_ref} {desc}")
         print(f"  status:{st['status'] or '-'}{audit_label}")
 
-        # 監査レポートがあれば1件表示
+        # 監査履歴があれば1件表示
         reps = audit_reports.get(st_id, [])
         if reps:
             rep = reps[0]
             rep_ts = fmt_ts(rep["timestamp"])
-            summary = (rep["summary"] or "")[:70]
-            print(f"  お針子 {rep_ts}: {summary}")
+            verdict = rep["verdict"] or "pending"
+            score = rep["score"]
+            findings = (rep["findings_summary"] or "")[:60]
+            print(f"  お針子 {rep_ts}: {verdict}({score}/15) {findings}")
             print("  べ、別にあなたのために監査したんじゃないんだからね！")
         else:
             print("  （監査レポートなし）")

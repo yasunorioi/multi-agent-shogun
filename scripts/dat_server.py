@@ -9,7 +9,7 @@ Python標準ライブラリのみ（http.server / socketserver）。読み取り
   python3 scripts/dat_server.py --port 8823
 
 JDim接続:
-  「外部板」→ http://localhost:8823/ を追加
+  「外部板」→ http://localhost/botsunichiroku/ を追加（nginx経由）
 
 対応板: kanri, dreams, senryaku, houkoku, ofure, zatsudan, docs, diary, audit
 """
@@ -591,7 +591,7 @@ def bbsmenu_html() -> str:
     ]
     for b in BOARDS:
         name = BOARD_NAMES.get(b, b)
-        lines.append(f'<a href="http://localhost:{PORT}/{b}/">{name}</a><br>')
+        lines.append(f'<a href="http://localhost/botsunichiroku/{b}/">{name}</a><br>')
     lines += ["</body>", "</html>"]
     return "\n".join(lines)
 

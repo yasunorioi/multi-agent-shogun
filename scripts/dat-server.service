@@ -1,0 +1,14 @@
+[Unit]
+Description=没日録2ch DATサーバー (JDim対応)
+After=network.target
+
+[Service]
+Type=simple
+User=yasu
+WorkingDirectory=/home/yasu/multi-agent-shogun
+ExecStart=/usr/bin/python3 /home/yasu/multi-agent-shogun/scripts/dat_server.py --port 8823
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

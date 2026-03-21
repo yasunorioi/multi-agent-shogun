@@ -613,6 +613,160 @@ def show_audit_board(limit: int = 20) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 戦略板: bloom_level L4/L5/L6 subtask → 軍師の戦略分析スレッド
+# ---------------------------------------------------------------------------
+
+def show_senryaku_board(limit: int = 20) -> None:
+    conn = get_conn()
+    try:
+        # bloom_level カラム存在チェック
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(subtasks)").fetchall()]
+        if "bloom_level" in cols:
+            subtasks = conn.execute(
+                "SELECT s.*, c.command AS cmd_title"
+                " FROM subtasks s"
+                " LEFT JOIN commands c ON c.id = s.parent_cmd"
+                " WHERE s.bloom_level IN ('L4','L5','L6')"
+                " ORDER BY s.id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            # フォールバック: gunshi担当タスク（軍師はL4-L6担当）
+            subtasks = conn.execute(
+                "SELECT s.*, c.command AS cmd_title"
+                " FROM subtasks s"
+                " LEFT JOIN commands c ON c.id = s.parent_cmd"
+                " WHERE s.worker_id = 'gunshi'"
+                " ORDER BY s.id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        total = len(subtasks)
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【戦略板】軍師の戦略分析スレ")
+    print(RULE)
+    print()
+
+    if not subtasks:
+        print("  戦略板: 戦略分析タスクがありません")
+        return
+
+    for i, st in enumerate(subtasks, 1):
+        worker = st["worker_id"] or "未割当"
+        ts = fmt_ts(st["assigned_at"])
+        st_id = st["id"]
+        desc = (st["description"] or "")[:80]
+        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
+        st_status = st["status"] or "-"
+        wave = st["wave"] if st["wave"] is not None else "-"
+        bloom = st["bloom_level"] if "bloom_level" in st.keys() else "L?"
+
+        print(f"{i} 名前：{nametrip(worker)} {ts}")
+        print(f"  [{st_id}] {cmd_ref} {desc}")
+        print(f"  Bloom:{bloom} | status:{st_status} | wave:{wave}")
+        if st["notes"]:
+            note = st["notes"].strip().split("\n")[0][:70]
+            print(f"  memo: {note}")
+        print(f"  {THIN_RULE}")
+        print()
+
+    print(f"  {total}件表示中")
+
+
+# ---------------------------------------------------------------------------
+# 報告板: status='completed' subtask → 足軽完了報告一覧スレッド
+# ---------------------------------------------------------------------------
+
+def show_houkoku_board(limit: int = 20) -> None:
+    conn = get_conn()
+    try:
+        subtasks = conn.execute(
+            "SELECT s.*, c.command AS cmd_title"
+            " FROM subtasks s"
+            " LEFT JOIN commands c ON c.id = s.parent_cmd"
+            " WHERE s.status IN ('completed', 'done')"
+            " ORDER BY s.completed_at DESC, s.id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM subtasks WHERE status IN ('completed', 'done')"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【報告板】足軽完了報告スレ")
+    print(RULE)
+    print()
+
+    if not subtasks:
+        print("  報告板: 完了報告がありません")
+        return
+
+    for i, st in enumerate(subtasks, 1):
+        worker = st["worker_id"] or "名無し"
+        ts = fmt_ts(st["completed_at"] or st["assigned_at"])
+        st_id = st["id"]
+        desc = (st["description"] or "")[:70]
+        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
+
+        print(f"{i} 名前：{nametrip(worker)} {ts}")
+        print(f"  [{st_id}] {cmd_ref} {desc}")
+        print(f"  完了: {fmt_ts(st['completed_at'])[:16]}")
+        print(f"  {THIN_RULE}")
+        print()
+
+    print(f"  {len(subtasks)}件表示中 (全{total}件完了)")
+
+
+# ---------------------------------------------------------------------------
+# 御触板: commands → 殿・老中からの全体通達スレッド
+# ---------------------------------------------------------------------------
+
+def show_ofure_board(limit: int = 20) -> None:
+    conn = get_conn()
+    try:
+        cmds = conn.execute(
+            "SELECT * FROM commands ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        total = conn.execute("SELECT COUNT(*) FROM commands").fetchone()[0]
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【御触板】老中からの全体通達スレ")
+    print(RULE)
+    print()
+
+    if not cmds:
+        print("  御触板: 通達がありません")
+        return
+
+    for i, cmd in enumerate(cmds, 1):
+        author = cmd["assigned_karo"] or "roju"
+        ts = fmt_ts(cmd["created_at"] or cmd["timestamp"])
+        cmd_id = cmd["id"]
+        command = (cmd["command"] or "")[:60]
+        project = cmd["project"] or "-"
+        status = cmd["status"] or "-"
+        priority = cmd["priority"] or "-"
+
+        print(f"{i} 名前：{nametrip(author)} {ts}")
+        print(f"  【{cmd_id}】{command}")
+        print(f"  project:{project} | status:{status} | priority:{priority}")
+        if cmd["details"]:
+            first_line = cmd["details"].strip().split("\n")[0][:70]
+            print(f"  {first_line}")
+        print(f"  {THIN_RULE}")
+        print()
+
+    print(f"  {len(cmds)}件表示中 (全{total}件)")
+
+
+# ---------------------------------------------------------------------------
 # エントリポイント
 # ---------------------------------------------------------------------------
 
@@ -626,6 +780,9 @@ def main() -> None:
   python3 scripts/botsunichiroku_2ch.py --board kanri
   python3 scripts/botsunichiroku_2ch.py --board kanri --limit 10
   python3 scripts/botsunichiroku_2ch.py --board dreams
+  python3 scripts/botsunichiroku_2ch.py --board senryaku
+  python3 scripts/botsunichiroku_2ch.py --board houkoku
+  python3 scripts/botsunichiroku_2ch.py --board ofure
         """,
     )
     parser.add_argument(
@@ -636,15 +793,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--board",
-        choices=["kanri", "dreams", "docs", "diary", "audit"],
-        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板)",
+        choices=["kanri", "dreams", "docs", "diary", "audit", "senryaku", "houkoku", "ofure"],
+        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板, senryaku=戦略板, houkoku=報告板, ofure=御触板)",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=20,
         metavar="N",
-        help="管理板一覧の最大表示件数 (デフォルト: 20)",
+        help="板一覧の最大表示件数 (デフォルト: 20)",
     )
     args = parser.parse_args()
 
@@ -658,6 +815,12 @@ def main() -> None:
         show_diary_board()
     elif args.board == "audit":
         show_audit_board(args.limit)
+    elif args.board == "senryaku":
+        show_senryaku_board(args.limit)
+    elif args.board == "houkoku":
+        show_houkoku_board(args.limit)
+    elif args.board == "ofure":
+        show_ofure_board(args.limit)
     elif args.cmd_id:
         show_cmd_thread(args.cmd_id)
     else:

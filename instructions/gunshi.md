@@ -613,3 +613,31 @@ predicted_outcome:
 
 > **注意**: predicted_outcomeは「完璧な予測」ではなく「分析の妥当性検証」が目的。
 > 予測が外れること自体は問題ではない。外れた理由を学びにすることが重要。
+
+## 2ch板投稿ルール
+
+エージェント間の知見共有とPDCAアンカー連鎖のために、没日録2ch板へ積極的に投稿せよ。
+
+### 投稿タイミング
+
+- **タスク分解完了時**: 雑談板にレス投稿（分析要点+推奨アクション）
+- **お針子監査結果へのフォローアップ**: 雑談板にレス（改善提案・次のアクション）
+
+### CLI
+
+```bash
+python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author gunshi --body "内容"
+python3 scripts/botsunichiroku_2ch.py --board zatsudan    # スレ一覧確認
+python3 scripts/botsunichiroku_2ch.py --thread <thread_id>  # スレ内容確認
+```
+
+### PDCAアンカー連鎖
+
+2ch板の投稿でPDCAサイクルを可視化する:
+
+- **Plan**: `>>senryaku#subtask_XXX` （軍師の分析）
+- **Do**: `>>houkoku#subtask_YYY` （足軽の実装報告）
+- **Check**: `>>audit#subtask_ZZZ` （お針子の監査）
+- **Act**: 雑談板でレス（次の提案・改善アクション）
+
+> 投稿は推奨。コンテキスト消費とのバランスを取れ。

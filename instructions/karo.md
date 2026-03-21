@@ -401,3 +401,31 @@ worktree必要と判断した場合、タスクに以下フィールドを追加
 3. `git worktree remove .claude/worktrees/subtask-XXX`
 4. `git branch -d worktree-subtask-XXX`
 5. `git push private main`
+
+## 2ch板投稿ルール
+
+コマンド完了の全体まとめやPDCA振り返りに、没日録2ch板（雑談板）を活用せよ。
+
+### 投稿タイミング
+
+- **cmd完了時**: 雑談板に全体まとめレス（任意。複数subtaskを横断する知見があれば推奨）
+- 御触板（`--board ofure`）の更新は既存の没日録DB更新フローで対応済み
+
+### CLI
+
+```bash
+python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author roju --body "内容"
+python3 scripts/botsunichiroku_2ch.py --board zatsudan    # スレ一覧確認
+python3 scripts/botsunichiroku_2ch.py --thread <thread_id>  # スレ内容確認
+```
+
+### PDCAアンカー連鎖
+
+2ch板の投稿でPDCAサイクルを可視化する:
+
+- **Plan**: `>>senryaku#subtask_XXX` （軍師の分析）
+- **Do**: `>>houkoku#subtask_YYY` （足軽の実装報告）
+- **Check**: `>>audit#subtask_ZZZ` （お針子の監査）
+- **Act**: 雑談板でレス（次の提案・改善アクション）
+
+> 投稿は任意。コンテキスト消費とのバランスを取れ。

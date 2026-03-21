@@ -68,6 +68,7 @@ from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, ke
 from botsu.dashboard import dashboard_add, dashboard_list, dashboard_search
 from botsu.search import search, enrich_cmd
 from botsu.check import check_orphans, check_coverage
+from botsu.reply import reply_add, reply_list
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +341,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--similar", metavar="SUBTASK_ID", help="指定subtaskのdescriptionで類似タスクを検索")
     p.add_argument("--enrich", metavar="CMD_ID", help="cmd_idに対してenrich（関連知見・pitfalls・成功パターン）を表示")
     p.set_defaults(func=lambda args: enrich_cmd(args) if getattr(args, "enrich", None) else search(args))
+
+    # === reply ===
+    reply_parser = top_sub.add_parser("reply", help="thread_repliesへのレス投稿・一覧")
+    reply_sub = reply_parser.add_subparsers(dest="action", required=True)
+
+    p = reply_sub.add_parser("add", help="レスを投稿する")
+    p.add_argument("thread_id", help="スレッドID")
+    p.add_argument("--agent", required=True, metavar="AGENT_ID", help="投稿者エージェントID")
+    p.add_argument("--body", required=True, help="投稿本文")
+    p.add_argument("--board", default="zatsudan", metavar="BOARD", help="板名 (デフォルト: zatsudan)")
+    p.set_defaults(func=reply_add)
+
+    p = reply_sub.add_parser("list", help="スレッドのレス一覧を表示する")
+    p.add_argument("thread_id", help="スレッドID")
+    p.add_argument("--limit", type=int, default=20, metavar="N", help="最大表示件数 (デフォルト: 20)")
+    p.set_defaults(func=reply_list)
 
     # === check ===
     check_parser = top_sub.add_parser("check", help="矛盾・放置検出 / カバレッジチェック")

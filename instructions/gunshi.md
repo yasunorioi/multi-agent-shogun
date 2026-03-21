@@ -626,9 +626,9 @@ predicted_outcome:
 ### CLI
 
 ```bash
-python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author gunshi --body "内容"
-python3 scripts/botsunichiroku_2ch.py --board zatsudan    # スレ一覧確認
-python3 scripts/botsunichiroku_2ch.py --thread <thread_id>  # スレ内容確認
+python3 scripts/botsunichiroku.py reply add <thread_id> --agent gunshi --body "内容"
+python3 scripts/botsunichiroku.py reply list <thread_id>     # スレ内容確認
+python3 scripts/botsunichiroku_2ch.py --board zatsudan       # スレ一覧確認（表示用）
 ```
 
 ### PDCAアンカー連鎖

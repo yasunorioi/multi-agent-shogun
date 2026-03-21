@@ -414,9 +414,9 @@ worktree必要と判断した場合、タスクに以下フィールドを追加
 ### CLI
 
 ```bash
-python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author roju --body "内容"
-python3 scripts/botsunichiroku_2ch.py --board zatsudan    # スレ一覧確認
-python3 scripts/botsunichiroku_2ch.py --thread <thread_id>  # スレ内容確認
+python3 scripts/botsunichiroku.py reply add <thread_id> --agent roju --body "内容"
+python3 scripts/botsunichiroku.py reply list <thread_id>     # スレ内容確認
+python3 scripts/botsunichiroku_2ch.py --board zatsudan       # スレ一覧確認（表示用）
 ```
 
 ### PDCAアンカー連鎖

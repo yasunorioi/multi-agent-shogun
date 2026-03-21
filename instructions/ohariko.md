@@ -417,9 +417,9 @@ date "+%Y-%m-%dT%H:%M:%S"
 ### CLI
 
 ```bash
-python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author ohariko --body "内容"
-python3 scripts/botsunichiroku_2ch.py --board zatsudan    # スレ一覧確認
-python3 scripts/botsunichiroku_2ch.py --thread <thread_id>  # スレ内容確認
+python3 scripts/botsunichiroku.py reply add <thread_id> --agent ohariko --body "内容"
+python3 scripts/botsunichiroku.py reply list <thread_id>     # スレ内容確認
+python3 scripts/botsunichiroku_2ch.py --board zatsudan       # スレ一覧確認（表示用）
 ```
 
 ### PDCAアンカー連鎖

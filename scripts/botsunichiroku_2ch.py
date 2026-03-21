@@ -16,6 +16,9 @@
   python3 scripts/botsunichiroku_2ch.py --board docs --limit 20
   python3 scripts/botsunichiroku_2ch.py --board diary   # 日記板
   python3 scripts/botsunichiroku_2ch.py --board audit   # 監査板
+  python3 scripts/botsunichiroku_2ch.py --board zatsudan           # 雑談板: スレ一覧
+  python3 scripts/botsunichiroku_2ch.py --thread <thread_id>       # スレ内全レス表示
+  python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author ashigaru2 --body "内容"
 """
 
 from __future__ import annotations
@@ -767,6 +770,118 @@ def show_ofure_board(limit: int = 20) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 雑談板: thread_replies → 論議スレ
+# ---------------------------------------------------------------------------
+
+def ensure_thread_replies_table(conn: sqlite3.Connection) -> None:
+    """thread_repliesテーブルが存在しない場合は作成する（既存テーブル変更なし）"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS thread_replies (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id TEXT    NOT NULL,
+            board     TEXT    NOT NULL DEFAULT 'zatsudan',
+            author    TEXT    NOT NULL,
+            body      TEXT    NOT NULL,
+            posted_at TEXT    NOT NULL
+        )
+    """)
+    conn.commit()
+
+
+def show_zatsudan_board(limit: int = 20) -> None:
+    """雑談板: スレ一覧表示"""
+    conn = get_conn()
+    try:
+        ensure_thread_replies_table(conn)
+        threads = conn.execute(
+            "SELECT thread_id, COUNT(*) AS reply_count,"
+            " MIN(posted_at) AS created_at, MAX(posted_at) AS last_at"
+            " FROM thread_replies WHERE board = 'zatsudan'"
+            " GROUP BY thread_id ORDER BY last_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(DISTINCT thread_id) FROM thread_replies WHERE board = 'zatsudan'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    print(RULE)
+    print("【雑談板】論議スレ一覧")
+    print(RULE)
+    print()
+
+    if not threads:
+        print("  雑談板: スレッドがありません")
+        print("  (--reply <thread_id> --author <name> --body <text> でスレを立てられます)")
+        return
+
+    for i, th in enumerate(threads, 1):
+        thread_id = th["thread_id"]
+        reply_count = th["reply_count"]
+        last_at = fmt_ts(th["last_at"])[:16]
+        created_at = fmt_ts(th["created_at"])[:16]
+        print(f"{i:3d}. 【{thread_id}】")
+        print(f"       作成: {created_at}  最終: {last_at}  ({reply_count}レス)")
+
+    print()
+    print(f"  {len(threads)}スレッド表示中 (全{total}スレッド)")
+
+
+def show_thread(thread_id: str) -> None:
+    """指定スレのレスを全件DAT形式で表示"""
+    conn = get_conn()
+    try:
+        ensure_thread_replies_table(conn)
+        replies = conn.execute(
+            "SELECT * FROM thread_replies WHERE thread_id = ? ORDER BY id",
+            (thread_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    print(RULE)
+    print(f"【雑談板】スレ: {thread_id}")
+    print(RULE)
+    print()
+
+    if not replies:
+        print(f"  スレ '{thread_id}' のレスがありません")
+        return
+
+    for i, rep in enumerate(replies, 1):
+        author = rep["author"]
+        ts = fmt_ts(rep["posted_at"])
+        body = rep["body"]
+        print(f"{i} 名前：{nametrip(author)} {ts}")
+        for line in body.strip().split("\n"):
+            print(f"  {line[:100]}")
+        print(f"  {THIN_RULE}")
+        print()
+
+    print(f"  合計 {len(replies)} レス")
+
+
+def post_reply(thread_id: str, author: str, body: str) -> None:
+    """スレにレスを投稿する"""
+    if not thread_id or not author or not body:
+        raise ValueError("thread_id, author, body はすべて必須です")
+    conn = get_conn()
+    try:
+        ensure_thread_replies_table(conn)
+        posted_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        conn.execute(
+            "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
+            " VALUES (?, 'zatsudan', ?, ?, ?)",
+            (thread_id, author, body, posted_at),
+        )
+        conn.commit()
+        print(f"[zatsudan] {thread_id} にレスを投稿しました (author: {author})")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # エントリポイント
 # ---------------------------------------------------------------------------
 
@@ -783,6 +898,9 @@ def main() -> None:
   python3 scripts/botsunichiroku_2ch.py --board senryaku
   python3 scripts/botsunichiroku_2ch.py --board houkoku
   python3 scripts/botsunichiroku_2ch.py --board ofure
+  python3 scripts/botsunichiroku_2ch.py --board zatsudan
+  python3 scripts/botsunichiroku_2ch.py --thread <thread_id>
+  python3 scripts/botsunichiroku_2ch.py --reply <thread_id> --author ashigaru2 --body "内容"
         """,
     )
     parser.add_argument(
@@ -793,8 +911,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--board",
-        choices=["kanri", "dreams", "docs", "diary", "audit", "senryaku", "houkoku", "ofure"],
-        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板, senryaku=戦略板, houkoku=報告板, ofure=御触板)",
+        choices=["kanri", "dreams", "docs", "diary", "audit", "senryaku", "houkoku", "ofure", "zatsudan"],
+        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板, senryaku=戦略板, houkoku=報告板, ofure=御触板, zatsudan=雑談板)",
     )
     parser.add_argument(
         "--limit",
@@ -802,6 +920,26 @@ def main() -> None:
         default=20,
         metavar="N",
         help="板一覧の最大表示件数 (デフォルト: 20)",
+    )
+    parser.add_argument(
+        "--thread",
+        metavar="THREAD_ID",
+        help="雑談板: 指定スレの全レスをDAT形式で表示",
+    )
+    parser.add_argument(
+        "--reply",
+        metavar="THREAD_ID",
+        help="雑談板: 指定スレにレスを投稿 (--author, --body と組み合わせて使用)",
+    )
+    parser.add_argument(
+        "--author",
+        metavar="AGENT_ID",
+        help="--reply 時の投稿者エージェントID (例: ashigaru2)",
+    )
+    parser.add_argument(
+        "--body",
+        metavar="TEXT",
+        help="--reply 時の投稿本文",
     )
     args = parser.parse_args()
 
@@ -821,6 +959,14 @@ def main() -> None:
         show_houkoku_board(args.limit)
     elif args.board == "ofure":
         show_ofure_board(args.limit)
+    elif args.board == "zatsudan":
+        show_zatsudan_board(args.limit)
+    elif args.thread:
+        show_thread(args.thread)
+    elif args.reply:
+        if not args.author or not args.body:
+            parser.error("--reply には --author と --body が必要です")
+        post_reply(args.reply, args.author, args.body)
     elif args.cmd_id:
         show_cmd_thread(args.cmd_id)
     else:

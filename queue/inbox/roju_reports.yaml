@@ -1,21 +1,132 @@
 reports:
+- cmd_id: null
+  detail_ref: docs/rotation_planner/contract_design.md
+  read: false
+  reported_at: '2026-03-22T19:28:01'
+  request_id: null
+  skill_candidate: null
+  status: done
+  subtask_id: null
+  summary: |
+    rotation-planner委託業務モデル設計完了。推奨: 3段階移行（Phase 0: 出荷管理暫定→Phase 1: owner_id追加→Phase 2: field_contracts）。
+    既存API後方互換。fields.user_id=管理者のまま維持。要殿裁定: 複数受託者UNIQUE制約・地主未登録対応・防除記録帰属。
+  worker: gunshi
+- cmd_id: research_002
+  detail_ref: docs/trading_research_brief.md
+  read: true
+  reported_at: '2026-03-22T00:45:54'
+  skill_candidate: null
+  status: completed
+  subtask_id: research_002
+  summary: 夢見板393件分析完了。投資関連は事実上ゼロ(systrade=1,asia_realestate=0)。短期4+中期5の方針とクエリ追加案をdocs/trading_research_brief.mdに出力
+  worker: ashigaru6
+- cmd_id: cmd_431
+  detail_ref: curl -s localhost:8080/reports/914
+  read: true
+  reported_at: '2026-03-21T20:00:00'
+  request_id: subtask_955
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_955
+  summary: replyサブコマンド追加完了。scripts/botsu/reply.py新規作成+botsunichiroku.pyに統合。reply add/list動作確認済み。既存サブコマンド破壊なし。commit
+    2d4b54e。
+  worker: ashigaru1
+- cmd_id: cmd_429
+  detail_ref: curl -s localhost:8080/reports/913
+  read: true
+  reported_at: '2026-03-21T12:45:00'
+  request_id: subtask_953
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_953
+  summary: JDim対応DATサーバー実装完了（方針変更対応済）。dat_server.py(ポート8823)+nginx_botsunichiroku.conf(http://localhost/botsunichiroku/でJDimアクセス)。全9板subject.txt/dat/bbsmenu.html動作確認済み。commit
+    fb3dc49+f8588f8。
+  worker: ashigaru1
+- cmd_id: cmd_428
+  detail_ref: curl -s localhost:8080/reports/912
+  read: true
+  reported_at: '2026-03-21T12:00:00'
+  request_id: subtask_951
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_951
+  summary: '2ch板3板追加完了。senryaku(戦略板: 軍師担当subtask/bloom_levelフォールバック)/houkoku(報告板:
+    completed subtask)/ofure(御触板: commands全件)。既存5板は無変更確認済み。commit b339d92。'
+  worker: ashigaru1
+- cmd_id: cmd_428
+  detail_ref: null
+  read: true
+  reported_at: '2026-03-21T11:19:23'
+  request_id: subtask_952
+  skill_candidate: null
+  status: blocked
+  subtask_id: subtask_952
+  summary: 'subtask_952ブロック中。blocked_by: subtask_951 が status:assigned（未完了）。subtask_951完了後に着手可能。'
+  worker: ashigaru2
+- cmd_id: cmd_427
+  detail_ref: curl -s localhost:8080/reports/911
+  read: true
+  reported_at: '2026-03-21T11:04:35'
+  request_id: subtask_950
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_950
+  summary: Claude Code Browse Use調査完了。正式名称はClaude in Chrome。context/browse-use.md
+    作成（147行）。
+  worker: ashigaru2
+- cmd_id: cmd_370
+  detail_ref: docs/shogun/integration_test_log_subtask829_retry1.md
+  read: true
+  reported_at: '2026-03-21T03:25:00'
+  request_id: subtask_829_retry_1
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_829_retry_1
+  summary: 統合テスト実行ログ提出。bloom_router.sh test(PASS=16/FAIL=0)/gunshi_analysis validate(valid)/通信フロー確認(9ペイン稼働)/PDCAドライラン記録。docs/shogun/integration_test_log_subtask829_retry1.md作成。commit
+    5a66ad2。
+  worker: ashigaru1
+- cmd_id: cmd_426
+  detail_ref: curl -s localhost:8080/reports/908
+  read: true
+  reported_at: '2026-03-21T03:10:00'
+  request_id: subtask_949
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_949
+  summary: 軍師権限拡大instructions実装完了。gunshi.md(F003再定義+Category 4+五つの問い軍師版+decompositionチェックリスト)/karo.md(Step
+    6.5拡張・decompose:true手順)/karo-parallel.md(軍師分解承認手順)。commit 0517e1a。
+  worker: ashigaru1
+- cmd_id: cmd_426
+  detail_ref: curl -s localhost:8080/reports/906
+  read: true
+  reported_at: '2026-03-21T02:23:30'
+  request_id: subtask_948
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_948
+  summary: 老中負荷軽減3施策（rejected自動差し戻し+お針子auto-trigger+バッチ配布）実装完了。commit c8d47c4。
+  worker: ashigaru2
 - cmd_id: cmd_426
   detail_ref: queue/inbox/gunshi_analysis.yaml
-  read: false
+  read: true
   reported_at: '2026-03-21T02:15:19'
   request_id: subtask_947
   skill_candidate: null
   status: done
   subtask_id: subtask_947
-  summary: |
-    軍師権限拡大設計完了。推奨: L4-L5の分解を軍師に委譲（L6は現行維持）。
+  summary: '軍師権限拡大設計完了。推奨: L4-L5の分解を軍師に委譲（L6は現行維持）。
+
     老中は分解設計者→レビュアーに役割転換。承認ステップで品質ゲート維持。
+
     gunshi.md/karo.md/karo-parallel.md改修差分案をgunshi_analysis.yamlに記載。
+
     PDCA推奨: 次のL4-L5タスクでパイロット実施。自己バイアス注意→お針子レビュー推奨。
+
+    '
   worker: gunshi
 - cmd_id: cmd_424
   detail_ref: context/agent-teams-channels.md
-  read: false
+  read: true
   reported_at: '2026-03-21T02:02:08'
   request_id: subtask_945
   skill_candidate: null
@@ -31,7 +142,7 @@ reports:
   worker: gunshi
 - cmd_id: cmd_424
   detail_ref: curl -s localhost:8080/reports/903
-  read: false
+  read: true
   reported_at: '2026-03-21T01:56:49'
   request_id: subtask_944
   skill_candidate: null
@@ -60,7 +171,8 @@ reports:
 
     '
   worker: ashigaru6
-- cmd_id: cmd_363
+- audit_triggered: true
+  cmd_id: cmd_363
   commit: null
   needs_audit: true
   read: true
@@ -119,7 +231,7 @@ reports:
   worker: ashigaru6
 - cmd_id: cmd_424
   detail_ref: curl -s localhost:8080/reports/902
-  read: false
+  read: true
   reported_at: '2026-03-21T01:57:58'
   request_id: subtask_943
   skill_candidate: null
@@ -127,7 +239,7 @@ reports:
   subtask_id: subtask_943
   summary: Agent Teams公式ドキュメント調査完了。context/agent-teams-research.md作成。有効化方法・TaskList・SendMessage・制約・Proプラン可否を整理。
   worker: ashigaru1
-- read: false
+- read: true
   reported_at: '2026-03-21T01:59:12'
   status: notification
   subtask_id: stophook_notification
@@ -136,7 +248,7 @@ reports:
   worker: ashigaru1
 - cmd_id: cmd_424
   detail_ref: curl -s localhost:8080/reports/904
-  read: false
+  read: true
   reported_at: '2026-03-21T02:04:37'
   request_id: subtask_945
   skill_candidate: null
@@ -144,7 +256,7 @@ reports:
   subtask_id: subtask_945
   summary: Agent Teams/Channels統合分析完了。対応表・移行パス・推奨アクションをcontext/agent-teams-channels-integration.mdに策定。
   worker: ashigaru1
-- read: false
+- read: true
   reported_at: '2026-03-21T02:05:33'
   status: notification
   subtask_id: stophook_notification
@@ -154,10 +266,42 @@ reports:
 - cmd_id: bug_report
   detail_ref: curl -s localhost:8080/reports/905
   findings: 'grep -c ''status: assigned'' がquoted文字列内にもマッチ。修正案: tasksリストのstatus==assignedをPythonパースでカウントに変更。'
-  read: false
+  read: true
   reported_at: '2026-03-21T02:07:10'
   status: blocked
   subtask_id: bug_stop_hook_grep
   summary: '【バグ報告】stop_hook_inbox.sh: grep誤検知で足軽が無限ブロック。subtask_943通知テキスト内のstatus:
     assigned文字列が常に2件カウントされる。修正授権を請う。'
   worker: ashigaru1
+- cmd_id: cmd_425
+  detail_ref: curl -s localhost:8080/reports/907
+  read: true
+  reported_at: '2026-03-21T02:25:51'
+  request_id: subtask_946
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_946
+  summary: 'AT Phase 0環境構築完了。settings.json更新・最小TaskList作成・tmux干渉リスク確認。split-panesはshogunセッション内では危険（ペイン配置破壊）。推奨:
+    in-processモードまたは別at-testセッション。'
+  worker: ashigaru1
+- full_summary: subtask_952完了。zatsudan板+thread_replies+CLI実装。--board zatsudan/--thread/--reply
+    --author --body 動作確認済み。既存8板変更なし。commit c46f458。
+  read: true
+  reported_at: '2026-03-21T11:30:21'
+  request_id: subtask_952
+  status: notification
+  subtask_id: subtask_952
+  summary: subtask_952完了。zatsudan板+thread_replies+CLI実装。--board zatsudan/--thread/--reply
+    -…
+  type: report_completed
+  worker: ashigaru2
+- full_summary: subtask_956完了。4instructions改修完了(gunshi/ashigaru/ohariko/karo)。2ch板投稿ルール+PDCA連鎖追記。commit
+    f72a6b6。
+  read: true
+  reported_at: '2026-03-21T19:41:47'
+  request_id: subtask_956
+  status: notification
+  subtask_id: subtask_956
+  summary: subtask_956完了。4instructions改修完了(gunshi/ashigaru/ohariko/karo)。2ch板投稿ルール+PDCA連鎖追記…
+  type: report_completed
+  worker: ashigaru2

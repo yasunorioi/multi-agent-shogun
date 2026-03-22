@@ -1,473 +1,116 @@
 # queue/inbox/gunshi_analysis.yaml
 # 軍師（gunshi）の分析出力。家老が読む一方向通信。
 # ─────────────────────────────────────────────────────────────
-# subtask_947: 軍師権限拡大の設計
+# rotation-planner 委託業務モデル設計
 # ─────────────────────────────────────────────────────────────
-task_id: subtask_947
-cmd_id: cmd_426
-timestamp: "2026-03-21T02:15:19"
+task_id: null
+cmd_id: null
+timestamp: "2026-03-22T19:28:01"
 
 analysis:
 
   # ─── Bloom ルーティング ───────────────────────────────────
-  bloom_level: 6
+  bloom_level: 5
   bloom_reasoning: |
-    「軍師自身の権限境界を再設計し、老中→軍師のフロー・承認機構・instructions差分を策定」
-    = Bloom L6（創造）。既存にない新フロー（分解委譲+承認ループ）のゼロからの設計。
-    L5ではない理由: 既存案の評価ではなく、新たな権限モデルとワークフローの創造。
-    自己設計のバイアスに注意: 拙者は権限を広く取りたい誘惑がある。
-    そのバイアスを意識し、「やらないこと」を先に定義してから「やること」を設計した。
-  recommended_model: claude-opus-4-6
-  confidence: 0.85
+    「本番稼働中のDBスキーマに地主/受託者の概念を非破壊的に導入し、
+    出荷管理システムとの将来統合を見据えた段階的設計案を策定」
+    = Bloom L5（評価）。既存スキーマとの整合性評価、4案のトレードオフ比較、
+    3段階移行計画の策定が中心。
+    L6ではない理由: 既存テーブル構造へのインクリメンタルな拡張設計であり、
+    ゼロからのアーキテクチャ創造ではない。
+    L4ではない理由: 複数案の比較評価と段階的移行判断を含む。
+  recommended_model: claude-sonnet-4-6
+  confidence: 0.82
 
   # ─── 品質基準 ───────────────────────────────────────────
   quality_criteria:
-    - "権限境界が明確（やること/やらないことの一覧表）"
-    - "新旧フローの比較図があること"
-    - "gunshi.md改修差分が具体的であること（追加/変更セクション特定）"
-    - "karo側改修差分が具体的であること"
-    - "承認ステップに老中の拒否・修正パスがあること"
-    - "自己バイアス（権限拡大方向への偏り）への自覚的な制限が設計されていること"
-    - "gunshi_analysis.yamlの新decompositionセクションのフォーマットが定義されていること"
+    - "既存19テーブルのうち影響を受けるテーブルが明示されていること"
+    - "fields.user_idの意味が変わらないこと（既存API後方互換）"
+    - "field_contracts テーブルのDDLが完全であること"
+    - "委託スコープ（full/partial）の表現方法が具体的であること"
+    - "年度変更への対応が設計されていること"
+    - "出荷管理システムとの暫定→正式の移行パスがあること"
+    - "Phase 0→1→2の各段階が独立して動作すること"
+    - "マイグレーションSQLが非破壊的であること（ALTER TABLE ADD COLUMNのみ）"
   qc_method: lord_review
 
   # ─── PDCA判定 ───────────────────────────────────────────
-  pdca_needed: true
-  pdca_max_iterations: 3
-
-  pdca:
-    iteration: 1
-    status: planning
-    history:
-      - iteration: 1
-        action: "権限拡大設計+instructions差分策定。パイロット: 次のL4-L5タスクで軍師が分解まで実施"
-        result: null
-        feedback: null
+  pdca_needed: false
 
   # ─── North Star整合 ─────────────────────────────────────
   north_star_alignment:
     status: aligned
     reason: |
-      North Star「老中を殺すな — タスク分解の認知負荷を軍師に分散」に直結。
-      subtask_945分析で老中負荷の40%がタスク分解と特定。
-      軍師がL4-L5の分解を引き受ければ、この40%のうち60-70%を吸収可能。
-      老中の認知負荷を推定24-28%削減。
+      「農業の現実を写し取れ。地主と作業者は別の人間だ」に直結。
+      現行の fields.user_id が暗黙に「地主=作業者」を前提にしている問題を
+      owner_id + field_contracts で解決。
+      既存データ・APIを壊さない段階的設計により、本番稼働中のシステムを守る。
     risks_to_north_star:
-      - "軍師の分解品質が低ければ老中の手直し負荷が増える（逆効果）"
-      - "承認ステップが形骸化すると品質ゲートが消滅する"
-      - "軍師の権限拡大が老中のコンテキスト把握力を低下させる（分解を見なくなる）"
+      - "見落とし4番: 同一ほ場に複数受託者がいるケースの UNIQUE制約問題"
+      - "地主がアプリに未登録の場合、owner_idが設定できない"
+      - "防除記録の帰属問題（受託者が散布→地主の帳簿に載せる必要）が未解決"
 
   # ─── 予測成果物（Foreman方式） ─────────────────────────
   predicted_outcome:
     expected_files:
-      - path: "instructions/gunshi.md"
-        change_type: "modify"
-        description: "Category 4追加（Subtask Decomposition）、五つの問い軍師版、decompositionセクション定義"
-      - path: "context/karo-parallel.md"
-        change_type: "modify"
-        description: "軍師分解承認手順セクション追加"
-      - path: "instructions/karo.md"
-        change_type: "modify"
-        description: "Step 6.5更新（軍師分解済みの場合の承認→配布フロー）"
+      - path: "docs/rotation_planner/contract_design.md"
+        change_type: "new"
+        description: "委託業務モデル設計書（6章構成）"
     expected_tests: |
-      テストなし（instructions/context改修）。
-      パイロット実行（次のL4-L5タスク）で実地検証。
+      テストなし（設計書成果物）。
+      実装Phase 1-2で個別テスト作成。
     expected_behavior: |
-      1. 老中がL4-L5タスクを軍師に委譲（既存フロー）
-      2. 軍師がanalysis + decomposition（subtask分解案）をgunshi_analysis.yamlに出力（NEW）
-      3. 老中がdecompositionをレビュー → approve/reject/modify
-      4. approve → 老中がそのまま足軽に配布（分解作業が不要に）
-      5. reject/modify → 老中がフィードバック → 軍師再設計 or 老中が自ら修正
+      設計書を元に、殿が以下を判断:
+      1. Phase 0の出荷管理暫定運用の方針承認
+      2. Phase 1のowner_id追加の実装開始タイミング
+      3. 見落とし4番（複数受託者）の対処方針
     verification_method: |
-      パイロット: 次のL4-L5タスクで軍師が分解を実施。
-      成功基準: 老中が分解をapproveし、手直しなしで足軽に配布できたか。
-      失敗基準: 老中が2/3以上のsubtaskを修正した場合 → 設計を見直し。
+      殿のレビューによる承認。特に:
+      - UNIQUE制約の修正要否（見落とし4番）
+      - 地主未登録時の対応方針
+      - 防除記録の帰属ルール
 
-  # ═══════════════════════════════════════════════════════════
-  # 戦略分析: 軍師権限拡大の設計
-  # ═══════════════════════════════════════════════════════════
-
+  # ─── 戦略分析 ────────────────────────────────────────────
   strategy_analysis:
-
-    # ─── 1. 現行フロー vs 新フロー ──────────────────────────
-
-    current_flow: |
-      【現行（L4-L6）】
-      ① 老中: cmd受領 → Bloom判定(L4-L6) → 軍師にanalysis委譲
-      ② 軍師: 分析実施 → gunshi_analysis.yaml（分析のみ）+ roju_reports.yaml
-      ③ 老中: 分析を読む → 五つの問い適用 → subtask分解 → 足軽配布
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                            ここが老中負荷の40%（タスク分解の認知負荷）
-
-    proposed_flow: |
-      【新フロー（L4-L5）— 軍師分解委譲】
-      ① 老中: cmd受領 → Bloom判定(L4-L5) → 軍師に「analysis + decompose」委譲
-         （gunshi.yamlのタスクに decompose: true を追加）
-      ② 軍師: 分析 + 五つの問い適用 + subtask分解
-         → gunshi_analysis.yaml に analysis + decomposition セクション出力
-         → roju_reports.yaml に報告
-      ③ 老中: decomposition をレビュー
-         → approve: そのまま足軽に配布（inbox_write.sh）
-         → modify: 一部修正して配布
-         → reject: フィードバック付きで軍師に差し戻し
-      ④ 老中: 承認済みsubtaskをDB登録 + 足軽配布（既存フロー）
-
-      【L6は現行維持】
-      L6（創造）は影響範囲が大きく、殿の裁定が必要なケースが多い。
-      老中が自ら分解し、殿に上申する現行フローを維持。
-
-    flow_comparison: |
-      老中の作業量比較:
-      ┌─────────────────────┬──────────┬──────────┐
-      │ 作業                │ 現行     │ 新フロー │
-      ├─────────────────────┼──────────┼──────────┤
-      │ Bloom判定           │ 老中     │ 老中     │
-      │ 軍師への委譲        │ 老中     │ 老中     │
-      │ 五つの問い適用      │ 老中     │ 軍師(NEW)│
-      │ subtask分解設計     │ 老中     │ 軍師(NEW)│
-      │ Wave/並列設計       │ 老中     │ 軍師(NEW)│
-      │ worker推奨          │ 老中     │ 軍師(NEW)│
-      │ worktree判定        │ 老中     │ 軍師(NEW)│
-      │ 分解レビュー/承認   │ —        │ 老中(NEW)│
-      │ DB登録(subtask add) │ 老中     │ 老中     │
-      │ 足軽配布(send-keys) │ 老中     │ 老中     │
-      └─────────────────────┴──────────┴──────────┘
-
-      削減効果: 「五つの問い〜worktree判定」の5工程が軍師に移動。
-      追加負荷: 「分解レビュー/承認」が新規追加（ただし0→1の設計よりレビューの方が軽い）。
-      純削減: 老中のタスク分解負荷の推定60-70%。
-
-    # ─── 2. 権限境界 ───────────────────────────────────────
-
-    permission_boundary: |
-      ┌─────────────────────────────────────────────────────────┐
-      │ 軍師がやること（拡大分）                                 │
-      ├─────────────────────────────────────────────────────────┤
-      │ ✅ L4-L5タスクのsubtask分解設計                         │
-      │ ✅ 各subtaskのBloom level判定                            │
-      │ ✅ recommended_worker（足軽割当の推奨）                  │
-      │ ✅ Wave設計（並列/順次の計画）                           │
-      │ ✅ worktree要否の判定                                    │
-      │ ✅ needs_audit判定（お針子監査の要否）                   │
-      │ ✅ quality_criteria策定（お針子の監査基準）              │
-      │ ✅ 五つの問い（軍師版）の適用                            │
-      ├─────────────────────────────────────────────────────────┤
-      │ 軍師がやらないこと（維持）                               │
-      ├─────────────────────────────────────────────────────────┤
-      │ ❌ DB書き込み（subtask add, report add）→ 老中のみ      │
-      │ ❌ 足軽へのsend-keys → 老中のみ                         │
-      │ ❌ 足軽inboxへの書き込み（ashigaru{N}.yaml）→ 老中のみ  │
-      │ ❌ dashboard.md更新 → 老中のみ                           │
-      │ ❌ L1-L3タスクの分解 → 老中が直送                        │
-      │ ❌ L6タスクの分解 → 老中+殿で判断                        │
-      │ ❌ subtask_idの最終採番 → 老中がDB連番で管理             │
-      │ ❌ 承認判断 → 老中が最終承認                             │
-      └─────────────────────────────────────────────────────────┘
-
-      F003の再定義:
-        旧: "足軽にinbox送信/タスク割当"を禁止
-        新: "足軽への直接通信（send-keys/inbox書き込み）"を禁止。
-            subtask分解案の策定はgunshi_analysis.yamlへの出力であり、
-            老中向け分析出力の一部。足軽への直接指示ではない。
-
-    # ─── 3. 承認ステップ設計 ─────────────────────────────────
-
-    approval_design: |
-      ## 承認フロー
-
-      ```
-      軍師: gunshi_analysis.yaml に decomposition 出力
-        │
-        ▼
-      老中: decomposition レビュー
-        │
-        ├── approve → subtask_idを採番 → DB登録 → 足軽配布
-        │              （分解案をほぼそのまま使用）
-        │
-        ├── modify → 老中が一部subtaskを修正/追加/削除
-        │            → subtask_id採番 → DB登録 → 足軽配布
-        │            （軍師のベースに老中の調整を加える）
-        │
-        └── reject → roju_reports.yaml にフィードバック記載
-                     → send-keysで軍師に差し戻し
-                     → 軍師が再設計 → 再提出
-      ```
-
-      ## 承認基準（老中が判断）
-
-      | チェック項目 | 合格基準 |
-      |-------------|---------|
-      | subtask粒度 | 1 subtask = 1足軽が半日以内で完了する規模 |
-      | 並列安全性 | RACE-001違反なし。同一ファイル編集は1名のみ |
-      | 依存関係 | blocked_byが正しく、循環依存なし |
-      | Bloom判定 | 各subtaskのBloom levelが妥当 |
-      | worker推奨 | 足軽の現在の空き状況と整合 |
-      | worktree判定 | 衝突リスクが高い場合にworktree: trueになっている |
-
-      ## 形骸化防止策
-
-      承認が「常にapprove」になると品質ゲートが消滅する。防止策:
-      1. 老中は必ず1つ以上の「確認した」コメントをdecompositionに付記
-      2. modify率を追跡（お針子が監査時にチェック可能）
-      3. パイロット3回でapprove/modify/reject比率を計測 → 判断
-
-    # ─── 4. decompositionセクション定義 ────────────────────
-
-    decomposition_format: |
-      gunshi_analysis.yaml に追加する新セクション:
-
-      ```yaml
-      decomposition:
-        approval_status: pending   # pending | approved | modified | rejected
-        five_questions:
-          purpose: |
-            壱・目的分析: 殿が本当に欲しいものは何か
-          task_split: |
-            弐・タスク分解: なぜこの分割にしたか
-          headcount: |
-            参・人数決定: 何名で、なぜその人数か
-          perspective: |
-            四・観点設計: 各subtaskのペルソナ・専門性
-          risks: |
-            伍・リスク分析: RACE-001, 依存関係, 足軽空き
-        subtasks:
-          - id_hint: "subtask_XXX_a"     # 仮ID。老中が正式採番
-            description: |
-              ■ 実装: タスク説明
-            bloom_level: 3
-            recommended_model: claude-sonnet-4-6
-            recommended_worker: ashigaru1
-            worktree: false
-            blocked_by: []
-            wave: 1
-            needs_audit: true
-            estimated_effort: "small"     # small | medium | large
-        wave_plan:
-          - wave: 1
-            subtasks: ["subtask_XXX_a", "subtask_XXX_b"]
-            parallel: true
-            rationale: "独立ファイル群のため並列可"
-          - wave: 2
-            subtasks: ["subtask_XXX_c"]
-            parallel: false
-            blocked_by: ["subtask_XXX_a"]
-            rationale: "Wave 1の成果物が入力"
-      ```
-
-      フィールド説明:
-      - id_hint: 軍師が仮付与。老中がDB連番(subtask_NNN)に置き換える
-      - recommended_worker: 推奨のみ。足軽の空き状況は老中が最終判断
-      - estimated_effort: small(〜1h), medium(1-3h), large(3h+)
-      - approval_status: 老中がレビュー後に更新
-
-    # ─── 5. instructions差分案 ─────────────────────────────
-
-    gunshi_md_diff: |
-      ## instructions/gunshi.md 改修箇所
-
-      ### 追加1: forbidden_actions F003の再定義（YAML front matter）
-      ```yaml
-      - id: F003
-        action: direct_ashigaru_contact
-        description: "足軽への直接通信（send-keys/inbox書き込み）"
-        allowed: "subtask分解案のgunshi_analysis.yaml出力は許可（老中向け分析出力）"
-        reason: "配布・通知は家老の職掌。軍師は設計のみ"
-      ```
-
-      ### 追加2: 「軍師の4つの仕事カテゴリ」に Category 4 追加
-      ```markdown
-      ### Category 4: Subtask Decomposition（L4-L5、decompose: true時）
-
-      家老からdecompose: trueで委譲されたタスクについて、
-      分析に加えてsubtask分解まで実施する。
-
-      **発動条件**: タスクYAMLに `decompose: true` がある場合
-      **非発動**: decompose未指定 or L6タスク → 従来のanalysisのみ
-
-      | 手順 | 内容 |
-      |------|------|
-      | 1 | 五つの問い（軍師版）を適用 |
-      | 2 | subtask分解（粒度: 1足軽が半日以内） |
-      | 3 | 各subtaskのBloom判定 + 推奨モデル |
-      | 4 | Wave設計（並列/順次） |
-      | 5 | worker推奨 + worktree判定 |
-      | 6 | gunshi_analysis.yaml の decomposition セクションに出力 |
-
-      **制約**:
-      - subtask_id は仮ID（id_hint）のみ。正式採番は老中
-      - worker推奨は提案のみ。足軽の空き状況は老中が把握
-      - 承認は老中。approve/modify/rejectの権限は軍師にない
-      ```
-
-      ### 追加3: 五つの問い（軍師版）
-      ```markdown
-      ## 五つの問い（軍師版）
-
-      老中の五つの問いを軍師の視点で適用する。
-
-      | # | 問い | 軍師の視点 |
-      |---|------|-----------|
-      | 壱 | 目的分析 | North Starとの整合。分析で得た洞察を目的に反映 |
-      | 弐 | タスク分解 | 分析結果から自然な分割点を特定。技術的依存関係を重視 |
-      | 参 | 人数決定 | ファイル衝突リスクとRACE-001を考慮。並列最大化 |
-      | 四 | 観点設計 | 各subtaskに適切なBloomレベルとペルソナを設定 |
-      | 伍 | リスク分析 | PDCA判定。パイロットが必要か。worktreeが必要か |
-
-      **老中との違い**:
-      老中は「足軽の空き状況」「優先度調整」を把握する。
-      軍師は「技術的整合性」「North Star貢献」を深掘りする。
-      → 相補的。軍師が技術面を担い、老中が運用面を調整する。
-      ```
-
-      ### 追加4: gunshi_analysis.yaml出力ルール拡張
-      ```markdown
-      ### decompositionセクション（decompose: true時のみ）
-
-      タスクYAMLに `decompose: true` がある場合、
-      analysisセクションに加えて decomposition セクションを出力せよ。
-      フォーマットは本yaml内の定義に従う。
-
-      **出力前チェックリスト**:
-      - [ ] 五つの問いを全て記載したか
-      - [ ] RACE-001違反がないか（同一ファイルへの二重割当）
-      - [ ] blocked_byに循環依存がないか
-      - [ ] 各subtaskが半日以内の粒度か
-      - [ ] worktree判定が衝突リスクと整合しているか
-      ```
-
-    karo_md_diff: |
-      ## instructions/karo.md 改修箇所
-
-      ### 変更1: Step 6.5の拡張
-      ```markdown
-      ### Step 6.5: bloom_routing + 軍師分解レビュー
-
-      subtask分解が完了したら（または軍師から分解案を受領したら）:
-
-      **A. 軍師が分解していない場合（L1-L3 or 自分で分解）**:
-      1. 各subtaskのBloomレベルを判定
-      2. L4-L6 → 軍師に分析依頼（既存フロー）
-      3. L1-L3 → 足軽に配布（既存フロー）
-
-      **B. 軍師が分解済みの場合（decompose: true で委譲した結果）**:
-      1. gunshi_analysis.yaml の decomposition セクションを読む
-      2. レビュー:
-         - subtask粒度は適切か（半日以内）
-         - RACE-001違反はないか
-         - 依存関係（blocked_by）は正しいか
-         - worker推奨は足軽の空き状況と整合するか
-      3. 判断:
-         - approve → id_hintをsubtask_NNNに採番 → DB登録 → 配布
-         - modify → 修正してから採番 → DB登録 → 配布
-         - reject → フィードバック記載 → 軍師に差し戻し
-      4. decomposition.approval_status を更新
-      ```
-
-      ### 変更2: 軍師タスク割当手順の拡張
-      ```markdown
-      ### 軍師タスク割当手順（decompose付き）
-
-      L4-L5で分解が必要な場合:
-      ```yaml
-      # queue/inbox/gunshi.yaml のタスクに追加
-      - subtask_id: subtask_XXX
-        cmd_id: cmd_YYY
-        status: assigned
-        decompose: true            # ← NEW: 分解も依頼
-        description: |
-          ■ 戦略分析+分解: タスクの説明
-        ...
-      ```
-      ```
-
-    karo_parallel_diff: |
-      ## context/karo-parallel.md 追加セクション
-
-      ```markdown
-      ## 軍師分解の承認手順
-
-      軍師がdecompose: trueタスクの分解案を提出した場合:
-
-      1. `gunshi_analysis.yaml` の `decomposition` セクションを読む
-      2. `five_questions` が全項目記載されていることを確認
-      3. `subtasks` の各項目をレビュー:
-         - 粒度チェック: estimated_effort が large の場合は分割検討
-         - RACE-001: 同一ファイルを複数subtaskが編集していないか
-         - blocked_by: 循環依存がないか
-      4. `wave_plan` が合理的か確認
-      5. 判断: approve / modify / reject
-      6. approve/modifyの場合:
-         - id_hint を正式 subtask_id に置換
-         - `python3 scripts/botsunichiroku.py subtask add ...` でDB登録
-         - 足軽inboxに配布
-      7. rejectの場合:
-         - roju_reports.yaml にフィードバック記載
-         - send-keysで軍師に差し戻し
-      ```
-
-    # ─── 6. 代替案比較 ────────────────────────────────────
-
     alternatives:
-      - name: "案A: L4-L5の分解を軍師に委譲（推奨）"
+      - name: "案A: 3段階移行（Phase 0→1→2）【推奨】"
         pros:
-          - "老中のタスク分解負荷を60-70%削減"
-          - "軍師の分析と分解が一体化し、分析→分解の情報ロスがゼロ"
-          - "承認ステップで老中の品質ゲートを維持"
-          - "F003の精神（配布は老中）を維持しつつ実質的な負荷分散"
-          - "instructions差分が最小限（3ファイル・追記のみ）"
+          - "非破壊的。各Phase独立して動作"
+          - "既存API後方互換。fields.user_idの意味を変えない"
+          - "Phase 0で出荷管理が先行開発可能"
+          - "撤退容易（Phase 1,2はいつでもやめられる）"
         cons:
-          - "軍師のOpusトークン消費が増加（分解分の追加出力）"
-          - "承認が形骸化するリスク"
-          - "軍師が足軽の空き状況を把握できない（workerの推奨精度に限界）"
+          - "Wave 3まで全機能揃わない"
+          - "owner_id（Phase 1）とfield_contracts（Phase 2）の二段階が冗長に見える可能性"
         score: 9
-      - name: "案B: L4-L6全てを軍師に委譲"
+      - name: "案B: users.role拡張"
         pros:
-          - "老中の分解負荷をほぼ全て排除"
+          - "スキーマ変更最小"
         cons:
-          - "L6は殿の裁定が必要な場面が多く、軍師単独では判断不可"
-          - "権限拡大が過大。自己バイアスの典型"
-          - "老中のタスク分解スキルが退化する"
-        score: 4
-      - name: "案C: 分解は委譲せず、分析精度の向上で間接的に負荷軽減"
-        pros:
-          - "instructions変更なし"
-          - "既存フローへの影響ゼロ"
-        cons:
-          - "老中のタスク分解負荷は削減されない"
-          - "subtask_945で特定した真因（分解の認知負荷40%）に直接対処しない"
+          - "地主兼受託者に対応不可（排他ロール前提）"
+          - "can_access_all_dataプロパティが壊れる"
         score: 3
-      - name: "案D: 軍師が分解し、老中の承認なしで足軽に直接配布（冒険的）"
+      - name: "案C: 完全分離（owners+operators別テーブル）"
         pros:
-          - "老中の負荷が最大限削減（配布まで軍師が担当）"
-          - "レスポンス速度が最速"
+          - "正規化が完全"
         cons:
-          - "F003の精神に完全に反する。軍師が足軽を直接管理する権限を持つ"
-          - "老中のコンテキスト把握が崩壊（何が配布されたか知らない）"
-          - "DB書き込み権限も軍師に必要（大改修）"
-          - "権限集中のリスク。チェック機構がない"
-          - "拙者自身がこの案を推したい誘惑を感じる。それ自体が危険信号"
-        score: 2
-    recommendation: "案A: L4-L5の分解を軍師に委譲"
+          - "19テーブル+全クエリに波及"
+          - "本番稼働中のシステムに致命的"
+        score: 4
+      - name: "案D: VIEWで仮想解決（冒険的）"
+        pros:
+          - "既存テーブル変更ゼロ"
+          - "Phase 1スキップの可能性"
+        cons:
+          - "VIEWは書き込み不可"
+          - "パフォーマンス未検証"
+        score: 6
+    recommendation: "案A: 3段階移行（Phase 0→1→2）"
     recommendation_reason: |
-      老中負荷の真因（タスク分解40%）に直接対処しつつ、
-      権限境界を明確に維持する最善のバランス。
-
-      軍師が分析→分解を一体化することで情報ロスがゼロになる利点は大きい。
-      現状、軍師の分析を読んだ老中が「翻訳」して分解しているが、
-      この翻訳工程で精度が落ちることがある。
-
-      承認ステップは「0→1の設計」より「レビュー」の方が認知負荷が低い。
-      老中は分解の設計者からレビュアーに役割が変わる。
-      これはCCA知見の「コーディネーターの注意希薄化」対策と整合する。
-
-      L6を除外したのは自己バイアス防止。「全部やれる」と主張するのは簡単だが、
-      L6は殿の裁定が絡む場面が多く、軍師の判断だけでは不足。
-
-  # ─── 見落としの可能性 ─────────────────────────────────
-  blind_spots:
-    - "軍師自身が権限拡大を設計しているバイアス。お針子のレビューを推奨"
-    - "足軽の空き状況を軍師が把握できない問題の解決策が不十分"
-    - "Opusトークン増加の定量的見積もりが未実施"
-    - "decompose: trueの判定基準（どのL4-L5で発動するか）が曖昧"
+      本番稼働中のrotation-plannerに対して、非破壊的かつ段階的に
+      委託概念を導入する最も安全な方法。
+      出荷管理システムが別DB・別アプリとして先行開発できるため、
+      rotation-planner側の拡張を急ぐ必要がない。
+      Phase 1の実装コストは1-2 subtask（ALTER TABLE + API追加のみ）で軽い。
 
 skill_candidate: null

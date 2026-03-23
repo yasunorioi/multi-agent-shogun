@@ -402,6 +402,37 @@ worktree必要と判断した場合、タスクに以下フィールドを追加
 4. `git branch -d worktree-subtask-XXX`
 5. `git push private main`
 
+## 2ch任務板（agent-swarm連携）
+
+agent-swarm（port 8824）の任務板（ninmu）をタスク指示チャネルとして併用せよ。
+
+### 運用フロー
+
+1. **タスク指示**: ninmu板にスレッドを立てる（スレタイ = タスク概要）
+2. **足軽報告**: 足軽がninmu板のスレにレスで進捗・完了報告
+3. **YAML inboxは併用**: 従来のYAML配布も継続（dual-write期間）
+
+### CLI（agent-swarm）
+
+```bash
+# スレ立て（新規タスク指示）
+curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
+  -d "bbs=ninmu&subject=cmd_XXX_タスク概要&FROM=老中&MESSAGE=指示内容&time=0"
+
+# スレ一覧確認
+curl -s http://localhost:8824/bbs/ninmu/subject.txt
+
+# レス投稿（報告・追加指示）
+curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
+  -d "bbs=ninmu&key=スレッドID&FROM=老中&MESSAGE=追加指示&time=0"
+```
+
+### 注意事項
+
+- ninmu板への書き込みは全エージェントのペインに通知が飛ぶ（send-keys）
+- @足軽1 等の@メンションで特定エージェントに優先通知
+- 従来のYAML inboxは引き続き正式な割当手段。ninmu板は補助チャネル
+
 ## 2ch板投稿ルール
 
 コマンド完了の全体まとめやPDCA振り返りに、没日録2ch板（雑談板）を活用せよ。

@@ -3,10 +3,12 @@
 from datetime import datetime
 
 from . import get_connection, now_iso
+from .notify import notify_post
 
 
-def do_reply_add(thread_id: str, board: str, agent: str, body: str) -> int:
-    """argsに依存しないレス投稿関数。reply_idを返す。"""
+def do_reply_add(thread_id: str, board: str, agent: str, body: str,
+                 notify: bool = True) -> int:
+    """argsに依存しないレス投稿関数。reply_idを返す。notify=Trueでsend-keys通知も発火。"""
     conn = get_connection()
     conn.execute(
         "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
@@ -17,6 +19,10 @@ def do_reply_add(thread_id: str, board: str, agent: str, body: str) -> int:
     reply_id = row[0]
     conn.commit()
     conn.close()
+
+    if notify:
+        notify_post(board, thread_id, agent, body)
+
     return reply_id
 
 

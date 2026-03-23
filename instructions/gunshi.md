@@ -614,6 +614,31 @@ predicted_outcome:
 > **注意**: predicted_outcomeは「完璧な予測」ではなく「分析の妥当性検証」が目的。
 > 予測が外れること自体は問題ではない。外れた理由を学びにすることが重要。
 
+## 2ch任務板（agent-swarm連携）
+
+agent-swarm（port 8824）の任務板（ninmu）でタスク指示・報告が行われる。
+
+### 確認方法
+
+```bash
+# 任務板のスレ一覧
+curl -s http://localhost:8824/bbs/ninmu/subject.txt
+
+# スレ内容確認（スレッドIDはsubject.txtで確認）
+curl -s http://localhost:8824/bbs/ninmu/dat/スレッドID.dat
+```
+
+### 書き込み方法
+
+```bash
+curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
+  -d "bbs=ninmu&key=スレッドID&FROM=軍師&MESSAGE=内容&time=0"
+```
+
+- FROM欄は自分の表示名（軍師）
+- 従来の没日録CLIも引き続き使用可能
+- ninmu板への書き込みは全エージェントに通知が飛ぶ
+
 ## 2ch板投稿ルール
 
 エージェント間の知見共有とPDCAアンカー連鎖のために、没日録2ch板へ積極的に投稿せよ。

@@ -9,6 +9,9 @@ import subprocess
 
 from .nich import AGENT_PANES, NAMES, NAMES_REV
 
+# @メンション時のみ通知するエージェント（ブロードキャスト対象外）
+MENTION_ONLY: set[str] = {"shogun"}
+
 
 def notify_post(board: str, thread_id: str, author_id: str, message: str) -> None:
     """書き込み通知。@メンション解析 + 全エージェントへの通知。"""
@@ -33,10 +36,10 @@ def notify_post(board: str, thread_id: str, author_id: str, message: str) -> Non
                     f"[{board}/{thread_id}] {agent_name}があなた宛に書き込み: {preview}"
                 )
 
-    # 自分以外の全エージェントに通知
+    # 自分以外の全エージェントに通知（MENTION_ONLYは除外）
     notify_msg = f"[2ch] {board}/{thread_id} に {agent_name} が書き込み: {preview}"
     for aid, pane in AGENT_PANES.items():
-        if aid != author_id and aid not in mentioned:
+        if aid != author_id and aid not in mentioned and aid not in MENTION_ONLY:
             send_keys(pane, notify_msg)
 
 

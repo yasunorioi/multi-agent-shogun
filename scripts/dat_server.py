@@ -615,11 +615,12 @@ class DatHandler(BaseHTTPRequestHandler):
             def _dec(key: bytes, default: str = "") -> str:
                 vals = raw_params.get(key, [b""])
                 v = vals[0]
+                # UTF-8を先に試す（curl/CLI経由）。失敗時にcp932（JDim経由）
                 try:
-                    return v.decode("cp932").strip()
+                    return v.decode("utf-8").strip()
                 except UnicodeDecodeError:
                     try:
-                        return v.decode("utf-8").strip()
+                        return v.decode("cp932").strip()
                     except UnicodeDecodeError:
                         return v.decode("latin-1").strip()
 

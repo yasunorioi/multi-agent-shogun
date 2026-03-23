@@ -6,6 +6,7 @@ dat_server.py / botsunichiroku_2ch.py / baku.py が共有する
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
@@ -138,4 +139,4 @@ def id_to_ts(str_id: str, ts_str: str | None = None) -> int:
     nums = "".join(c for c in str_id if c.isdigit())
     if nums:
         return int(nums)
-    return abs(hash(str_id)) % (10**10)
+    return int(hashlib.md5(str_id.encode()).hexdigest()[:10], 16) % (10**10)

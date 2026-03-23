@@ -471,17 +471,22 @@ def _notify_thread(board: str, thread_id: str, author_id: str, message: str) -> 
                 f"内容: {preview} ── "
                 f"python3 scripts/botsunichiroku_2ch.py --board {board} --thread {thread_id} "
                 f"でスレを読み、殿の書き込みに対してレスせよ。"
-                f"レス方法: python3 -c \"from botsu.reply import do_reply_add; "
-                f"do_reply_add('{thread_id}', '{board}', 'roju', '返信内容')\" "
-                f"（scriptsディレクトリで実行）"
+                f"レス方法: curl -s -X POST http://localhost:8823/botsunichiroku/test/bbs.cgi "
+                f"-d 'bbs={board}&key={thread_id}&FROM=roju&MESSAGE=返信内容&time=0'"
             )
             _send_keys_to_pane(roju_pane, cmd)
         return
 
-    # エージェントの書き込み → スレID名にマッチするエージェントに通知
+    # エージェントの書き込み → 殿に通知 + スレID名にマッチするエージェントに通知
     notify_msg = f"[2ch] {board}/{thread_id} に {agent_name} が書き込み: {preview}"
+
+    # 殿に通知（家臣の書き込みを殿が追えるように）
+    shogun_pane = AGENT_PANES.get("shogun")
+    if shogun_pane:
+        _send_keys_to_pane(shogun_pane, notify_msg)
+
     for agent_id, pane in AGENT_PANES.items():
-        if agent_id == author_id:
+        if agent_id == author_id or agent_id == "shogun":
             continue
         agent_name_lower = NAMES.get(agent_id, agent_id).lower()
         if agent_id in thread_id.lower() or agent_name_lower in thread_id.lower():

@@ -4,6 +4,7 @@ description: >
   Use when: (1) お針子がsubtaskの成果物を監査する時、(2) 老中が監査依頼を発行した時、
   (3) 足軽のコミットを15点ルーブリックで採点する時、(4) /audit コマンドが呼ばれた時。
   NOT for: コードレビュー以外の一般的なファイル確認。
+allowed-tools: Bash(git *), Bash(python3 scripts/botsunichiroku.py *)
 ---
 
 # audit - Skill Definition
@@ -46,6 +47,30 @@ description: >
 1. `queue/inbox/roju_ohariko.yaml` の直近未読監査依頼
 2. `queue/inbox/roju_reports.yaml` の直近未読完了報告
 
+## Pre-injected Context (Shell Interpolation)
+
+以下の情報はスキル発火時に自動取得され、プロンプトに埋め込まれる:
+
+### 直近コミット情報
+```
+!`git log --oneline -5`
+```
+
+### 直近の変更差分サマリ
+```
+!`git diff --stat HEAD~1 HEAD`
+```
+
+### 未読の監査依頼（あれば）
+```
+!`python3 scripts/botsunichiroku.py audit list --status pending 2>/dev/null | head -10`
+```
+
+### 直近の完了報告
+```
+!`grep -A5 'status: notification' queue/inbox/roju_reports.yaml 2>/dev/null | tail -12`
+```
+
 ---
 
 ## Implementation Steps
@@ -68,6 +93,9 @@ python3 scripts/botsunichiroku.py report list --subtask subtask_XXX --json
 
 ### Step 2: コミット実在確認
 
+commit_hash が指定された場合は Bash ツールで確認。指定なし（HEADデフォルト）の場合は上記
+Pre-injected Context の「直近コミット情報」（`!`git log --oneline -5`` の出力）を参照せよ。
+
 ```bash
 cd <repo_path>
 git log --oneline <commit_hash> 2>/dev/null | head -1
@@ -85,6 +113,10 @@ audit:
 ```
 
 ### Step 3: 変更差分レビュー
+
+commit_hash 指定なし（HEADデフォルト）の場合は上記 Pre-injected Context の
+「直近の変更差分サマリ」（`!`git diff --stat HEAD~1 HEAD`` の出力）を活用せよ。
+全差分が必要な場合は Bash ツールで取得:
 
 ```bash
 git diff <commit_hash>~1 <commit_hash>

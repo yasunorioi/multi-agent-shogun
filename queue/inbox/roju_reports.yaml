@@ -3,11 +3,20 @@ reports:
   subtask_id: null
   worker: gunshi
   status: done
+  reported_at: "2026-03-24T01:44:40"
+  summary: "ベクトル検索(sqlite-vec+Ruri v3)導入設計完了。sui-memory参考。FTS5横にvec_index追加、RRFでハイブリッド検索。9subtask/3Phase。Ruri v3-310m推奨(月額ゼロ/日本語特化)。VPSメモリ要確認(457MB記録vs4GB記載)。PDCA不要。"
+  detail_ref: "docs/shogun/vector_search_design.md"
+  skill_candidate: null
+  read: false
+- cmd_id: null
+  subtask_id: null
+  worker: gunshi
+  status: done
   reported_at: "2026-03-23T17:48:54"
   summary: "2ch互換CGI全面置換設計完了。3フェーズ段階移行（Phase0基盤整備→Phase1デュアルライト→Phase2YAML廃止）。8subtask。任務/監査/軍師板新設+BOARD_WRITERS権限+@メンション通知。没日録DB不変。PDCA推奨。"
   detail_ref: "docs/shogun/2ch_workflow_design.md"
   skill_candidate: null
-  read: false
+  read: true
 - cmd_id: cmd_433
   subtask_id: subtask_958
   request_id: subtask_958

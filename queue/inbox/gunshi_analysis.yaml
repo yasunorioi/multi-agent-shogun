@@ -1,157 +1,145 @@
 # queue/inbox/gunshi_analysis.yaml
 # 軍師（gunshi）の分析出力。家老が読む一方向通信。
 # ─────────────────────────────────────────────────────────────
-# 2ch互換CGI全面置換設計 — 通信レイヤーの2ch化
+# ベクトル検索（sqlite-vec + Ruri v3）導入設計
 # ─────────────────────────────────────────────────────────────
 task_id: null
 cmd_id: null
-timestamp: "2026-03-23T17:48:54"
+timestamp: "2026-03-24T01:44:40"
 
 analysis:
 
   # ─── Bloom ルーティング ───────────────────────────────────
-  bloom_level: 6
+  bloom_level: 5
   bloom_reasoning: |
-    「稼働中のマルチエージェント通信基盤をYAML→2ch thread_repliesに全面移行する
-    アーキテクチャ設計 + 段階的移行計画の策定」
-    = Bloom L6（創造）。既存の三層分離設計に「通信レイヤー」を新たに追加し、
-    YAML inbox通信を完全に代替する新アーキテクチャを創出。
-    板設計、権限マトリクス、通知ルーティング、老中ワークフロー全面改修を含む。
-    L5ではない理由: 既存案の比較評価ではなく、新通信基盤の設計・創造が中心。
+    「既存FTS5にsqlite-vecベクトル検索を追加するハイブリッド検索の設計。
+    sui-memoryの設計パターンを没日録に適用し、モデル選定・RRF統合・
+    時間減衰・VPS制約を評価」
+    = Bloom L5（評価）。既存技術の適用評価、4モデルの比較、
+    コスト・パフォーマンストレードオフ分析が中心。
+    L6ではない理由: sui-memoryの確立された設計パターンの適用であり、
+    ゼロからのアーキテクチャ創造ではない。
   recommended_model: claude-sonnet-4-6
-  confidence: 0.88
+  confidence: 0.90
 
   # ─── 品質基準 ───────────────────────────────────────────
   quality_criteria:
-    - "新板（ninmu/kansa/gunshi_board）が追加されBOARDS定数に反映されていること"
-    - "WRITABLE_BOARDS + BOARD_WRITERS権限マトリクスが実装されていること"
-    - "bbs.cgiの板ごと通知ルーティング(_notify_by_board)が動作すること"
-    - "reply list-for CLIで特定エージェント宛タスクを一覧取得できること"
-    - "既存のzatsudan板書き込み・通知が壊れていないこと"
-    - "kanri/diary/dreams板（DB生成・読み取り専用）が壊れていないこと"
-    - "フォールバック: bbs.cgi停止時にreply add CLIで通信可能なこと"
-    - "@メンション通知が正しいペインにsend-keysを送ること"
+    - "sqlite-vec + vec_index仮想テーブルが没日録DBに追加されること"
+    - "既存FTS5検索（search_index）が壊れていないこと"
+    - "migrate_vec.pyで既存2,345件のバッチベクトル化が完了すること"
+    - "search --hybrid でRRF統合結果が返ること"
+    - "--hybrid なしでは従来のFTS5検索が動作すること（後方互換）"
+    - "sqlite-vec未インストール環境でもCLIがエラーなく動作すること"
+    - "検索レイテンシが200ms以下であること"
+    - "モデル遅延ロード: 非検索コマンド実行時にモデルがロードされないこと"
   qc_method: ohariko
 
   # ─── PDCA判定 ───────────────────────────────────────────
-  pdca_needed: true
-  pdca_max_iterations: 3
-
-pdca:
-  iteration: 1
-  status: planning
-  history:
-    - iteration: 1
-      action: "Phase 0: 基盤整備（板追加+権限+通知+CLI）"
-      result: null
-      feedback: null
+  pdca_needed: false
+  pdca_reasoning: |
+    sui-memoryで確立された設計パターンの適用。
+    Phase 0の実装自体はリスク低（既存を壊さない追加のみ）。
+    ただしPhase 2の時間減衰パラメータ調整はベンチマーク結果に依存するため、
+    Phase 2着手時にPDCA再評価を推奨。
 
   # ─── North Star整合 ─────────────────────────────────────
   north_star_alignment:
     status: aligned
     reason: |
-      「殿がJDimだけで全てを把握できる世界」に直結。
-      YAML inboxは殿から不可視だった。thread_repliesへの移行により:
-      1. 殿がJDimでタスク進捗をリアルタイム閲覧可能
-      2. 殿がJDimからCMD指示を出せる（任務板スレ立て）
-      3. 没日録DBスキーマは不変（前回分析の三層分離原則を堅持）
-      4. SQLite WALによりYAMLファイルの排他制御問題を根本解消
+      「意味検索で没日録の知見を掘り起こせ。FTS5を壊すな、拡張せよ」に直結。
+      FTS5はキーワード一致のみ。ベクトル検索で意味的に近い知見を発掘。
+      マクガイバー精神: SQLite + Python、外部依存2つのみ、月額ゼロ。
+      sui-memoryの実績（7,059チャンク、100ms、1,759行Python）が有効性を実証。
     risks_to_north_star:
-      - "bbs.cgiダウン時の通信断（フォールバック: reply add CLI + 手動send-keys）"
-      - "老中がスレ上の報告を見てDB更新を怠る可能性（お針子監査項目に追加で軽減）"
-      - "http.serverのシングルスレッド制限（同時POST時のブロッキング）"
-      - "Phase 2移行時のYAML→2ch切り替え失敗（デュアルライト期間で検証）"
+      - "VPSメモリ不足（457MB記録 vs 4GB記載）でagent-swarm展開困難"
+      - "遅延ロードの初回10秒待ちがUXを損なう可能性"
+      - "MeCab分かち書きテキスト vs rawテキストのベクトル化精度問題"
+      - "モデルバージョン更新時の全ベクトル再計算コスト"
 
   # ─── 予測成果物（Foreman方式） ─────────────────────────
   predicted_outcome:
     expected_files:
-      - path: "docs/shogun/2ch_workflow_design.md"
+      - path: "docs/shogun/vector_search_design.md"
         change_type: "new"
-        description: "2ch通信レイヤー全面置換設計書（8章+付録）"
-      - path: "scripts/botsu/nich.py"
+        description: "ベクトル検索導入設計書（7章+付録3本）"
+      - path: "scripts/botsu/vec.py"
+        change_type: "new"
+        description: "共通ベクトル検索モジュール（VecSearchクラス）"
+      - path: "scripts/migrate_vec.py"
+        change_type: "new"
+        description: "既存FTS5データのバッチベクトル化スクリプト"
+      - path: "scripts/botsunichiroku.py"
         change_type: "modify"
-        description: "BOARDS/WRITABLE_BOARDS/BOARD_WRITERS拡張"
-      - path: "scripts/dat_server.py"
+        description: "search --hybrid オプション追加"
+      - path: "scripts/botsu/__init__.py"
         change_type: "modify"
-        description: "新板subject/dat生成 + _notify_by_board通知ルーティング"
-      - path: "scripts/botsu/reply.py"
-        change_type: "modify"
-        description: "reply list-for / list-unread CLI追加"
-      - path: "instructions/karo.md"
-        change_type: "modify"
-        description: "ワークフロー差分更新（Phase 1/2対応）"
-      - path: "instructions/ashigaru.md"
-        change_type: "modify"
-        description: "inbox読み込み+報告手順の差分更新"
+        description: "vec_upsert関数追加（インクリメンタル更新）"
     expected_tests: |
-      Phase 0:
-      - curl POST ninmu板書き込み → 200 OK
-      - curl POST kansa板書き込み（権限あり/なし）→ 200/403
-      - @メンション通知テスト → 対象ペインにsend-keys到達
-      - reply list-for @ashigaru1 --board ninmu → 一覧取得
-      - 既存zatsudan板書き込み → 壊れていないこと
-      Phase 1:
-      - デュアルライト運用テスト（YAML + 2ch並行）
+      - search --hybrid でRRF結果が返る
+      - search（hybridなし）でFTS5のみ結果が返る（後方互換）
+      - sqlite-vec未インストールでCLIエラーなし
+      - バッチベクトル化: 2,345件が4分以内に完了
+      - 検索レイテンシ: 200ms以下
     expected_behavior: |
       Phase 0完了時:
-      - 殿がJDimで任務板・監査板・軍師板を閲覧可能
-      - エージェントがbbs.cgi POST or reply add CLIで任務板に書き込み可能
-      - 板ごとの書き込み権限が機能（kansa板: roju+oharikoのみ等）
-      - @メンションでsend-keys自動通知が動作
-      - 既存YAML通信は全て並行動作（何も壊さない）
+      - `search "農家が困っていること" --hybrid` で意味検索が動作
+      - キーワード不一致でも意味的に近い知見がヒット
+      - 既存FTS5検索は従来通り動作
+      - モデルは検索コマンド実行時のみロード（他コマンドに影響なし）
     verification_method: |
-      Phase 0: 各板のcurl POST + reply list CLIで動作確認
-      Phase 1: 2-3 CMD分のデュアルライト運用
-      Phase 2: YAML廃止後1週間の安定運用確認
+      1. migrate_vec.py実行 → vec_indexに2,345件登録確認
+      2. search --hybrid "テストクエリ" → 結果件数・関連性確認
+      3. search "テストクエリ"（hybridなし）→ 従来結果と同一
+      4. pip uninstall sqlite-vec → CLIが正常動作
 
   # ─── 戦略分析 ────────────────────────────────────────────
   strategy_analysis:
     alternatives:
-      - name: "案A: 3フェーズ段階移行（Phase 0→1→2）【推奨】"
+      - name: "案A: sqlite-vec + Ruri v3-310m（ローカル推論）【推奨】"
         pros:
-          - "各フェーズで独立してロールバック可能"
-          - "Phase 0は既存を一切壊さない（板追加のみ）"
-          - "Phase 1のデュアルライトで信頼性検証"
-          - "殿がJDimで全通信を閲覧可能になる"
-          - "SQLite WALでYAMLの排他制御問題を根本解消"
+          - "月額ゼロ（ローカル推論のみ）"
+          - "日本語特化モデルで没日録に最適"
+          - "SQLite 1ファイル原則を維持"
+          - "sui-memoryで実績あり"
+          - "外部依存2つのみ"
         cons:
-          - "Phase 1のデュアルライト期間は二重管理コスト"
-          - "全面完了（Phase 2）まで8 subtask"
-          - "bbs.cgiがSPOFになる"
+          - "初回モデルロード~10秒"
+          - "VPS展開時のメモリ制約"
+          - "PyTorch依存（ディスク~2GB）"
         score: 9
-      - name: "案B: 即時全面置換（ビッグバン移行）"
+      - name: "案B: OpenAI Embeddings API"
         pros:
-          - "デュアルライト期間不要。移行コスト最小"
-          - "即座にJDim統一UIを実現"
+          - "ローカルモデル不要。メモリ節約"
+          - "高品質ベクトル"
         cons:
-          - "ロールバック困難"
-          - "エッジケース未検証で本番移行"
-          - "足軽のinstructions一括更新が必要"
+          - "月額課金（殿の忌避事項）"
+          - "オフライン動作不可"
+          - "プライバシーリスク（データ外部送信）"
+        score: 2
+      - name: "案C: FTS5のみ（ベクトル検索なし）"
+        pros:
+          - "追加依存ゼロ"
+          - "実装コストゼロ"
+        cons:
+          - "意味検索不可"
+          - "キーワード不一致の知見を掘り起こせない"
+          - "North Starに到達しない"
         score: 4
-      - name: "案C: 部分移行（殿↔老中のみ2ch化、足軽はYAML維持）"
+      - name: "案D: ChromaDB / Qdrant等の専用ベクトルDB"
         pros:
-          - "影響範囲が狭い"
-          - "足軽のinstructions変更不要"
+          - "HNSW等の高速ANN"
+          - "豊富なフィルタリング機能"
         cons:
-          - "通信方式が混在し続ける"
-          - "殿から足軽の状況が見えない（改善なし）"
-          - "中途半端。North Starに到達しない"
-        score: 5
-      - name: "案D: やらない（YAML維持）"
-        pros:
-          - "リスクゼロ。変更コストゼロ"
-        cons:
-          - "YAMLの排他制御問題が残る"
-          - "殿からタスク状況が見えないまま"
-          - "JDim統一UIの実現が遠のく"
+          - "別プロセス・別ファイル（SQLite 1本原則に違反）"
+          - "Dockerまたはサーバー運用が必要"
+          - "sui-memoryの前身(claude-mem)がChromaDBで失敗した教訓"
         score: 3
-    recommendation: "案A: 3フェーズ段階移行（Phase 0→1→2）"
+    recommendation: "案A: sqlite-vec + Ruri v3-310m（ローカル推論）"
     recommendation_reason: |
-      既に殿↔老中のJDim対話が稼働中（bbs.cgi + send-keysフック）。
-      この実績を足軽・軍師・お針子に拡大するのは自然な延長線上。
-      Phase 0は既存を一切壊さず新板を追加するだけなので低リスク。
-      Phase 1のデュアルライトで信頼性を検証してからYAML廃止に進める。
-      前回分析の三層分離（保存/検索/表示）に「通信」レイヤーを追加する
-      拡張であり、アーキテクチャの一貫性を保てる。
+      殿の制約（月額忌避・SQLite・マクガイバー精神）に完全一致。
+      sui-memoryが同じ構成で7,059チャンク・100ms検索を達成しており、
+      没日録の2,345件では余裕で動作する。
+      ChromaDB(案D)はsui-memoryの前身(claude-mem)が3日で失敗した教訓がある。
+      SQLite 1ファイルに全てを収める設計が最もロバスト。
 
 skill_candidate: null

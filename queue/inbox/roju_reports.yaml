@@ -1,15 +1,65 @@
 reports:
 - cmd_id: null
-  detail_ref: docs/rotation_planner/contract_design.md
+  subtask_id: null
+  worker: gunshi
+  status: done
+  reported_at: "2026-03-23T17:48:54"
+  summary: "2ch互換CGI全面置換設計完了。3フェーズ段階移行（Phase0基盤整備→Phase1デュアルライト→Phase2YAML廃止）。8subtask。任務/監査/軍師板新設+BOARD_WRITERS権限+@メンション通知。没日録DB不変。PDCA推奨。"
+  detail_ref: "docs/shogun/2ch_workflow_design.md"
+  skill_candidate: null
   read: false
+- cmd_id: cmd_433
+  subtask_id: subtask_958
+  request_id: subtask_958
+  worker: ashigaru1
+  status: completed
+  reported_at: "2026-03-23T10:00:00"
+  summary: "シェルインターポレーション仕様調査+/auditスキル導入完了。構文=!`command`(本文内のみ/allowed-tools frontmatter必須)。Pre-injected Context(git log/diff --stat/audit list/roju_reports)追加+Step2-3参照注記。Phase3: simplifyはビルトインのため変更不可。commit deafa0a。"
+  detail_ref: "curl -s localhost:8080/reports/915"
+  skill_candidate: null
+  read: true
+- cmd_id: cmd_434
+  detail_ref: git show b2c0b3a --stat
+  read: true
+  reported_at: '2026-03-23T17:16:26'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_960
+  summary: ベンチマークスクリプト(scripts/bench_ronin.sh)作成完了。779行。5テスト(speed/tool/yaml/context/practical)。JSON出力+没日録report形式。commit b2c0b3a。
+  worker: ashigaru2
+- cmd_id: cmd_434
+  detail_ref: git show 38b6fa1 --stat
+  read: true
+  reported_at: '2026-03-23T17:15:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_959
+  summary: MBP城tmux起動スクリプト(scripts/launch_mbp.sh)作成完了。236行。ollama/claude/予備の3ペイン構成。SSH両対応。commit
+    38b6fa1。
+  worker: ashigaru2
+- cmd_id: calm_research
+  detail_ref: docs/calm_research.md
+  read: true
+  reported_at: '2026-03-23T15:46:36'
+  skill_candidate: null
+  status: completed
+  subtask_id: calm_research
+  summary: CALM調査完了。マルチエージェントFWではなく連続ベクトル予測の言語モデリング基礎研究。Shogunへの直接技術移転は限定的だが圧縮・帯域幅・ノイズ耐性の概念に示唆あり
+  worker: ashigaru6
+- cmd_id: null
+  detail_ref: docs/rotation_planner/contract_design.md
+  read: true
   reported_at: '2026-03-22T19:28:01'
   request_id: null
   skill_candidate: null
   status: done
   subtask_id: null
-  summary: |
-    rotation-planner委託業務モデル設計完了。推奨: 3段階移行（Phase 0: 出荷管理暫定→Phase 1: owner_id追加→Phase 2: field_contracts）。
+  summary: 'rotation-planner委託業務モデル設計完了。推奨: 3段階移行（Phase 0: 出荷管理暫定→Phase 1: owner_id追加→Phase
+    2: field_contracts）。
+
     既存API後方互換。fields.user_id=管理者のまま維持。要殿裁定: 複数受託者UNIQUE制約・地主未登録対応・防除記録帰属。
+
+    '
   worker: gunshi
 - cmd_id: research_002
   detail_ref: docs/trading_research_brief.md
@@ -159,7 +209,8 @@ reports:
   summary: 'subtask_874差し戻し修正完了。commit b2e636c。services/agriha-chat/tests/conftest.py新規作成:
     sys.path追加+ANTHROPIC_API_KEYダミー環境変数。リポルートからpytest 59件全PASS確認済み。'
   worker: ashigaru1
-- cmd_id: cmd_365
+- audit_triggered: true
+  cmd_id: cmd_365
   commit: null
   needs_audit: true
   read: true
@@ -303,5 +354,25 @@ reports:
   status: notification
   subtask_id: subtask_956
   summary: subtask_956完了。4instructions改修完了(gunshi/ashigaru/ohariko/karo)。2ch板投稿ルール+PDCA連鎖追記…
+  type: report_completed
+  worker: ashigaru2
+- full_summary: subtask_959完了。scripts/launch_mbp.sh作成(chmod +x)。ollama未インストール/qwen3:70b未pull確認+ローカル/SSH両対応。commit
+    38b6fa1。
+  read: true
+  reported_at: '2026-03-23T17:12:16'
+  request_id: subtask_959
+  status: notification
+  subtask_id: subtask_959
+  summary: subtask_959完了。scripts/launch_mbp.sh作成(chmod +x)。ollama未インストール/qwen3:70b未pull確認+ロ…
+  type: report_completed
+  worker: ashigaru2
+- full_summary: subtask_960完了。scripts/bench_ronin.sh作成(5テスト:speed/tool/yaml/context/practical)。JSON出力+没日録report形式。commit
+    b2c0b3a。
+  read: true
+  reported_at: '2026-03-23T17:16:26'
+  request_id: subtask_960
+  status: notification
+  subtask_id: subtask_960
+  summary: subtask_960完了。scripts/bench_ronin.sh作成(5テスト:speed/tool/yaml/context/practical)。J…
   type: report_completed
   worker: ashigaru2

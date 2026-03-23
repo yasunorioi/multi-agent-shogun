@@ -1,116 +1,157 @@
 # queue/inbox/gunshi_analysis.yaml
 # 軍師（gunshi）の分析出力。家老が読む一方向通信。
 # ─────────────────────────────────────────────────────────────
-# rotation-planner 委託業務モデル設計
+# 2ch互換CGI全面置換設計 — 通信レイヤーの2ch化
 # ─────────────────────────────────────────────────────────────
 task_id: null
 cmd_id: null
-timestamp: "2026-03-22T19:28:01"
+timestamp: "2026-03-23T17:48:54"
 
 analysis:
 
   # ─── Bloom ルーティング ───────────────────────────────────
-  bloom_level: 5
+  bloom_level: 6
   bloom_reasoning: |
-    「本番稼働中のDBスキーマに地主/受託者の概念を非破壊的に導入し、
-    出荷管理システムとの将来統合を見据えた段階的設計案を策定」
-    = Bloom L5（評価）。既存スキーマとの整合性評価、4案のトレードオフ比較、
-    3段階移行計画の策定が中心。
-    L6ではない理由: 既存テーブル構造へのインクリメンタルな拡張設計であり、
-    ゼロからのアーキテクチャ創造ではない。
-    L4ではない理由: 複数案の比較評価と段階的移行判断を含む。
+    「稼働中のマルチエージェント通信基盤をYAML→2ch thread_repliesに全面移行する
+    アーキテクチャ設計 + 段階的移行計画の策定」
+    = Bloom L6（創造）。既存の三層分離設計に「通信レイヤー」を新たに追加し、
+    YAML inbox通信を完全に代替する新アーキテクチャを創出。
+    板設計、権限マトリクス、通知ルーティング、老中ワークフロー全面改修を含む。
+    L5ではない理由: 既存案の比較評価ではなく、新通信基盤の設計・創造が中心。
   recommended_model: claude-sonnet-4-6
-  confidence: 0.82
+  confidence: 0.88
 
   # ─── 品質基準 ───────────────────────────────────────────
   quality_criteria:
-    - "既存19テーブルのうち影響を受けるテーブルが明示されていること"
-    - "fields.user_idの意味が変わらないこと（既存API後方互換）"
-    - "field_contracts テーブルのDDLが完全であること"
-    - "委託スコープ（full/partial）の表現方法が具体的であること"
-    - "年度変更への対応が設計されていること"
-    - "出荷管理システムとの暫定→正式の移行パスがあること"
-    - "Phase 0→1→2の各段階が独立して動作すること"
-    - "マイグレーションSQLが非破壊的であること（ALTER TABLE ADD COLUMNのみ）"
-  qc_method: lord_review
+    - "新板（ninmu/kansa/gunshi_board）が追加されBOARDS定数に反映されていること"
+    - "WRITABLE_BOARDS + BOARD_WRITERS権限マトリクスが実装されていること"
+    - "bbs.cgiの板ごと通知ルーティング(_notify_by_board)が動作すること"
+    - "reply list-for CLIで特定エージェント宛タスクを一覧取得できること"
+    - "既存のzatsudan板書き込み・通知が壊れていないこと"
+    - "kanri/diary/dreams板（DB生成・読み取り専用）が壊れていないこと"
+    - "フォールバック: bbs.cgi停止時にreply add CLIで通信可能なこと"
+    - "@メンション通知が正しいペインにsend-keysを送ること"
+  qc_method: ohariko
 
   # ─── PDCA判定 ───────────────────────────────────────────
-  pdca_needed: false
+  pdca_needed: true
+  pdca_max_iterations: 3
+
+pdca:
+  iteration: 1
+  status: planning
+  history:
+    - iteration: 1
+      action: "Phase 0: 基盤整備（板追加+権限+通知+CLI）"
+      result: null
+      feedback: null
 
   # ─── North Star整合 ─────────────────────────────────────
   north_star_alignment:
     status: aligned
     reason: |
-      「農業の現実を写し取れ。地主と作業者は別の人間だ」に直結。
-      現行の fields.user_id が暗黙に「地主=作業者」を前提にしている問題を
-      owner_id + field_contracts で解決。
-      既存データ・APIを壊さない段階的設計により、本番稼働中のシステムを守る。
+      「殿がJDimだけで全てを把握できる世界」に直結。
+      YAML inboxは殿から不可視だった。thread_repliesへの移行により:
+      1. 殿がJDimでタスク進捗をリアルタイム閲覧可能
+      2. 殿がJDimからCMD指示を出せる（任務板スレ立て）
+      3. 没日録DBスキーマは不変（前回分析の三層分離原則を堅持）
+      4. SQLite WALによりYAMLファイルの排他制御問題を根本解消
     risks_to_north_star:
-      - "見落とし4番: 同一ほ場に複数受託者がいるケースの UNIQUE制約問題"
-      - "地主がアプリに未登録の場合、owner_idが設定できない"
-      - "防除記録の帰属問題（受託者が散布→地主の帳簿に載せる必要）が未解決"
+      - "bbs.cgiダウン時の通信断（フォールバック: reply add CLI + 手動send-keys）"
+      - "老中がスレ上の報告を見てDB更新を怠る可能性（お針子監査項目に追加で軽減）"
+      - "http.serverのシングルスレッド制限（同時POST時のブロッキング）"
+      - "Phase 2移行時のYAML→2ch切り替え失敗（デュアルライト期間で検証）"
 
   # ─── 予測成果物（Foreman方式） ─────────────────────────
   predicted_outcome:
     expected_files:
-      - path: "docs/rotation_planner/contract_design.md"
+      - path: "docs/shogun/2ch_workflow_design.md"
         change_type: "new"
-        description: "委託業務モデル設計書（6章構成）"
+        description: "2ch通信レイヤー全面置換設計書（8章+付録）"
+      - path: "scripts/botsu/nich.py"
+        change_type: "modify"
+        description: "BOARDS/WRITABLE_BOARDS/BOARD_WRITERS拡張"
+      - path: "scripts/dat_server.py"
+        change_type: "modify"
+        description: "新板subject/dat生成 + _notify_by_board通知ルーティング"
+      - path: "scripts/botsu/reply.py"
+        change_type: "modify"
+        description: "reply list-for / list-unread CLI追加"
+      - path: "instructions/karo.md"
+        change_type: "modify"
+        description: "ワークフロー差分更新（Phase 1/2対応）"
+      - path: "instructions/ashigaru.md"
+        change_type: "modify"
+        description: "inbox読み込み+報告手順の差分更新"
     expected_tests: |
-      テストなし（設計書成果物）。
-      実装Phase 1-2で個別テスト作成。
+      Phase 0:
+      - curl POST ninmu板書き込み → 200 OK
+      - curl POST kansa板書き込み（権限あり/なし）→ 200/403
+      - @メンション通知テスト → 対象ペインにsend-keys到達
+      - reply list-for @ashigaru1 --board ninmu → 一覧取得
+      - 既存zatsudan板書き込み → 壊れていないこと
+      Phase 1:
+      - デュアルライト運用テスト（YAML + 2ch並行）
     expected_behavior: |
-      設計書を元に、殿が以下を判断:
-      1. Phase 0の出荷管理暫定運用の方針承認
-      2. Phase 1のowner_id追加の実装開始タイミング
-      3. 見落とし4番（複数受託者）の対処方針
+      Phase 0完了時:
+      - 殿がJDimで任務板・監査板・軍師板を閲覧可能
+      - エージェントがbbs.cgi POST or reply add CLIで任務板に書き込み可能
+      - 板ごとの書き込み権限が機能（kansa板: roju+oharikoのみ等）
+      - @メンションでsend-keys自動通知が動作
+      - 既存YAML通信は全て並行動作（何も壊さない）
     verification_method: |
-      殿のレビューによる承認。特に:
-      - UNIQUE制約の修正要否（見落とし4番）
-      - 地主未登録時の対応方針
-      - 防除記録の帰属ルール
+      Phase 0: 各板のcurl POST + reply list CLIで動作確認
+      Phase 1: 2-3 CMD分のデュアルライト運用
+      Phase 2: YAML廃止後1週間の安定運用確認
 
   # ─── 戦略分析 ────────────────────────────────────────────
   strategy_analysis:
     alternatives:
-      - name: "案A: 3段階移行（Phase 0→1→2）【推奨】"
+      - name: "案A: 3フェーズ段階移行（Phase 0→1→2）【推奨】"
         pros:
-          - "非破壊的。各Phase独立して動作"
-          - "既存API後方互換。fields.user_idの意味を変えない"
-          - "Phase 0で出荷管理が先行開発可能"
-          - "撤退容易（Phase 1,2はいつでもやめられる）"
+          - "各フェーズで独立してロールバック可能"
+          - "Phase 0は既存を一切壊さない（板追加のみ）"
+          - "Phase 1のデュアルライトで信頼性検証"
+          - "殿がJDimで全通信を閲覧可能になる"
+          - "SQLite WALでYAMLの排他制御問題を根本解消"
         cons:
-          - "Wave 3まで全機能揃わない"
-          - "owner_id（Phase 1）とfield_contracts（Phase 2）の二段階が冗長に見える可能性"
+          - "Phase 1のデュアルライト期間は二重管理コスト"
+          - "全面完了（Phase 2）まで8 subtask"
+          - "bbs.cgiがSPOFになる"
         score: 9
-      - name: "案B: users.role拡張"
+      - name: "案B: 即時全面置換（ビッグバン移行）"
         pros:
-          - "スキーマ変更最小"
+          - "デュアルライト期間不要。移行コスト最小"
+          - "即座にJDim統一UIを実現"
         cons:
-          - "地主兼受託者に対応不可（排他ロール前提）"
-          - "can_access_all_dataプロパティが壊れる"
-        score: 3
-      - name: "案C: 完全分離（owners+operators別テーブル）"
-        pros:
-          - "正規化が完全"
-        cons:
-          - "19テーブル+全クエリに波及"
-          - "本番稼働中のシステムに致命的"
+          - "ロールバック困難"
+          - "エッジケース未検証で本番移行"
+          - "足軽のinstructions一括更新が必要"
         score: 4
-      - name: "案D: VIEWで仮想解決（冒険的）"
+      - name: "案C: 部分移行（殿↔老中のみ2ch化、足軽はYAML維持）"
         pros:
-          - "既存テーブル変更ゼロ"
-          - "Phase 1スキップの可能性"
+          - "影響範囲が狭い"
+          - "足軽のinstructions変更不要"
         cons:
-          - "VIEWは書き込み不可"
-          - "パフォーマンス未検証"
-        score: 6
-    recommendation: "案A: 3段階移行（Phase 0→1→2）"
+          - "通信方式が混在し続ける"
+          - "殿から足軽の状況が見えない（改善なし）"
+          - "中途半端。North Starに到達しない"
+        score: 5
+      - name: "案D: やらない（YAML維持）"
+        pros:
+          - "リスクゼロ。変更コストゼロ"
+        cons:
+          - "YAMLの排他制御問題が残る"
+          - "殿からタスク状況が見えないまま"
+          - "JDim統一UIの実現が遠のく"
+        score: 3
+    recommendation: "案A: 3フェーズ段階移行（Phase 0→1→2）"
     recommendation_reason: |
-      本番稼働中のrotation-plannerに対して、非破壊的かつ段階的に
-      委託概念を導入する最も安全な方法。
-      出荷管理システムが別DB・別アプリとして先行開発できるため、
-      rotation-planner側の拡張を急ぐ必要がない。
-      Phase 1の実装コストは1-2 subtask（ALTER TABLE + API追加のみ）で軽い。
+      既に殿↔老中のJDim対話が稼働中（bbs.cgi + send-keysフック）。
+      この実績を足軽・軍師・お針子に拡大するのは自然な延長線上。
+      Phase 0は既存を一切壊さず新板を追加するだけなので低リスク。
+      Phase 1のデュアルライトで信頼性を検証してからYAML廃止に進める。
+      前回分析の三層分離（保存/検索/表示）に「通信」レイヤーを追加する
+      拡張であり、アーキテクチャの一貫性を保てる。
 
 skill_candidate: null

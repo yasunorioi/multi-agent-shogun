@@ -11,7 +11,7 @@ Python標準ライブラリのみ（http.server / socketserver）。
 JDim接続:
   「外部板」→ http://localhost/botsunichiroku/ を追加（nginx経由）
 
-対応板: kanri, dreams, senryaku, houkoku, ofure, zatsudan, docs, diary, audit
+対応板: kanri, dreams, diary, zatsudan
 
 書き込み:
   POST /test/bbs.cgi  — JDim標準書き込みプロトコル
@@ -428,7 +428,13 @@ def do_bbs_write(bbs: str, key: str, from_field: str, message: str, subject: str
     if subject:
         thread_id = subject.replace("/", "_").replace(" ", "_")[:64]
     else:
-        thread_id = key
+        # JDimはDATファイルID（数値）をkeyとして送る → 元のthread_idに逆引き
+        try:
+            num_key = int(key)
+            resolved = lookup_id(bbs, num_key)
+            thread_id = resolved if resolved else key
+        except (ValueError, TypeError):
+            thread_id = key
 
     if not thread_id:
         return 400, _bbs_error("スレッドIDが指定されていません")
@@ -448,30 +454,56 @@ def do_bbs_write(bbs: str, key: str, from_field: str, message: str, subject: str
 
 
 def _notify_thread(board: str, thread_id: str, author_id: str, message: str) -> None:
-    """スレッドへの書き込みをtmux send-keysで関連エージェントに通知。"""
-    preview = message.replace("\n", " ")[:60]
-    agent_name = NAMES.get(author_id, author_id)
-    notify_msg = f"[2ch] {board}/{thread_id} に {agent_name} が書き込み: {preview}"
+    """スレッドへの書き込みをtmux send-keysで関連エージェントに通知。
 
+    殿(shogun)が書き込んだ場合 → 老中にsend-keysで指示を流し込む
+    その他 → スレID名にマッチするエージェント or 老中に通知
+    """
+    preview = message.replace("\n", " ")[:80]
+    agent_name = NAMES.get(author_id, author_id)
+
+    # 殿の書き込み → 老中に対話指示を送る
+    if author_id == "shogun":
+        roju_pane = AGENT_PANES.get("roju")
+        if roju_pane:
+            cmd = (
+                f"殿が雑談板のスレ「{thread_id}」に書き込んだ。"
+                f"内容: {preview} ── "
+                f"python3 scripts/botsunichiroku_2ch.py --board {board} --thread {thread_id} "
+                f"でスレを読み、殿の書き込みに対してレスせよ。"
+                f"レス方法: python3 -c \"from botsu.reply import do_reply_add; "
+                f"do_reply_add('{thread_id}', '{board}', 'roju', '返信内容')\" "
+                f"（scriptsディレクトリで実行）"
+            )
+            _send_keys_to_pane(roju_pane, cmd)
+        return
+
+    # エージェントの書き込み → スレID名にマッチするエージェントに通知
+    notify_msg = f"[2ch] {board}/{thread_id} に {agent_name} が書き込み: {preview}"
     for agent_id, pane in AGENT_PANES.items():
         if agent_id == author_id:
             continue
         agent_name_lower = NAMES.get(agent_id, agent_id).lower()
         if agent_id in thread_id.lower() or agent_name_lower in thread_id.lower():
-            _send_tmux_notify(pane, notify_msg)
+            _send_keys_to_pane(pane, notify_msg)
             return
 
+    # デフォルト: 老中に通知
     if author_id != "roju" and author_id != "karo-roju":
         roju_pane = AGENT_PANES.get("roju")
         if roju_pane:
-            _send_tmux_notify(roju_pane, notify_msg)
+            _send_keys_to_pane(roju_pane, notify_msg)
 
 
-def _send_tmux_notify(pane: str, message: str) -> None:
-    """tmux send-keys で通知。"""
+def _send_keys_to_pane(pane: str, message: str) -> None:
+    """tmux send-keys でメッセージを送信（2段階: テキスト + Enter）。"""
     try:
         subprocess.run(
-            ["tmux", "display-message", "-t", pane, "-d", "5000", message[:200]],
+            ["tmux", "send-keys", "-t", pane, message[:500]],
+            capture_output=True, timeout=3,
+        )
+        subprocess.run(
+            ["tmux", "send-keys", "-t", pane, "Enter"],
             capture_output=True, timeout=3,
         )
     except Exception:
@@ -572,22 +604,27 @@ class DatHandler(BaseHTTPRequestHandler):
                 self.send_cp932(_bbs_error("投稿が大きすぎます"), "text/html; charset=Shift_JIS", 413)
                 return
             raw = self.rfile.read(content_length)
-            try:
-                body_str = raw.decode("cp932")
-            except UnicodeDecodeError:
-                try:
-                    body_str = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    body_str = raw.decode("latin-1")
+            # JDimはcp932でURLエンコードして送るので、バイト列のままparse_qsに渡す
+            raw_params = parse_qs(raw, keep_blank_values=True)
 
-            params = parse_qs(body_str, keep_blank_values=True)
-            bbs = (params.get("bbs", [""])[0]).strip()
-            key = (params.get("key", [""])[0]).strip()
-            from_field = (params.get("FROM", [""])[0]).strip()
-            mail = (params.get("mail", [""])[0]).strip()
-            message = (params.get("MESSAGE", [""])[0]).strip()
-            subject = (params.get("subject", [""])[0]).strip() or None
-            time_val = (params.get("time", [""])[0]).strip()
+            def _dec(key: bytes, default: str = "") -> str:
+                vals = raw_params.get(key, [b""])
+                v = vals[0]
+                try:
+                    return v.decode("cp932").strip()
+                except UnicodeDecodeError:
+                    try:
+                        return v.decode("utf-8").strip()
+                    except UnicodeDecodeError:
+                        return v.decode("latin-1").strip()
+
+            bbs = _dec(b"bbs")
+            key = _dec(b"key")
+            from_field = _dec(b"FROM")
+            mail = _dec(b"mail")
+            message = _dec(b"MESSAGE")
+            subject = _dec(b"subject") or None
+            time_val = _dec(b"time")
 
             if not message:
                 self.send_cp932(_bbs_error("本文が空です"), "text/html; charset=Shift_JIS", 400)

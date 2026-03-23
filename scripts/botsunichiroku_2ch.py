@@ -40,50 +40,22 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 DB_PATH = PROJECT_ROOT / "data" / "botsunichiroku.db"
 DREAMS_PATH = PROJECT_ROOT / "data" / "dreams.jsonl"
 
+import sys  # noqa: E402
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from botsu.nich import NAMES, fmt_ts, nametrip  # noqa: E402
+from botsu.reply import do_reply_add  # noqa: E402
+
 # ---------------------------------------------------------------------------
-# 定数 (付録A準拠)
+# 定数 (CLI表示固有)
 # ---------------------------------------------------------------------------
 
 RULE = "━" * 38
 THIN_RULE = "───────────────"
 
-WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"]
-
-# tripコード (§4.2準拠)
-TRIPS: dict[str, str] = {
-    "shogun":    "◆SHGN",
-    "karo-roju": "◆ROJU",
-    "roju":      "◆ROJU",
-    "ashigaru1": "◆ASH1",
-    "ashigaru2": "◆ASH2",
-    "ashigaru3": "◆ASH3",
-    "ashigaru4": "◆ASH4",
-    "ashigaru5": "◆ASH5",
-    "ashigaru6": "◆HYG6",
-    "gunshi":    "◆GNSH",
-    "ohariko":   "◆OHRK",
-    "baku":      "◆BAKU",
-}
-
-# 表示名
-NAMES: dict[str, str] = {
-    "shogun":    "将軍",
-    "karo-roju": "老中",
-    "roju":      "老中",
-    "ashigaru1": "足軽1",
-    "ashigaru2": "足軽2",
-    "ashigaru3": "足軽3",
-    "ashigaru4": "足軽4",
-    "ashigaru5": "足軽5",
-    "ashigaru6": "部屋子1",
-    "gunshi":    "軍師",
-    "ohariko":   "お針子",
-    "baku":      "獏",
-}
-
 
 # ---------------------------------------------------------------------------
-# ヘルパー
+# DB接続（CLI用 — sys.exitしない版）
 # ---------------------------------------------------------------------------
 
 def get_conn() -> sqlite3.Connection:
@@ -93,40 +65,6 @@ def get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
-
-
-def fmt_ts(ts_str: str | None) -> str:
-    """ISO timestamp → 2ch形式 YYYY/MM/DD(曜) HH:MM:SS"""
-    if not ts_str:
-        return "----/--/--(-) --:--:--"
-    try:
-        # タイムゾーン・マイクロ秒除去
-        ts_clean = ts_str.split("+")[0].split("Z")[0]
-        if "." in ts_clean:
-            ts_clean = ts_clean.split(".")[0]
-        dt = datetime.strptime(ts_clean, "%Y-%m-%dT%H:%M:%S")
-        wd = WEEKDAYS[dt.weekday()]
-        return dt.strftime(f"%Y/%m/%d({wd}) %H:%M:%S")
-    except Exception:
-        return ts_str[:19] if len(ts_str) >= 10 else "----/--/--(-) --:--:--"
-
-
-def agent_name(agent_id: str | None) -> str:
-    if not agent_id:
-        return "名無し"
-    return NAMES.get(agent_id, agent_id)
-
-
-def trip(agent_id: str | None) -> str:
-    if not agent_id:
-        return ""
-    return TRIPS.get(agent_id, f"◆{agent_id[:4].upper()}")
-
-
-def nametrip(agent_id: str | None) -> str:
-    n = agent_name(agent_id)
-    t = trip(agent_id)
-    return f"{n} {t}" if t else n
 
 
 # ---------------------------------------------------------------------------
@@ -146,12 +84,10 @@ def show_cmd_thread(cmd_id: str) -> None:
             (cmd_id,),
         ).fetchall()
 
-        # subtask_id → post番号マッピング (blocked_by の >>N参照用)
         subtask_to_post: dict[str, int] = {}
         for i, st in enumerate(subtasks, 2):
             subtask_to_post[st["id"]] = i
 
-        # reports (subtaskに紐づくもの)
         subtask_ids = tuple(st["id"] for st in subtasks)
         if subtask_ids:
             placeholders = ",".join("?" * len(subtask_ids))
@@ -166,14 +102,12 @@ def show_cmd_thread(cmd_id: str) -> None:
     finally:
         conn.close()
 
-    # ── ヘッダー ─────────────────────────────────
     cmd_summary = (cmd["command"] or "")[:40]
     print(RULE)
     print(f"【管理板】{cmd_id} — {cmd_summary}")
     print(RULE)
     print()
 
-    # ── >>1: CMD本体 (付録A §1準拠) ──────────────
     author = cmd["assigned_karo"] or "roju"
     ts = fmt_ts(cmd["created_at"] or cmd["timestamp"])
     print(f"1 名前：{nametrip(author)} {ts}")
@@ -189,7 +123,6 @@ def show_cmd_thread(cmd_id: str) -> None:
     print(f"  {THIN_RULE}")
     print()
 
-    # ── >>2~: subtasks (時系列順) ─────────────────
     post_num = 2
     for st in subtasks:
         worker = st["worker_id"] or "未割当"
@@ -215,7 +148,6 @@ def show_cmd_thread(cmd_id: str) -> None:
         print()
         post_num += 1
 
-    # ── reports / audits ──────────────────────────
     for rep in reports:
         worker = rep["worker_id"] or "名無し"
         ts = fmt_ts(rep["timestamp"])
@@ -244,24 +176,21 @@ def show_cmd_thread(cmd_id: str) -> None:
 def show_kanri_board(limit: int = 20) -> None:
     conn = get_conn()
     try:
-        # 通常スレッド (archived 以外)
         cmds = conn.execute(
             "SELECT id, command, project, status, priority, created_at, timestamp"
             " FROM commands WHERE status != 'archived' ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        # dat落ちスレッド (archived)
         archived_cmds = conn.execute(
             "SELECT id, command, project, status, priority, created_at, timestamp"
             " FROM commands WHERE status = 'archived' ORDER BY id DESC LIMIT 10",
         ).fetchall()
-        # 各CMDのレス数（subtask数 + report数）
         counts: dict[str, int] = {}
         for cmd in list(cmds) + list(archived_cmds):
             n_sub = conn.execute(
                 "SELECT COUNT(*) FROM subtasks WHERE parent_cmd = ?", (cmd["id"],)
             ).fetchone()[0]
-            counts[cmd["id"]] = n_sub + 1  # +1 for >>1 (CMD本体)
+            counts[cmd["id"]] = n_sub + 1
     finally:
         conn.close()
 
@@ -335,20 +264,19 @@ def show_dreams_board() -> None:
         print("  夢見板: まだ夢がありません")
         return
 
-    # dreamt_at の日付でグループ化
     by_date: dict[str, list[dict]] = defaultdict(list)
     for d in dreams:
         ts = d.get("dreamt_at", "")
         date = ts[:10] if ts else "unknown"
         by_date[date].append(d)
 
-    # 最新日付から最大7日分表示
     dates = sorted(by_date.keys(), reverse=True)[:7]
 
     for date in dates:
         day_dreams = by_date[date]
         try:
             dt = datetime.strptime(date, "%Y-%m-%d")
+            from botsu.nich import WEEKDAYS
             wd = WEEKDAYS[dt.weekday()]
             date_str = dt.strftime(f"%Y/%m/%d({wd})")
         except Exception:
@@ -369,7 +297,6 @@ def show_dreams_board() -> None:
             print(f"  【{domain}】{query}")
             print(f"  relevance: {score} | status: {status}")
 
-            # external_result から [タイトル] を1件抽出して表示
             ext = d.get("external_result", "")
             if ext:
                 titles = re.findall(r'\[([^\]]{5,80})\]', ext)
@@ -385,82 +312,12 @@ def show_dreams_board() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 書庫板: doc_keywords → ドキュメント索引スレッド
-# ---------------------------------------------------------------------------
-
-def show_docs_board(limit: int = 20) -> None:
-    conn = get_conn()
-    try:
-        # 存在チェック
-        tbl = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='doc_keywords'"
-        ).fetchone()
-        if not tbl:
-            print(RULE)
-            print("【書庫板】ドキュメント索引")
-            print(RULE)
-            print()
-            print("  書庫板: doc_keywords テーブルが存在しません")
-            return
-
-        # doc_id 一覧 (keyword数降順)
-        doc_rows = conn.execute(
-            "SELECT doc_id, doc_type, COUNT(*) AS kw_cnt"
-            " FROM doc_keywords GROUP BY doc_id ORDER BY doc_id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-
-        # 各 doc_id のキーワード取得
-        kw_map: dict[str, list[str]] = {}
-        for dr in doc_rows:
-            kws = conn.execute(
-                "SELECT keyword FROM doc_keywords WHERE doc_id = ? ORDER BY keyword",
-                (dr["doc_id"],),
-            ).fetchall()
-            kw_map[dr["doc_id"]] = [r["keyword"] for r in kws]
-
-        total_docs = conn.execute(
-            "SELECT COUNT(DISTINCT doc_id) FROM doc_keywords"
-        ).fetchone()[0]
-
-    finally:
-        conn.close()
-
-    print(RULE)
-    print("【書庫板】ドキュメント索引")
-    print(RULE)
-    print()
-
-    if not doc_rows:
-        print("  書庫板: まだドキュメントがありません")
-        return
-
-    for i, dr in enumerate(doc_rows, 1):
-        doc_id = dr["doc_id"]
-        doc_type = dr["doc_type"] or "-"
-        kw_cnt = dr["kw_cnt"]
-        kws = kw_map.get(doc_id, [])
-
-        print(f"{i:3d}. 【{doc_id}】 (type:{doc_type}  キーワード:{kw_cnt}件)")
-        # キーワードを1行に並べて表示（最大10件）
-        kw_line = " / ".join(kws[:10])
-        if len(kws) > 10:
-            kw_line += f" ... (+{len(kws) - 10})"
-        print(f"       {kw_line}")
-        print(f"       {THIN_RULE}")
-        print()
-
-    print(f"  {len(doc_rows)}件表示中 (全{total_docs}件)")
-
-
-# ---------------------------------------------------------------------------
 # 日記板: diary_entries → エージェント別日記スレッド
 # ---------------------------------------------------------------------------
 
 def show_diary_board() -> None:
     conn = get_conn()
     try:
-        # テーブル存在チェック
         tbl = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='diary_entries'"
         ).fetchone()
@@ -481,7 +338,6 @@ def show_diary_board() -> None:
             print("  日記板: まだ記録がありません")
             return
 
-        # エージェント別に取得
         agents = conn.execute(
             "SELECT DISTINCT agent_id FROM diary_entries ORDER BY agent_id"
         ).fetchall()
@@ -513,7 +369,6 @@ def show_diary_board() -> None:
             tags_str = f" #{'  #'.join(e['tags'].split(','))}" if e["tags"] else ""
             print(f"{i} 名前：{nametrip(aid)} {ts}")
             print(f"  【{e['date']}】{cmd_ref}{subtask_ref} {e['summary']}")
-            # body を最大2行
             for line in (e["body"] or "").strip().split("\n")[:2]:
                 print(f"  {line[:80]}")
             if tags_str:
@@ -523,252 +378,6 @@ def show_diary_board() -> None:
         print()
 
     print(f"  合計 {total} 件の日記エントリ")
-
-
-# ---------------------------------------------------------------------------
-# 監査板: needs_audit=1 subtask → 監査結果スレッド
-# ---------------------------------------------------------------------------
-
-_AUDIT_ICON = {
-    "approved":           "✅",
-    "done":               "✅",
-    "rejected":           "❌",
-    "rejected_trivial":   "❌",
-    "rejected_judgment":  "❌",
-    "in_progress":        "🔍",
-    "pending":            "⏳",
-}
-
-
-def _audit_icon(status: str | None) -> str:
-    if not status:
-        return "⏳"
-    return _AUDIT_ICON.get(status, "⏳")
-
-
-def show_audit_board(limit: int = 20) -> None:
-    conn = get_conn()
-    try:
-        subtasks = conn.execute(
-            "SELECT s.*, c.command AS cmd_title"
-            " FROM subtasks s"
-            " LEFT JOIN commands c ON c.id = s.parent_cmd"
-            " WHERE s.needs_audit = 1"
-            " ORDER BY s.id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-
-        # 各subtaskの監査履歴（audit_historyテーブル）
-        audit_reports: dict[str, list] = {}
-        for st in subtasks:
-            reps = conn.execute(
-                "SELECT * FROM audit_history WHERE subtask_id = ?"
-                " ORDER BY id DESC",
-                (st["id"],),
-            ).fetchall()
-            audit_reports[st["id"]] = list(reps)
-
-        total_needs = conn.execute(
-            "SELECT COUNT(*) FROM subtasks WHERE needs_audit = 1"
-        ).fetchone()[0]
-
-    finally:
-        conn.close()
-
-    print(RULE)
-    print("【監査板】お針子の目")
-    print(RULE)
-    print()
-
-    if not subtasks:
-        print("  監査板: 監査対象タスクがありません")
-        return
-
-    for i, st in enumerate(subtasks, 1):
-        st_id = st["id"]
-        audit_st = st["audit_status"]
-        icon = _audit_icon(audit_st)
-        worker = st["worker_id"] or "未割当"
-        ts = fmt_ts(st["assigned_at"])
-        desc = (st["description"] or "")[:70]
-        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
-        audit_label = f" audit:{audit_st}" if audit_st else " audit:pending"
-
-        print(f"{i} 名前：{nametrip(worker)} {ts}")
-        print(f"  {icon} [{st_id}] {cmd_ref} {desc}")
-        print(f"  status:{st['status'] or '-'}{audit_label}")
-
-        # 監査履歴があれば1件表示
-        reps = audit_reports.get(st_id, [])
-        if reps:
-            rep = reps[0]
-            rep_ts = fmt_ts(rep["timestamp"])
-            verdict = rep["verdict"] or "pending"
-            score = rep["score"]
-            findings = (rep["findings_summary"] or "")[:60]
-            print(f"  お針子 {rep_ts}: {verdict}({score}/15) {findings}")
-            print("  べ、別にあなたのために監査したんじゃないんだからね！")
-        else:
-            print("  （監査レポートなし）")
-
-        print(f"  {THIN_RULE}")
-        print()
-
-    print(f"  {len(subtasks)}件表示中 (全{total_needs}件要監査)")
-
-
-# ---------------------------------------------------------------------------
-# 戦略板: bloom_level L4/L5/L6 subtask → 軍師の戦略分析スレッド
-# ---------------------------------------------------------------------------
-
-def show_senryaku_board(limit: int = 20) -> None:
-    conn = get_conn()
-    try:
-        # bloom_level カラム存在チェック
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(subtasks)").fetchall()]
-        if "bloom_level" in cols:
-            subtasks = conn.execute(
-                "SELECT s.*, c.command AS cmd_title"
-                " FROM subtasks s"
-                " LEFT JOIN commands c ON c.id = s.parent_cmd"
-                " WHERE s.bloom_level IN ('L4','L5','L6')"
-                " ORDER BY s.id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        else:
-            # フォールバック: gunshi担当タスク（軍師はL4-L6担当）
-            subtasks = conn.execute(
-                "SELECT s.*, c.command AS cmd_title"
-                " FROM subtasks s"
-                " LEFT JOIN commands c ON c.id = s.parent_cmd"
-                " WHERE s.worker_id = 'gunshi'"
-                " ORDER BY s.id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        total = len(subtasks)
-    finally:
-        conn.close()
-
-    print(RULE)
-    print("【戦略板】軍師の戦略分析スレ")
-    print(RULE)
-    print()
-
-    if not subtasks:
-        print("  戦略板: 戦略分析タスクがありません")
-        return
-
-    for i, st in enumerate(subtasks, 1):
-        worker = st["worker_id"] or "未割当"
-        ts = fmt_ts(st["assigned_at"])
-        st_id = st["id"]
-        desc = (st["description"] or "")[:80]
-        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
-        st_status = st["status"] or "-"
-        wave = st["wave"] if st["wave"] is not None else "-"
-        bloom = st["bloom_level"] if "bloom_level" in st.keys() else "L?"
-
-        print(f"{i} 名前：{nametrip(worker)} {ts}")
-        print(f"  [{st_id}] {cmd_ref} {desc}")
-        print(f"  Bloom:{bloom} | status:{st_status} | wave:{wave}")
-        if st["notes"]:
-            note = st["notes"].strip().split("\n")[0][:70]
-            print(f"  memo: {note}")
-        print(f"  {THIN_RULE}")
-        print()
-
-    print(f"  {total}件表示中")
-
-
-# ---------------------------------------------------------------------------
-# 報告板: status='completed' subtask → 足軽完了報告一覧スレッド
-# ---------------------------------------------------------------------------
-
-def show_houkoku_board(limit: int = 20) -> None:
-    conn = get_conn()
-    try:
-        subtasks = conn.execute(
-            "SELECT s.*, c.command AS cmd_title"
-            " FROM subtasks s"
-            " LEFT JOIN commands c ON c.id = s.parent_cmd"
-            " WHERE s.status IN ('completed', 'done')"
-            " ORDER BY s.completed_at DESC, s.id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        total = conn.execute(
-            "SELECT COUNT(*) FROM subtasks WHERE status IN ('completed', 'done')"
-        ).fetchone()[0]
-    finally:
-        conn.close()
-
-    print(RULE)
-    print("【報告板】足軽完了報告スレ")
-    print(RULE)
-    print()
-
-    if not subtasks:
-        print("  報告板: 完了報告がありません")
-        return
-
-    for i, st in enumerate(subtasks, 1):
-        worker = st["worker_id"] or "名無し"
-        ts = fmt_ts(st["completed_at"] or st["assigned_at"])
-        st_id = st["id"]
-        desc = (st["description"] or "")[:70]
-        cmd_ref = f"[{st['parent_cmd']}]" if st["parent_cmd"] else ""
-
-        print(f"{i} 名前：{nametrip(worker)} {ts}")
-        print(f"  [{st_id}] {cmd_ref} {desc}")
-        print(f"  完了: {fmt_ts(st['completed_at'])[:16]}")
-        print(f"  {THIN_RULE}")
-        print()
-
-    print(f"  {len(subtasks)}件表示中 (全{total}件完了)")
-
-
-# ---------------------------------------------------------------------------
-# 御触板: commands → 殿・老中からの全体通達スレッド
-# ---------------------------------------------------------------------------
-
-def show_ofure_board(limit: int = 20) -> None:
-    conn = get_conn()
-    try:
-        cmds = conn.execute(
-            "SELECT * FROM commands ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        total = conn.execute("SELECT COUNT(*) FROM commands").fetchone()[0]
-    finally:
-        conn.close()
-
-    print(RULE)
-    print("【御触板】老中からの全体通達スレ")
-    print(RULE)
-    print()
-
-    if not cmds:
-        print("  御触板: 通達がありません")
-        return
-
-    for i, cmd in enumerate(cmds, 1):
-        author = cmd["assigned_karo"] or "roju"
-        ts = fmt_ts(cmd["created_at"] or cmd["timestamp"])
-        cmd_id = cmd["id"]
-        command = (cmd["command"] or "")[:60]
-        project = cmd["project"] or "-"
-        status = cmd["status"] or "-"
-        priority = cmd["priority"] or "-"
-
-        print(f"{i} 名前：{nametrip(author)} {ts}")
-        print(f"  【{cmd_id}】{command}")
-        print(f"  project:{project} | status:{status} | priority:{priority}")
-        if cmd["details"]:
-            first_line = cmd["details"].strip().split("\n")[0][:70]
-            print(f"  {first_line}")
-        print(f"  {THIN_RULE}")
-        print()
-
-    print(f"  {len(cmds)}件表示中 (全{total}件)")
 
 
 # ---------------------------------------------------------------------------
@@ -865,22 +474,11 @@ def show_thread(thread_id: str) -> None:
 
 
 def post_reply(thread_id: str, author: str, body: str) -> None:
-    """スレにレスを投稿する"""
+    """スレにレスを投稿する（botsu.reply.do_reply_add 経由）"""
     if not thread_id or not author or not body:
         raise ValueError("thread_id, author, body はすべて必須です")
-    conn = get_conn()
-    try:
-        ensure_thread_replies_table(conn)
-        posted_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        conn.execute(
-            "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
-            " VALUES (?, 'zatsudan', ?, ?, ?)",
-            (thread_id, author, body, posted_at),
-        )
-        conn.commit()
-        print(f"[zatsudan] {thread_id} にレスを投稿しました (author: {author})")
-    finally:
-        conn.close()
+    reply_id = do_reply_add(thread_id, "zatsudan", author, body)
+    print(f"[zatsudan] {thread_id} にレスを投稿しました (author: {author}, reply #{reply_id})")
 
 
 # ---------------------------------------------------------------------------
@@ -913,8 +511,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--board",
-        choices=["kanri", "dreams", "docs", "diary", "audit", "senryaku", "houkoku", "ofure", "zatsudan"],
-        help="板を指定 (kanri=管理板一覧, dreams=夢見板, docs=書庫板, diary=日記板, audit=監査板, senryaku=戦略板, houkoku=報告板, ofure=御触板, zatsudan=雑談板)",
+        choices=["kanri", "dreams", "diary", "zatsudan"],
+        help="板を指定 (kanri=管理板, dreams=夢見板, diary=日記板, zatsudan=雑談板)",
     )
     parser.add_argument(
         "--limit",
@@ -949,18 +547,8 @@ def main() -> None:
         show_kanri_board(args.limit)
     elif args.board == "dreams":
         show_dreams_board()
-    elif args.board == "docs":
-        show_docs_board(args.limit)
     elif args.board == "diary":
         show_diary_board()
-    elif args.board == "audit":
-        show_audit_board(args.limit)
-    elif args.board == "senryaku":
-        show_senryaku_board(args.limit)
-    elif args.board == "houkoku":
-        show_houkoku_board(args.limit)
-    elif args.board == "ofure":
-        show_ofure_board(args.limit)
     elif args.board == "zatsudan":
         show_zatsudan_board(args.limit)
     elif args.thread:

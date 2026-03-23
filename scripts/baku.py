@@ -11,6 +11,8 @@
   python3 scripts/baku.py --summary           # 直近24時間の夢サマリ生成
   python3 scripts/baku.py --topic "量子塩梅"   # 手動トピック指定（1回）
   python3 scripts/baku.py --interval 1800     # 30分ごと（秒指定）
+  python3 scripts/baku.py --digest            # 週次まとめスレ生成（2ch雑談板）
+  python3 scripts/baku.py --digest --days 3   # 直近3日分のまとめ
 """
 
 import json
@@ -39,6 +41,7 @@ PID_FILE = PROJECT_ROOT / "data" / "baku.pid"
 DEFAULT_INTERVAL = 3600  # 1時間
 MAX_SEARCHES_PER_RUN = 5
 SUMMARY_HOUR = 7  # 朝7時にサマリ生成
+DIGEST_DAY = 0  # 月曜にダイジェスト生成 (0=月, 6=日)
 
 # === Anthropic API 設定 ===
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com"))
@@ -88,6 +91,49 @@ TONO_INTERESTS = {
         "LLM inference cost optimization edge",
         "edge computing total cost ownership",
         "agricultural IoT cost benefit analysis",
+    ],
+    "systrade_research": [
+        "algorithmic trading alternative data",
+        "nowcasting corporate earnings logistics",
+        "systematic trading academic paper",
+        "quantitative finance machine learning",
+        "Asian equity market microstructure",
+        "Japan stock market anomaly factor",
+        "commodity futures agricultural hedging",
+        "sector ETF lead-lag momentum",
+        "Mandelbrot fractal market hypothesis",
+        "risk parity portfolio construction",
+        "nowcasting GDP real-time economic indicator",
+    ],
+    "asia_realestate": [
+        "Thailand real estate market foreign investment",
+        "Malaysia property market Japanese developer",
+        "Philippines condominium market overseas buyer",
+        "Vietnam real estate FDI growth",
+        "Nepal real estate development infrastructure",
+        "Southeast Asia REIT Japanese company",
+        "東南アジア 不動産 日系企業 進出",
+        "タイ コンドミニアム 投資 日本人",
+        "Thailand BTS MRT extension land price",
+        "Vietnam metro railway urban development",
+        "Philippines infrastructure build build build",
+        "Malaysia MRT3 property corridor",
+        "アジア 鉄道 高速道路 沿線開発 人口動態",
+        "China real estate crisis capital outflow Southeast Asia",
+        "Japanese construction company Southeast Asia infrastructure",
+        "日本企業 東南アジア インフラ受注 ODA",
+        "ASEAN infrastructure project Japan railway export",
+        "post China real estate emerging market investment",
+        "GIS development suitability analysis railway corridor",
+        "QGIS urban land use transit oriented development",
+        "Southeast Asia cement demand infrastructure boom",
+        "Thailand building material company listed stock",
+        "Vietnam construction material steel cement demand",
+        "ASEAN housing construction supply chain Japanese company",
+        "TOTO Daikin Southeast Asia market expansion",
+        "新興国 建材 需要予測 インフラ投資",
+        "satellite imagery construction activity monitoring",
+        "ODA infrastructure project database JICA ADB",
     ],
     "hardware": [
         "DIN rail IoT module PoE sensor",
@@ -607,6 +653,166 @@ def dream_once(manual_topic: str | None = None) -> int:
     return found
 
 
+# === 週次ダイジェスト（2chスレ投稿） ===
+
+
+def load_dreams_days(days: int = 7) -> list[dict]:
+    """直近N日分の夢を全て読み込み"""
+    if not DREAMS_PATH.exists():
+        return []
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    dreams = []
+    with open(DREAMS_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                d = json.loads(line.strip())
+                if d.get("dreamt_at", "") > cutoff:
+                    dreams.append(d)
+            except json.JSONDecodeError:
+                continue
+    return dreams
+
+
+def _post_reply(thread_id: str, body: str) -> bool:
+    """雑談板にレス投稿（botsu.reply.do_reply_add 直接呼び出し）"""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from botsu.reply import do_reply_add
+        do_reply_add(thread_id, "zatsudan", "baku", body)
+        print(f"  獏: スレ投稿OK → {thread_id}")
+        return True
+    except Exception as e:
+        print(f"  WARN: スレ投稿エラー: {e}", file=sys.stderr)
+    return False
+
+
+def generate_digest(days: int = 7) -> int:
+    """ドメイン別まとめスレを雑談板に投稿。投稿数を返す。
+
+    各ドメインについて:
+    - 件数・ユニーククエリ数・high relevance数を集計
+    - 上位クエリと外部検索結果のスニペットを抽出
+    - 関連ネタとしてドメイン横断のリンクを付与
+    """
+    dreams = load_dreams_days(days=days)
+    if not dreams:
+        print("獏: ダイジェスト対象の夢なし。")
+        return 0
+
+    now = datetime.now()
+    thread_id = f"baku_digest_{now.strftime('%Y%m%d')}"
+    posted = 0
+
+    # ドメイン別集計
+    by_domain: dict[str, list[dict]] = {}
+    for d in dreams:
+        domain = d.get("domain", "unknown")
+        by_domain.setdefault(domain, []).append(d)
+
+    # 全体サマリ（>>1）
+    total = len(dreams)
+    domains_sorted = sorted(by_domain.items(), key=lambda x: -len(x[1]))
+    unique_queries = len({d.get("query", "") for d in dreams})
+    high_rel = sum(1 for d in dreams if d.get("relevance_score", 0) >= 3)
+
+    header_lines = [
+        f"【獏の夢まとめ】{now.strftime('%Y-%m-%d')} 直近{days}日分",
+        f"",
+        f"総夢数: {total}件 / ユニーククエリ: {unique_queries} / 高relevance: {high_rel}件",
+        f"",
+        f"■ドメイン別件数",
+    ]
+    for domain, entries in domains_sorted:
+        uq = len({d.get("query", "") for d in entries})
+        hr = sum(1 for d in entries if d.get("relevance_score", 0) >= 3)
+        header_lines.append(f"  {domain}: {len(entries)}件 (uq={uq}, high={hr})")
+
+    if _post_reply(thread_id, "\n".join(header_lines)):
+        posted += 1
+
+    # ドメイン別詳細（>>2〜）
+    for domain, entries in domains_sorted:
+        if len(entries) == 0:
+            continue
+
+        # ユニーククエリ別に集約
+        query_groups: dict[str, list[dict]] = {}
+        for d in entries:
+            q = d.get("query", "?")
+            query_groups.setdefault(q, []).append(d)
+
+        # relevance_scoreの合計でソート
+        ranked = sorted(
+            query_groups.items(),
+            key=lambda x: sum(d.get("relevance_score", 0) for d in x[1]),
+            reverse=True,
+        )
+
+        lines = [f"【{domain}】{len(entries)}件", ""]
+
+        for query, group in ranked[:10]:  # 上位10クエリ
+            total_rel = sum(d.get("relevance_score", 0) for d in group)
+            lines.append(f"▼ {query} (×{len(group)}, rel={total_rel})")
+
+            # 最新の外部結果からスニペット抽出
+            best = max(group, key=lambda d: d.get("relevance_score", 0))
+            ext = best.get("external_result", "")
+            if ext:
+                # 最初の結果タイトル+スニペットを抽出
+                snippets = ext.split(" | ")[:2]
+                for s in snippets:
+                    s = s.strip()[:150]
+                    if s:
+                        lines.append(f"  → {s}")
+
+            # 解釈があれば付与
+            interp = best.get("interpretation", {})
+            if isinstance(interp, dict):
+                conn = interp.get("connection", "")
+                insight = interp.get("insight", "")
+                if conn:
+                    lines.append(f"  接続: {conn}")
+                if insight:
+                    lines.append(f"  知見: {insight}")
+
+            lines.append("")
+
+        # 本文が長すぎる場合は切り詰め
+        body = "\n".join(lines)
+        if len(body) > 2000:
+            body = body[:1997] + "..."
+
+        if _post_reply(thread_id, body):
+            posted += 1
+
+        time.sleep(0.5)  # DB書き込み間隔
+
+    # クロスドメイン関連ネタ（最終レス）
+    cross_lines = ["【ドメイン横断の関連ネタ】", ""]
+
+    # 同一外部結果が複数ドメインで出現しているケースを抽出
+    ext_to_domains: dict[str, set[str]] = {}
+    for d in dreams:
+        ext = (d.get("external_result") or "")[:80]
+        if ext:
+            ext_to_domains.setdefault(ext, set()).add(d.get("domain", "?"))
+
+    cross_refs = {ext: doms for ext, doms in ext_to_domains.items() if len(doms) >= 2}
+    if cross_refs:
+        for ext, doms in list(cross_refs.items())[:5]:
+            cross_lines.append(f"  {' × '.join(sorted(doms))}")
+            cross_lines.append(f"    → {ext[:120]}")
+            cross_lines.append("")
+    else:
+        cross_lines.append("  (今回はドメイン横断ヒットなし)")
+
+    if _post_reply(thread_id, "\n".join(cross_lines)):
+        posted += 1
+
+    print(f"獏: ダイジェスト完了 → {thread_id} ({posted}レス投稿)")
+    return posted
+
+
 # === 日次サマリ ===
 
 
@@ -694,6 +900,7 @@ def daemon_loop(interval: int = DEFAULT_INTERVAL):
     print(f"獏: 停止するには kill {os.getpid()} または Ctrl+C\n")
 
     last_summary_date = None
+    last_digest_week = None
 
     try:
         while _running:
@@ -715,6 +922,17 @@ def daemon_loop(interval: int = DEFAULT_INTERVAL):
                     run_daily_batch()
                 except Exception as e:
                     print(f"獏: 日次バッチエラー: {e}", file=sys.stderr)
+
+                # 週次ダイジェスト（DIGEST_DAY に実行）
+                current_week = today.isocalendar()[1]
+                if today.weekday() == DIGEST_DAY and last_digest_week != current_week:
+                    try:
+                        print("獏: 週次ダイジェスト生成開始...")
+                        generate_digest(days=7)
+                    except Exception as e:
+                        print(f"獏: ダイジェスト生成エラー: {e}", file=sys.stderr)
+                    last_digest_week = current_week
+
                 last_summary_date = today
 
             # 次の夢見まで待つ（シグナルで中断可能）
@@ -741,9 +959,16 @@ if __name__ == "__main__":
                         help=f"実行間隔（秒、デフォルト={DEFAULT_INTERVAL}）")
     parser.add_argument("--batch", action="store_true",
                         help="日次バッチ（Sonnet選別+蔵書化）を1回実行して終了")
+    parser.add_argument("--digest", action="store_true",
+                        help="まとめスレ生成（2ch雑談板に投稿）")
+    parser.add_argument("--days", type=int, default=7,
+                        help="ダイジェスト対象日数（デフォルト=7）")
     args = parser.parse_args()
 
-    if args.summary:
+    if args.digest:
+        posted = generate_digest(days=args.days)
+        print(f"ダイジェスト結果: {posted}レス投稿")
+    elif args.summary:
         write_daily_summary()
     elif args.batch:
         result = run_daily_batch()

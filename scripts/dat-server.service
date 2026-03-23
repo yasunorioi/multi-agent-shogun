@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 User=yasu
 WorkingDirectory=/home/yasu/multi-agent-shogun
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /home/yasu/multi-agent-shogun/scripts/dat_server.py --port 8823
 Restart=always
 RestartSec=5

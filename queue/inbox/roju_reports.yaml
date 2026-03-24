@@ -1,32 +1,370 @@
 reports:
-- cmd_id: null
-  subtask_id: null
-  worker: gunshi
+- cmd_id: cmd_441
+  subtask_id: subtask_979
+  worker: ashigaru2
   status: done
-  reported_at: "2026-03-24T01:44:40"
-  summary: "ベクトル検索(sqlite-vec+Ruri v3)導入設計完了。sui-memory参考。FTS5横にvec_index追加、RRFでハイブリッド検索。9subtask/3Phase。Ruri v3-310m推奨(月額ゼロ/日本語特化)。VPSメモリ要確認(457MB記録vs4GB記載)。PDCA不要。"
-  detail_ref: "docs/shogun/vector_search_design.md"
-  skill_candidate: null
-  read: false
-- cmd_id: null
-  subtask_id: null
-  worker: gunshi
-  status: done
-  reported_at: "2026-03-23T17:48:54"
-  summary: "2ch互換CGI全面置換設計完了。3フェーズ段階移行（Phase0基盤整備→Phase1デュアルライト→Phase2YAML廃止）。8subtask。任務/監査/軍師板新設+BOARD_WRITERS権限+@メンション通知。没日録DB不変。PDCA推奨。"
-  detail_ref: "docs/shogun/2ch_workflow_design.md"
-  skill_candidate: null
+  summary: 'subtask_979は既にcommit 35f6c73で実装済み。reply list-for / list-unread 動作確認完了'
+  findings:
+  - 'commit 35f6c73 で reply list-for / reply list-unread は既に追加済み'
+  - 'reply list-for ashigaru1 --board ninmu → 正常動作(1件ヒット)'
+  - 'reply list-unread --board ninmu --agent roju → 正常動作(3件未読)'
+  - '既存 reply list / reply add は破壊なし'
+  - '追加コード変更なし（既に完成済みのため）'
   read: true
-- cmd_id: cmd_433
-  subtask_id: subtask_958
-  request_id: subtask_958
-  worker: ashigaru1
+- cmd_id: cmd_440
+  findings:
+  - 'scripts/migrate_vec.py 新規作成: FTS5→ベクトルバッチ変換。BATCH_SIZE=32、冪等、--dry-run対応'
+  - 'scripts/botsu/search.py: _search_hybrid()追加。--hybridフラグでRRFハイブリッド検索'
+  - vec_index未作成時はエラーメッセージ表示（FTS5フォールバック）
+  - 従来FTS5検索は--hybridなしで正常動作確認済み
+  - バッチベクトル化は実行中(1760/2382完了、CPU推論のため時間要)
+  - 'commit: e0224c9'
+  read: true
+  status: done
+  subtask_id: subtask_977
+  summary: 'ベクトル検索Phase 0 (2/2) 完了: migrate_vec.py + CLI --hybrid統合'
+  worker: ashigaru2
+- cmd_id: cmd_440
+  findings:
+  - 'scripts/botsu/vec.py: VecSearchクラス追加(setup/upsert/search/hybrid_search)。遅延ロード実装'
+  - hybrid_search()にfts_tableパラメータ追加(agent-swarm対応)
+  - requirements.txt新規作成(sqlite-vec, sentence-transformers)
+  - 【重要】設計書の1024次元は誤り。ruri-v3-310mの実際は768次元。既存DBも768次元で正常動作中
+  - 'テスト全PASS: VecSearch instantiation/setup/upsert/search + 既存FTS5search正常動作確認'
+  - 'commit: 2778ecb / git push private main 完了'
+  read: true
+  reported_at: '2026-03-24T23:09:42'
   status: completed
-  reported_at: "2026-03-23T10:00:00"
-  summary: "シェルインターポレーション仕様調査+/auditスキル導入完了。構文=!`command`(本文内のみ/allowed-tools frontmatter必須)。Pre-injected Context(git log/diff --stat/audit list/roju_reports)追加+Step2-3参照注記。Phase3: simplifyはビルトインのため変更不可。commit deafa0a。"
-  detail_ref: "curl -s localhost:8080/reports/915"
-  skill_candidate: null
+  subtask_id: subtask_976
+  summary: 'ベクトル検索Phase 0完了。VecSearchクラス追加+requirements.txt新規作成。
+
+    テスト全PASS。既存FTS5/DB(vec_meta 1504件)壊さず。commit 2778ecb push済み。
+
+    '
+  worker: ashigaru1
+- cmd_id: null
+  detail_ref: docs/rotation_planner/contract_design.md
   read: true
+  reported_at: '2026-03-24T23:08:50'
+  skill_candidate: null
+  status: done
+  subtask_id: null
+  summary: 'rotation-planner委託業務モデル設計書を殿裁定3件で更新完了。
+
+    3-a: contractors テーブル新設（受託者を独立管理、field_contractsから分離）
+
+    3-b: fields.owner_id NOT NULL化（デフォルト=自分のuser_id）
+
+    3-c: crop_seasons テーブル新設（作期概念導入、秋小麦の年度またぎ対応）
+
+    field_contracts は crop_season_id + contractor_id 参照に変更。
+
+    §1b/1c/1e/4d を裁定適用後の最終形に更新、§8-11を新設。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_439
+  findings:
+  - 'scripts/policy_checker.py: 新規作成(90行)。fail-open設計。F001/F004/SERIAL/F003/OHARIKO_SCOPE実装'
+  - 'テスト1: F001 send-keys -t shogun → deny確認OK'
+  - 'テスト2: ls -la → 出力なし(通過)確認OK'
+  - 'テスト3: F004 while true+sleep → deny確認OK'
+  - 'テスト4: SERIAL cat /dev/ttyACM0 → deny確認OK'
+  - '.claude/settings.json: Bash matcherにpolicy_checker.py追加(gatekeeper_f006.shの二重防御)、Edit|Write
+    matcher新設'
+  - 'commit: 0830945 / git push private main 完了'
+  read: true
+  reported_at: '2026-03-24T22:13:46'
+  status: completed
+  subtask_id: subtask_974
+  summary: 'Phase 1実装完了。policy_checker.py新規作成+settings.json hook設定追記。
+
+    テスト全PASS。commit 0830945 / push済み。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_439
+  findings:
+  - 'scripts/bloom_router.py: 新規作成92行。route(description, bloom_level) → low|medium|high|max'
+  - 類似3件以上→low / 1-2件+L≤3→low / 1-2件+L>3→medium / 類似なし→bloom_levelに従う
+  - 'テスト: ''YAML編集'' L2→low ✓ / ''新規アーキテクチャ設計'' L6→max ✓'
+  - 'commit: 885319d / git push private main 完了'
+  - '没日録report #922 登録済み'
+  read: true
+  status: done
+  subtask_id: subtask_975
+  summary: 'Phase 1実装(bloom_router.py)完了: 没日録FTS5類似検索+Bloomタキソノミーでeffort自動決定'
+  timestamp: '2026-03-24T00:00:00'
+  worker: ashigaru2
+- cmd_id: cmd_438
+  findings:
+  - 'instructions/ohariko.md: 監査報告YAMLフォーマット直前にPC1-PC3ルーブリックセクション追記(+11行)'
+  - 'scripts/launch_mbp.sh: ペイン1 claude_bin起動行に --effort low 追加(§1.5 ashigaru=low準拠)'
+  - 'commit: 4379e6d / git push private main 完了'
+  - '没日録report #921 登録済み'
+  read: true
+  status: done
+  subtask_id: subtask_972
+  summary: 'Phase 0実装(2/2)完了: ohariko.mdにPC1-PC3ルーブリック(+3点)追記(15点→18点拡張)、launch_mbp.shペイン1起動行に--effort
+    low追加'
+  timestamp: '2026-03-24T00:00:00'
+  worker: ashigaru2
+- cmd_id: cmd_438
+  findings:
+  - 'instructions/ashigaru.md: Preflight Check（P1-P5）+ 報告フォーマット(P1-FAIL/ALL-PASS)
+    + 拒否3段階(L1/L2/L3)を末尾追記(+45行)'
+  - 'config/settings.yaml: effort_routing追記(ashigaru:low, heyako:low, gunshi:max,
+    ohariko:high, karo:high) — ローカル適用済み・gitignore対象のためcommit不可'
+  - 文字列規約 P1-FAIL/ALL-PASS を設計書§1.2の通り正確に実装済み
+  - 'commit: 49f41ee / git push private main 完了'
+  read: true
+  reported_at: '2026-03-24T21:31:35'
+  status: completed
+  subtask_id: subtask_971
+  summary: 'Phase 0実装(1/2)完了。Preflight Check+拒否3段階をashigaru.mdに追記。
+
+    effort_routingをsettings.yamlに追記（ローカル適用済み・gitignore対象）。
+
+    commit 49f41ee / push済み。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_437
+  detail_ref: docs/shogun/quality_guardrails_design_v2.md
+  read: true
+  reported_at: '2026-03-24T21:04:47'
+  skill_candidate:
+    description: Phase 0-N加算的設計テンプレート
+    name: phase-consistent-design
+  status: done
+  subtask_id: subtask_970
+  summary: 'Phase 0-2一貫設計書v2を策定完了。足軽3名のリサーチ結果を統合。
+
+
+    核心設計:
+
+    - Phase間非破壊性保証: 全Phase加算的、前Phaseを置き換えない
+
+    - データモデル貫通: 「P1-FAIL」文字列規約がPhase 0→1→2を貫通
+
+    - 温室三層構造踏襲: 爆発(Preflight)→ガムテ(hooks)→知恵(適応思考)
+
+    - 月額コスト: 全Phaseゼロ
+
+
+    Phase 0(即時・68行変更): Preflight Check + 拒否3段階 + ルーブリック+3 + effort固定
+
+    Phase 1(1日・150行): policy_checker.py(PreToolUse) + bloom_router.py + 違反ログ
+
+    Phase 2(2-3日・175行): TraceRecord DB + pass@1メトリクス + CogRouter模倣 + TS-Flow feedback
+
+
+    設計変更コスト: Phase Nで不要になるものはゼロ。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_437
+  findings:
+  - 'AgentSpec(ICSE2026): trigger/check/enforce三項構造。4enforce: stop/user_inspection/invoke_action/llm_self_examine。パース1.42ms/述語評価2.83ms。'
+  - 'hooks突き合わせ: PreToolUse=before_action(完全)、Stop=agent_finish(完全)、PostToolUse=state_change(近似)。enforce
+    stop→permissionDecision:deny(完全)。LangChain依存問題は解消済み。'
+  - '再現不可: 複数ステップ先読み安全性のみ(論文も未解決と明記)。軌跡参照はtranscript_path経由で重いが可能。'
+  - 'policy_checker.py完全プロトタイプ設計(60行): F001/F002/F004/F006/シリアルcat対応。PreToolUse版。TMUX_PANEからagent_id取得。'
+  - 'settings.json統合設計: policy_checker.py(F001/F004)+gatekeeper_f006.sh(F006)の二重防御アーキテクチャ。'
+  - '成果物: docs/shogun/quality_guardrails_research.md §10追記(gitignore対象のためコミット不可。ローカルのみ)。'
+  read: true
+  reported_at: '2026-03-24T20:58:36'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_968
+  summary: AgentSpec精読+Claude Code hooks突き合わせ完了。90%代替可能。docs/shogun/quality_guardrails_research.mdに§10追記。
+  worker: ashigaru2
+- cmd_id: cmd_437
+  findings:
+  - 【CogRouter閾値】固定値なし。z-score正規化+softmax(m=2)の相対比較。FT必須(CoSFT+CoPO)
+  - 【FTなし近似A】自己評価確信度(1-10)でL1-L4を判定するfew-shot prompt。L1=即答、L4=3パス比較
+  - 【FTなし近似B】<cognitive_routing>タグで「馴染みあり→直接、失敗歴→振り返り、岐路→シミュレーション」をsystem promptに組込み
+  - '【Claude Code think tool】/thinkコマンドなし。キーワードで制御: think=4k, think hard/megathink=10k,
+    ultrathink=32kトークン目安'
+  - 【/effortコマンド】セッション全体に適用。/effort low/medium/high/max。起動時は--effort lowも可
+  - 【API最新】thinking:{type:adaptive}+output_config:{effort:...}が正式。budget_tokensは非推奨
+  - 【interleaved thinking】Opus4.6はadaptive modeで自動有効。Sonnet4.6手動はbetaヘッダ必要
+  - 【shogun移行パス】Phase1=role別effort固定(ashigaru:low,gunshi:max) / Phase2=system promptにCogRouter模倣指示
+    / Phase3=確信度をYAML報告に記録→DB統計→Bloom Routing自動化
+  - 【Bloom Routing自動化の本質】CogRouterの「タスク後半94.8%がL1に収束」→ 前半高budget・後半省力化。subtask連続成功→effort降格のフィードバックループで実現可能
+  read: true
+  reported_at: '2026-03-24T20:56:35'
+  status: completed
+  subtask_id: subtask_967
+  summary: 'CogRouter精読 + Claude Code think tool突き合わせ完了。
+
+    核心: CogRouterはFT必須だがプロンプト近似可能。
+
+    Claude CodeはAdaptive+effortが最新。ultrathinkキーワードが即使える。
+
+    shogun移行パス3段階を設計。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_436
+  detail_ref: docs/shogun/quality_guardrails_research.md
+  read: true
+  reported_at: '2026-03-24T20:14:46'
+  skill_candidate:
+    description: 学術論文横断サーベイ→shogunシステム設計転用テンプレート
+    name: academic-survey-to-design
+  status: done
+  subtask_id: subtask_966
+  summary: '品質管理3本柱の横断サーベイ+統合分析完了。8論文+6FWをサーベイし、shogun適用設計を策定。
+
+
+    核心的発見: shogunの温室三層構造（爆発→ガムテ→知恵）は、学術界が2025-2026年に
+
+    定式化した「Defense-in-Depth」パターンそのもの。思想はあるがコードがない。
+
+
+    3本柱の成果物:
+
+    1. 思考深度制御: CogRouter方式の自動Bloom Routing設計（確信度ベース深度選択）
+
+    2. ポリシー機械検証: AgentSpec DSL風のルール定義 + stop-hookベースのpolicy_checker.py設計
+
+    3. 不可能タスク拒否: Preflight Check方式（5項目点検）+ 拒否3段階モデル（過剰拒否防止）
+
+
+    Phase 0（即時実施可能）: instructions変更のみ（Preflight Check + ルーブリック拡張）
+
+    Phase 1: policy_checker.py + stop-hook統合
+
+    Phase 2: Policy-as-Prompt自動生成 + pass@1メトリクス
+
+
+    注: 足軽3名(subtask_963/964/965)のリサーチ結果は未統合。到着次第追記予定。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_436
+  findings:
+  - '現状: F006のみgatekeeper_f006.sh(PreToolUse)で実装済み。F001/F002/F004は未実装。'
+  - 'PreToolUse hook拡張(即導入可): gatekeeper_f006.shにF001(tmux send-keys -t shogun検知→deny)/F004(while+sleep+whileパターン→deny)/シリアルcat(/dev/ttyACM→deny)を追加。設定変更不要。'
+  - 'Stop hook拡張: last_assistant_messageにguardrails-ai BanListを通してF002(人間直接呼びかけ)をfuzzy検知可能。pip
+    install guardrails-ai のみ。月額0円。'
+  - 'guardrails-ai(★6600+,Apache2,軽量): BanListバリデータでF001-F006禁止フレーズをfuzzyマッチ。ローカルCPU実行可。お針子監査スクリプトへの組み込みが最適。'
+  - 'NeMo Guardrails(★5800+,Apache2,重量): 会話型AI向けで現構成との統合困難。C++ビルド必要。現フェーズでは不採用推奨。'
+  - 'F001-F006検証マトリクス: F001◎(hook拡張)/F002△(Stopテキスト検査)/F003△(困難)/F004◎(hook拡張)/F005△(複雑)/F006✓(実装済)'
+  - '推奨アクション①: gatekeeper_f006.sh拡張でF001/F004/シリアルcatを追加(工数:小)'
+  - '推奨アクション②: guardrails-ai + stop_hook延長でF002検知(工数:中。殿の月額忌避なし)'
+  read: true
+  reported_at: '2026-03-24T20:11:28'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_964
+  summary: ポリシー機械検証リサーチ完了。hooks拡張でF001/F002/F004即導入可。guardrails-aiがStop hook連携に有効。
+  worker: ashigaru2
+- cmd_id: cmd_436
+  findings:
+  - 【Extended Thinking】thinking={type:adaptive}でOpus4.6/Sonnet4.6が難易度自動判定→思考深度調整
+  - 【Think tool】Claude Codeに/think専用コマンドなし。Adaptive modeのinterleaved thinkingで代替
+  - 【Thinking budget】旧:budget_tokens(最小1024, 推奨1k-32k+)。新:effort=low/medium/high/max
+  - 【effort levels】low=単純/速度重視, medium=バランス, high=複雑推論, max=最大性能(Opus4.6のみ)
+  - 【shogun即導入案】将軍/軍師=high, 老中/お針子=medium, 足軽=low。role別effort設定
+  - 【注意】tool use時はthinking blockを必ず保存・返却(署名フィールドで検証). 費用は完全思考トークン数で請求
+  - 【budget_tokens廃止注意】Opus4.6/Sonnet4.6ではbudget_tokensは非推奨→effortへ移行必須
+  read: true
+  reported_at: '2026-03-24T20:10:10'
+  status: completed
+  subtask_id: subtask_963
+  summary: '思考深度制御リサーチ完了。4テーマ調査済み。
+
+    最重要: Opus4.6/Sonnet4.6でAdaptive thinking + effortパラメータが最新推奨。
+
+    旧budget_tokensは非推奨。shogunへの即導入案あり。
+
+    '
+  worker: ashigaru1
+- cmd_id: null
+  detail_ref: docs/shogun/enterpriseops_gym_analysis.md
+  read: true
+  reported_at: '2026-03-24T18:57:04'
+  skill_candidate:
+    description: 学術論文→システム改善の分析テンプレート
+    name: paper-to-system-analysis
+  status: done
+  subtask_id: null
+  summary: 'EnterpriseOps-Gym論文分析完了。shogunへの知見転用4点を策定。
+
+    最重要: (1)不可能タスク拒否メカニズム導入 (2)ポリシー準拠の自動検証。
+
+    論文はshogunの軍師+足軽分離が正しいことを裏付けた。
+
+    一方「やるべきでないことをやらない能力」が欠落と判明。攻めは十分、守りを固めよ。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_435
+  detail_ref: git -C /home/yasu/agent-swarm show ab442fb --stat
+  findings:
+  - '原因: len(parts)==4 (test/read.cgi/{board}/{thread_id}) のルートがdo_GETに未実装で404'
+  - '修正: do_GET内に/test/read.cgi/{board}/{thread_id}ルート追加(20行)'
+  - commit ab442fb (agent-swarmリポ /home/yasu/agent-swarm)
+  - 'push: agent-swarmリポにリモート未設定のためpush不可。commitのみ完了'
+  - サーバー再起動は殿にsudo依頼が必要（コード修正のみ完了）
+  read: true
+  reported_at: '2026-03-24T18:54:12'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_962
+  summary: agent-swarm DATサーバー(8824) read.cgiルーティング修正完了。commit ab442fb。
+  worker: ashigaru2
+- cmd_id: cmd_435
+  findings:
+  - '原因: len(parts)==4 (test/read.cgi/{board}/{thread_id}) のルートが未実装で404'
+  - '修正: do_GETの最終404の直前にread.cgiルート(29行)を追加'
+  - 'commit: 5b2cc6f / git push private main 完了'
+  - サーバー再起動は殿にsudo依頼が必要（コード修正のみ完了）
+  read: true
+  reported_at: '2026-03-24T18:53:54'
+  status: completed
+  subtask_id: subtask_961
+  summary: '没日録DATサーバー read.cgiルーティング修正完了。
+
+    /test/read.cgi/{board}/{thread_id} 形式(4要素)のルートをdo_GET内に追加。
+
+    既存の /board/dat/thread_id.dat ルートと同等の処理に流す。
+
+    '
+  worker: ashigaru1
+- cmd_id: null
+  detail_ref: docs/shogun/vector_search_design.md
+  read: true
+  reported_at: '2026-03-24T01:44:40'
+  skill_candidate: null
+  status: done
+  subtask_id: null
+  summary: ベクトル検索(sqlite-vec+Ruri v3)導入設計完了。sui-memory参考。FTS5横にvec_index追加、RRFでハイブリッド検索。9subtask/3Phase。Ruri
+    v3-310m推奨(月額ゼロ/日本語特化)。VPSメモリ要確認(457MB記録vs4GB記載)。PDCA不要。
+  worker: gunshi
+- cmd_id: null
+  detail_ref: docs/shogun/2ch_workflow_design.md
+  read: true
+  reported_at: '2026-03-23T17:48:54'
+  skill_candidate: null
+  status: done
+  subtask_id: null
+  summary: 2ch互換CGI全面置換設計完了。3フェーズ段階移行（Phase0基盤整備→Phase1デュアルライト→Phase2YAML廃止）。8subtask。任務/監査/軍師板新設+BOARD_WRITERS権限+@メンション通知。没日録DB不変。PDCA推奨。
+  worker: gunshi
+- cmd_id: cmd_433
+  detail_ref: curl -s localhost:8080/reports/915
+  read: true
+  reported_at: '2026-03-23T10:00:00'
+  request_id: subtask_958
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_958
+  summary: 'シェルインターポレーション仕様調査+/auditスキル導入完了。構文=!`command`(本文内のみ/allowed-tools frontmatter必須)。Pre-injected
+    Context(git log/diff --stat/audit list/roju_reports)追加+Step2-3参照注記。Phase3: simplifyはビルトインのため変更不可。commit
+    deafa0a。'
+  worker: ashigaru1
 - cmd_id: cmd_434
   detail_ref: git show b2c0b3a --stat
   read: true
@@ -34,7 +372,8 @@ reports:
   skill_candidate: null
   status: completed
   subtask_id: subtask_960
-  summary: ベンチマークスクリプト(scripts/bench_ronin.sh)作成完了。779行。5テスト(speed/tool/yaml/context/practical)。JSON出力+没日録report形式。commit b2c0b3a。
+  summary: ベンチマークスクリプト(scripts/bench_ronin.sh)作成完了。779行。5テスト(speed/tool/yaml/context/practical)。JSON出力+没日録report形式。commit
+    b2c0b3a。
   worker: ashigaru2
 - cmd_id: cmd_434
   detail_ref: git show 38b6fa1 --stat
@@ -383,5 +722,179 @@ reports:
   status: notification
   subtask_id: subtask_960
   summary: subtask_960完了。scripts/bench_ronin.sh作成(5テスト:speed/tool/yaml/context/practical)。J…
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-24T18:34:00'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-24T18:54:25'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-03-24T18:55:38'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-24T20:10:44'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- cmd_id: cmd_436
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_965
+  findings:
+  - Claude APIにinfeasible task専用フィールドなし。prompt engineeringで対処
+  - 'OSS: OpenAI SDK tripwire, CrewAI 3層ガードレール, LangGraph条件分岐'
+  - '学術: 最良モデル拒否率53.9%(EnterpriseOps-Gym)。根本的未解決問題'
+  - '提案: preflight(4)+mid_execution(3)+anti_hallucination(3)+escalation(4)=14項目'
+  - '核心: 証拠(tool call結果)なしに主張禁止。circuit breaker(2回失敗で停止)'
+  read: true
+  reported_at: '2026-03-24T20:10:47'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_965
+  summary: 不可能タスク拒否パターン調査完了。API・OSS・学術・実装4軸サーベイ。shogun向け14項目チェックリスト提案
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T20:12:49'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T20:13:08'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- cmd_id: cmd_437
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_969
+  findings:
+  - 【TS-Guard】Qwen2.5-7B+GRPO。3タスクRL(要求有害性→攻撃相関→行動安全性)。step-level pre-execution。3クラス出力(safe/controversial/unsafe)。F1=90-94%
+  - 【TS-Flow】detect-and-abortではなくフィードバック注入。unsafe検知→agent入力に分析追記→agent自身が修正。ASR56%→1.2%,Utility27%→43%
+  - 【proactive guardrail】従来reactive(事後abort)に対し、実行前に介入+誘導。shogunのPreToolUse hookが構造的に一致
+  - 【3フェーズ統合】事前+事中+事後を統合する既存FWは存在しない。AEGIS(Ed25519署名+監査ログ)が最も近い。TraceRecord伝搬モデルを設計(trace_id→phase→verdict→parent_trace_id)
+  - '【拒否3段階】K8s Deny/Warn/Audit、Claude Code deny/ask/allow、guardrails-ai EXCEPTION/REASK/NOOP。shogun案:
+    L1切腹(F001-F006,即停止)/L2差止め(200行超変更,家老承認)/L3注意喚起(失敗履歴あり,日記記録+続行)'
+  - 【OSS】OpenAI SDK InputGuardrail(tripwire), NeMo SelfCheckInput(LLM判定→abort), CrewAI
+    3層ガードレール+max_iterations。guardrails-aiはinfeasible detection専用機能なし
+  - 【核心知見】TS-Flowの「止めずに誘導」がshogunに最も有効。足軽にTS-Guard的フィードバックを注入し自己修正させる設計が理想
+  read: true
+  reported_at: '2026-03-24T20:56:37'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_969
+  summary: ToolSafe精読+不可能タスク拒否実装パターン調査完了。4項目全回答。shogun向け設計案あり
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T20:57:47'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-03-24T20:58:23'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T21:00:13'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-24T21:32:29'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-03-24T22:14:24'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- cmd_id: cmd_441
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_978
+  findings:
+  - 'swarm.yaml: gunshi_board追加、kanri/diary/dreams(R-only)追加、kansa writers拡張(karo-roju追加)'
+  - 'notify.py: 板別通知ルーティング実装(ninmu→殿/老中/足軽、kansa→老中/お針子、gunshi_board→老中/軍師、zatsudan→既存維持)'
+  - 'テスト全合格: ninmu=200, kanri=403, kansa足軽=403, kansaお針子=200, gunshi_board軍師=200,
+    gunshi_board足軽=403, zatsudan=200, subject.txt/dat生成OK'
+  - commit dcf7e0b (agent-swarmリポジトリ)
+  read: true
+  reported_at: '2026-03-24T23:09:21'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_978
+  summary: 2ch全面置換Phase 0完了。新板追加+権限マトリクス+通知ルーティング。全テスト合格。commit dcf7e0b
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T23:10:25'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T23:10:41'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- cmd_id: cmd_441
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_979
+  findings:
+  - 'reply list-for: @メンション検索(--board/--unread/--mark-read)。body LIKE ''%@agent%''で抽出'
+  - 'reply list-unread: 板の未読レス一覧。read_watermarks(agent_id,board,last_read_id)でwatermark管理'
+  - 'read_watermarks: CREATE IF NOT EXISTS+UPSERT。マイグレーション不要'
+  - 'テスト全合格: list-for/list-unread/mark-read/既存reply add&list全正常'
+  - commit 35f6c73 (multi-agent-shogunリポジトリ)
+  read: true
+  reported_at: '2026-03-24T23:29:32'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_979
+  summary: 2ch Phase 0 CLI拡張完了。reply list-for/list-unread実装。read_watermarksテーブル追加。commit
+    35f6c73
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-24T23:30:35'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-25T00:30:43'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
   type: report_completed
   worker: ashigaru2

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# healthcheck.sh — 4コンポーネント生存確認（Silent Degradation検知）
+# healthcheck.sh — 3コンポーネント生存確認（Silent Degradation検知）
 # 異常時は警告表示のみ（ブロックしない）。常に exit 0。
 # ═══════════════════════════════════════════════════════════════
 
@@ -20,22 +20,9 @@ check() {
 
 echo "═══ HealthCheck ═══"
 
-# 1. Memory MCP設定確認
-MCP_CFG="$SCRIPT_DIR/.mcp.json"
-TOTAL=$((TOTAL + 1))
-if [ -f "$MCP_CFG" ] && grep -q '"memory"' "$MCP_CFG" 2>/dev/null; then
-    MEM_FILE=$(python3 -c "import json; print(json.load(open('$MCP_CFG'))['mcpServers']['memory']['env']['MEMORY_FILE_PATH'])" 2>/dev/null)
-    if [ -n "$MEM_FILE" ] && [ -f "$MEM_FILE" ]; then
-        echo "[OK]   Memory MCP: 設定あり, memory file存在"
-    else
-        echo "[OK]   Memory MCP: 設定あり (memory fileは未生成の可能性)"
-    fi
-    PASS=$((PASS + 1))
-else
-    echo "[WARN] Memory MCP: .mcp.json にmemory設定なし"
-fi
+# Memory MCPチェックは除外（殿指示: 記憶崩壊許容設計）
 
-# 2. 高札Docker（廃止済み確認）
+# 1. 高札Docker（廃止済み確認）
 TOTAL=$((TOTAL + 1))
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health --max-time 2 2>/dev/null)
 HTTP_CODE="${HTTP_CODE:-000}"
@@ -46,7 +33,7 @@ else
     echo "[WARN] 高札Docker: 応答あり(HTTP $HTTP_CODE) — 不要なDocker稼働中？"
 fi
 
-# 3. inbox YAML構文チェック
+# 2. inbox YAML構文チェック
 for YFILE in roju_reports.yaml roju_ohariko.yaml; do
     YPATH="$SCRIPT_DIR/queue/inbox/$YFILE"
     TOTAL=$((TOTAL + 1))
@@ -60,7 +47,7 @@ for YFILE in roju_reports.yaml roju_ohariko.yaml; do
     fi
 done
 
-# 4. 没日録DB整合性
+# 3. 没日録DB整合性
 DB_PATH="$SCRIPT_DIR/data/botsunichiroku.db"
 TOTAL=$((TOTAL + 1))
 if [ ! -f "$DB_PATH" ]; then

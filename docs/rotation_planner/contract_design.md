@@ -58,22 +58,30 @@ fields.user_id ──→ users.id
 
 ### 1b. fields テーブル拡張
 
+> **注**: §8 裁定3-bにより owner_id は NOT NULL に変更。
+
 ```sql
 -- Phase 1: owner_id追加（非破壊的マイグレーション）
-ALTER TABLE fields ADD COLUMN owner_id INTEGER REFERENCES users(id);
--- owner_id = NULL → 自作（user_id が地主兼作業者。現行互換）
--- owner_id = 鈴木.id → 地主は鈴木さん、user_id（田中さん）が実質管理者
+-- 裁定3-b: NOT NULL。デフォルトは自分（user_id）
+ALTER TABLE fields ADD COLUMN owner_id INTEGER NOT NULL DEFAULT 0;
+UPDATE fields SET owner_id = user_id WHERE owner_id = 0;
+-- owner_id = user_id → 自作（地主 = 管理者 = アプリユーザー）
+-- owner_id ≠ user_id → 地主は別人、user_id（管理者）が実質耕作者
 ```
 
 **解釈ルール:**
 ```python
 def get_owner(field):
     """ほ場の地主（荷主）を返す"""
-    return field.owner_id if field.owner_id else field.user_id
+    return field.owner_id  # 裁定3-b: 常にowner_idが入っている
 
 def get_operator(field):
     """ほ場の実質管理者を返す"""
     return field.user_id  # 常にuser_id = 管理者
+
+def is_self_operated(field):
+    """自作かどうか"""
+    return field.owner_id == field.user_id
 ```
 
 **なぜ user_id を「管理者」側に残すか:**
@@ -82,26 +90,31 @@ def get_operator(field):
 - user_id = 管理者 のまま保てば、既存クエリの変更がゼロ
 - 地主（鈴木さん）がほ場を見たい場合は `WHERE owner_id = ?` で別途取得
 
-### 1c. field_contracts テーブル（年度別委託関係）
+### 1c. field_contracts テーブル（作期別委託関係）
+
+> **注**: §8の殿裁定3-a/3-b/3-cで大幅変更あり。下記は裁定適用後の最終形。
 
 ```sql
+-- 前提: contractors テーブル（§8 裁定3-a）、crop_seasons テーブル（§8 裁定3-c）が先に存在
+
 CREATE TABLE IF NOT EXISTS field_contracts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     field_id INTEGER NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
-    fiscal_year INTEGER NOT NULL,
-    owner_user_id INTEGER NOT NULL REFERENCES users(id),
-    operator_user_id INTEGER NOT NULL REFERENCES users(id),
+    crop_season_id INTEGER NOT NULL REFERENCES crop_seasons(id),  -- 裁定3-c: fiscal_year→作期
+    owner_user_id INTEGER NOT NULL REFERENCES users(id),          -- 裁定3-b: NOT NULL化
+    owner_name TEXT,                               -- 地主名テキスト（地主=自分の場合は不要）
+    contractor_id INTEGER NOT NULL REFERENCES contractors(id),    -- 裁定3-a: operator→contractor
     scope_type TEXT NOT NULL CHECK (scope_type IN ('full', 'partial')),
     scope_operations TEXT,  -- JSON配列: partial時の作業リスト
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(field_id, fiscal_year)
+    UNIQUE(field_id, crop_season_id, contractor_id)  -- 裁定1踏襲+3-a/3-c適用
 );
 CREATE INDEX IF NOT EXISTS idx_field_contracts_field ON field_contracts(field_id);
-CREATE INDEX IF NOT EXISTS idx_field_contracts_year ON field_contracts(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_field_contracts_season ON field_contracts(crop_season_id);
 CREATE INDEX IF NOT EXISTS idx_field_contracts_owner ON field_contracts(owner_user_id);
-CREATE INDEX IF NOT EXISTS idx_field_contracts_operator ON field_contracts(operator_user_id);
+CREATE INDEX IF NOT EXISTS idx_field_contracts_contractor ON field_contracts(contractor_id);
 ```
 
 ### 1d. 委託スコープの表現
@@ -134,33 +147,42 @@ scope_operations_example = [
 - マスタ管理のコストに対してROIが低い
 - JSON配列でフリーテキスト許容が現実的
 
-### 1e. 年度変更への対応
+### 1e. 年度変更・作期への対応
+
+> **注**: §8 裁定3-cにより fiscal_year → crop_season_id に変更。
 
 ```
-2026年: F001 → 鈴木(地主) → 田中(受託/全委託)
-2027年: F001 → 鈴木(地主) → 佐藤(受託/一部委託:収穫のみ)
-2028年: F001 → 鈴木(地主) → 自作（契約解除）
+2026水稲作期(4月-10月): F001 → 鈴木(地主) → 田中(受託/全委託)
+2026秋小麦作期(8月-翌8月): F001 → 鈴木(地主) → 佐藤(受託/一部委託:収穫のみ)
+2027水稲作期: F001 → 鈴木(地主) → 自作（契約解除）
 ```
 
 **表現:**
 ```sql
--- 2026年
-INSERT INTO field_contracts
-  (field_id, fiscal_year, owner_user_id, operator_user_id, scope_type)
-VALUES (1, 2026, 鈴木.id, 田中.id, 'full');
+-- 作期を先に作成
+INSERT INTO crop_seasons (name, start_date, end_date, fiscal_year, crop_type)
+VALUES ('2026水稲', '2026-04-01', '2026-10-31', 2026, '水稲');
 
--- 2027年
-INSERT INTO field_contracts
-  (field_id, fiscal_year, owner_user_id, operator_user_id, scope_type, scope_operations)
-VALUES (1, 2027, 鈴木.id, 佐藤.id, 'partial', '["収穫"]');
+INSERT INTO crop_seasons (name, start_date, end_date, fiscal_year, crop_type)
+VALUES ('2026秋小麦', '2026-08-01', '2027-08-31', 2026, '秋小麦');
 
--- 2028年: レコードなし → 自作
--- field_contracts にレコードがない = 自作（fields.user_id = 地主 = 作業者）
+-- 2026水稲: 全委託
+INSERT INTO field_contracts
+  (field_id, crop_season_id, owner_user_id, contractor_id, scope_type)
+VALUES (1, /* 2026水稲.id */, 鈴木.id, /* 田中のcontractor.id */, 'full');
+
+-- 2026秋小麦: 収穫のみ委託（年度またぎ）
+INSERT INTO field_contracts
+  (field_id, crop_season_id, owner_user_id, contractor_id, scope_type, scope_operations)
+VALUES (1, /* 2026秋小麦.id */, 鈴木.id, /* 佐藤のcontractor.id */, 'partial', '["収穫"]');
+
+-- 2027水稲: レコードなし → 自作
 ```
 
 **設計判断:** 「契約なし = 自作」とする暗黙のデフォルト。これにより:
 - 現行データに契約レコードを追加する必要がない（全て「自作」扱い）
 - 委託開始時にのみレコードを作成する
+- **秋小麦のような年度またぎ作期も、crop_seasonsのstart_date/end_dateで自然に表現できる**
 
 ---
 
@@ -313,31 +335,53 @@ CREATE TABLE IF NOT EXISTS field_contracts (...);
 
 ### 4d. models.py 変更
 
+> **注**: §8裁定3-a/3-b/3-c適用後の最終形。
+
 ```python
 # Phase 1: Field dataclass にowner_id追加
 @dataclass
 class Field:
     id: int
     user_id: int      # 管理者（実質的な操作者）
-    owner_id: Optional[int] = None  # 地主（NULLなら user_id = 地主）
+    owner_id: int      # 地主（裁定3-b: NOT NULL、デフォルト=user_id）
     field_code: str
     # ... 以下既存フィールド
 
     @property
-    def effective_owner_id(self) -> int:
-        """実質的な地主IDを返す"""
-        return self.owner_id if self.owner_id else self.user_id
+    def is_self_operated(self) -> bool:
+        """自作かどうか"""
+        return self.owner_id == self.user_id
 
-# Phase 2: FieldContract dataclass 新規
+# Phase 1: 裁定3-a 受託者マスタ
+@dataclass
+class Contractor:
+    id: int
+    user_id: Optional[int]  # アプリユーザーの場合
+    name: str
+    phone: Optional[str] = None
+    notes: Optional[str] = None
+
+# Phase 1: 裁定3-c 作期
+@dataclass
+class CropSeason:
+    id: int
+    name: str                  # "2026秋小麦"
+    start_date: str            # "2026-08-01"
+    end_date: str              # "2027-08-31"
+    fiscal_year: int           # 播種年度
+    crop_type: Optional[str] = None
+
+# Phase 1: FieldContract（裁定3-a/3-b/3-c適用後）
 @dataclass
 class FieldContract:
     id: int
     field_id: int
-    fiscal_year: int
-    owner_user_id: int
-    operator_user_id: int
-    scope_type: str  # 'full' | 'partial'
+    crop_season_id: int        # 裁定3-c: fiscal_year→作期
+    owner_user_id: int         # 裁定3-b: NOT NULL
+    contractor_id: int         # 裁定3-a: operator→contractor
+    scope_type: str            # 'full' | 'partial'
     scope_operations: Optional[str] = None  # JSON配列
+    owner_name: Optional[str] = None
     notes: Optional[str] = None
 ```
 
@@ -443,5 +487,295 @@ UNIQUE(field_id, fiscal_year, operator_user_id)
 
 ---
 
-*本文書は軍師（gunshi）による戦略分析である。農業の現場知識は殿の知見に依存する。
-設計判断の妥当性は殿のレビューを経て確定すること。*
+## 7. 殿裁定（2026-03-22）
+
+### 裁定1: 複数受託者 → 採用
+`UNIQUE(field_id, fiscal_year, operator_user_id)` に変更。
+耕起=田中、収穫=佐藤のケースは現実にある。耕作者が管理責任を持つ。
+
+### 裁定2: 地主未登録 → owner_name テキスト保存
+`field_contracts` に `owner_name TEXT` を追加。`owner_user_id` は nullable に変更。
+理由: 子供3人が相続して全員県外在住、というパターンが実在する。
+耕作者が地主名を入力するしかない。
+
+### 裁定3: 防除記録 → 耕作者帰属
+防除記録は耕作者（受託者）の帳簿に帰属。地主側への転記は対象外。
+理由: 実質的に防除作業は耕作者のみが行うため。
+
+### 設計原則（裁定から導出）
+**「耕作者が主体」で一貫。地主は権利者であって管理者ではない。**
+
+---
+
+## 8. 殿裁定 第2弾（2026-03-24）
+
+### 裁定3-a: 受託者テーブルの独立管理
+
+**裁定**: 委託元（受託者）を `field_contracts` に埋め込まず、別テーブル `contractors` で独立管理。
+`fields.user_id` とは別の外部キーで紐付け。
+
+**理由**: 受託者は複数のほ場を横断して受託する。受託者の情報（名前・連絡先等）をほ場ごとに重複させるのは正規化に反する。
+
+**設計変更**:
+
+```sql
+-- 新規テーブル: contractors（受託者マスタ）
+CREATE TABLE IF NOT EXISTS contractors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),  -- アプリユーザーの場合
+    name TEXT NOT NULL,                     -- 受託者名（user未登録でも可）
+    phone TEXT,                             -- 連絡先（任意）
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contractors_user ON contractors(user_id);
+```
+
+**field_contracts テーブルの変更**:
+
+```sql
+-- 旧: operator_user_id INTEGER NOT NULL REFERENCES users(id)
+-- 新: contractor_id INTEGER NOT NULL REFERENCES contractors(id)
+
+CREATE TABLE IF NOT EXISTS field_contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    field_id INTEGER NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
+    crop_season_id INTEGER NOT NULL REFERENCES crop_seasons(id),  -- 裁定3-cで変更（後述）
+    owner_user_id INTEGER NOT NULL REFERENCES users(id),          -- 裁定3-bで変更（後述）
+    owner_name TEXT,                                               -- 地主名テキスト（owner_user_id=自分の場合は不要）
+    contractor_id INTEGER NOT NULL REFERENCES contractors(id),     -- 裁定3-aで変更
+    scope_type TEXT NOT NULL CHECK (scope_type IN ('full', 'partial')),
+    scope_operations TEXT,  -- JSON配列: partial時の作業リスト
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(field_id, crop_season_id, contractor_id)  -- 裁定1踏襲: 同一作期に複数受託者を許可
+);
+```
+
+**contractors vs users の関係**:
+```
+contractors.user_id → users.id（nullable）
+  ├── user_id あり → アプリユーザーとして登録済みの受託者（自分のほ場も見える）
+  └── user_id なし → アプリ未登録の外部受託者（名前と連絡先のみ）
+```
+
+→ 裁定2（owner_name テキスト保存）と同じ思想を受託者側にも適用。
+usersテーブルに全員を登録する必要はない。
+
+### 裁定3-b: owner_id NOT NULL + デフォルト自分
+
+**裁定**: 地主未登録の場合は自分（生産者 = アプリユーザー）のものとする。NULL不可。デフォルトは自分のuser_id。
+
+**設計変更**:
+
+```sql
+-- 旧: fields テーブル
+-- ALTER TABLE fields ADD COLUMN owner_id INTEGER REFERENCES users(id);  -- nullable
+
+-- 新: owner_id NOT NULL, デフォルト = user_id
+ALTER TABLE fields ADD COLUMN owner_id INTEGER NOT NULL DEFAULT 0 REFERENCES users(id);
+-- ※ SQLite ALTER TABLE ADD COLUMN に DEFAULT が必要。マイグレーション時に user_id をコピー。
+```
+
+**マイグレーション手順**:
+```sql
+-- Step 1: カラム追加（仮のデフォルト値0）
+ALTER TABLE fields ADD COLUMN owner_id INTEGER NOT NULL DEFAULT 0;
+
+-- Step 2: 既存データを user_id で埋める（自作 = 自分が地主）
+UPDATE fields SET owner_id = user_id WHERE owner_id = 0;
+
+-- Step 3: 外部キー制約はSQLiteの制約により後付けできない
+-- → アプリ層で参照整合性を担保
+```
+
+**解釈ルールの変更**:
+```python
+# 旧:
+def get_owner(field):
+    return field.owner_id if field.owner_id else field.user_id
+
+# 新（裁定3-b適用後）:
+def get_owner(field):
+    return field.owner_id  # 常にowner_idが入っている。NULL不可。
+    # 自作の場合: owner_id == user_id
+    # 委託の場合: owner_id != user_id
+```
+
+**field_contracts.owner_user_id も NOT NULL に変更**:
+```sql
+owner_user_id INTEGER NOT NULL REFERENCES users(id),  -- 裁定3-b: NULL不可
+```
+
+→ 「地主がアプリ未登録の場合」は `owner_name` テキストで保持しつつ、
+`owner_user_id` は管理している受託者自身のIDを入れる。
+（= 「自分のほ場として管理するが、真の地主は別にいる」という表現）
+
+### 裁定3-c: 作期（crop_season）概念の導入
+
+**裁定**: 年度区切りは3/31だが、秋小麦は8月〜翌8月。単純な `fiscal_year INTEGER` では表現できない。作期（crop_season）の概念を導入し、1つの作期が複数年度にまたがるケースを扱えるようにせよ。
+
+**背景**:
+```
+稲作:     4月播種 → 10月収穫 → 同一年度内で完結
+秋小麦:   8月畑起こし → 翌8月収穫 → 2年度にまたがる
+冬野菜:   10月定植 → 翌3月収穫 → 年度をまたぐ
+```
+
+**新規テーブル: crop_seasons（作期マスタ）**:
+
+```sql
+CREATE TABLE IF NOT EXISTS crop_seasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,              -- "2026秋小麦", "2026水稲" 等の表示名
+    start_date TEXT NOT NULL,        -- 作期開始日 "2026-08-01"
+    end_date TEXT NOT NULL,          -- 作期終了日 "2027-08-31"
+    fiscal_year INTEGER NOT NULL,    -- 主たる年度（管理会計上）= 播種年度
+    crop_type TEXT,                  -- "秋小麦", "水稲", "大豆" 等（任意）
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(name)
+);
+CREATE INDEX IF NOT EXISTS idx_crop_seasons_year ON crop_seasons(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_crop_seasons_dates ON crop_seasons(start_date, end_date);
+```
+
+**設計判断**:
+
+| 項目 | 判断 | 理由 |
+|------|------|------|
+| start_date/end_date | TEXT（ISO 8601） | SQLiteの日付型はTEXT。比較はそのまま可能 |
+| fiscal_year | 播種年度で決定 | 管理会計・JA報告の単位。8月播種の秋小麦は2026年度 |
+| crop_type | 任意 | 作期に紐づけるが必須ではない。crop_historyと二重管理にしない |
+| name | ユニーク | "2026秋小麦(F001)" 等でほ場単位にしてもよいが、過剰設計の恐れ |
+
+**field_contracts への反映**:
+
+```sql
+-- 旧: fiscal_year INTEGER NOT NULL
+-- 新: crop_season_id INTEGER NOT NULL REFERENCES crop_seasons(id)
+```
+
+これにより:
+```sql
+-- 秋小麦の委託（2026年8月〜2027年8月）
+INSERT INTO crop_seasons (name, start_date, end_date, fiscal_year, crop_type)
+VALUES ('2026秋小麦', '2026-08-01', '2027-08-31', 2026, '秋小麦');
+
+-- この作期に対する委託契約
+INSERT INTO field_contracts
+  (field_id, crop_season_id, owner_user_id, contractor_id, scope_type)
+VALUES (1, /* crop_season.id */, 鈴木.id, /* contractor.id */, 'full');
+```
+
+**crop_history への影響**:
+
+現行の crop_history に `crop_season_id` を追加すべきかは検討が必要:
+```sql
+-- 案: crop_history にも作期を紐付け
+ALTER TABLE crop_history ADD COLUMN crop_season_id INTEGER REFERENCES crop_seasons(id);
+```
+
+ただし既存の crop_history は年度（year）ベースで動いている。
+**Phase 1では crop_history は変更せず、field_contracts のみ crop_season_id を使用する。**
+crop_history への拡張は Phase 2以降の検討事項とする。
+
+### 裁定3-c 補足: field_ownership VIEW の更新
+
+```sql
+-- 旧: fiscal_year = strftime('%Y', 'now') でフィルタ
+-- 新: 現在日付が作期の期間内かで判定
+
+CREATE VIEW field_ownership AS
+SELECT
+    f.*,
+    COALESCE(fc.owner_user_id, f.owner_id) AS effective_owner_id,
+    c.name AS contractor_name,
+    c.user_id AS contractor_user_id,
+    fc.scope_type,
+    fc.scope_operations,
+    cs.name AS season_name,
+    cs.fiscal_year
+FROM fields f
+LEFT JOIN field_contracts fc
+    ON f.id = fc.field_id
+LEFT JOIN crop_seasons cs
+    ON fc.crop_season_id = cs.id
+    AND date('now') BETWEEN cs.start_date AND cs.end_date
+LEFT JOIN contractors c
+    ON fc.contractor_id = c.id;
+```
+
+---
+
+## 9. 更新後のテーブル関連図
+
+```
+users
+  │
+  ├──→ fields.user_id（管理者=耕作者）
+  ├──→ fields.owner_id（地主。NOT NULL、デフォルト=user_id）【裁定3-b】
+  │
+  ├──→ contractors.user_id（受託者がアプリユーザーの場合）
+  │         │
+  │         └──→ field_contracts.contractor_id【裁定3-a】
+  │
+  ├──→ field_contracts.owner_user_id（地主）
+  │
+  └──→ rotation_plans.user_id（変更なし）
+
+crop_seasons【裁定3-c 新規】
+  │
+  └──→ field_contracts.crop_season_id
+
+fields ←── field_contracts.field_id
+```
+
+---
+
+## 10. 更新後のPhase別実装計画
+
+### Phase 0: 出荷管理暫定運用（変更なし）
+rotation-planner変更なし。出荷管理側で独自owner管理。
+
+### Phase 1: owner分離 + contractors + crop_seasons
+
+| 順序 | 作業 | subtask粒度 |
+|------|------|------------|
+| 1-1 | `fields` に `owner_id` カラム追加 + マイグレーション（全レコードに user_id をコピー） | 1 subtask |
+| 1-2 | `contractors` テーブル新規作成 + FieldContractRepository | 1 subtask |
+| 1-3 | `crop_seasons` テーブル新規作成 | 1 subtask |
+| 1-4 | `field_contracts` テーブル新規作成（crop_season_id + contractor_id 参照） | 1 subtask |
+| 1-5 | `field_ownership` VIEW 作成 | 1-2 と同一subtask |
+| 1-6 | API追加: `GET /api/fields/by-owner/{id}`, `GET /api/contractors`, `GET /api/crop-seasons` | 1 subtask |
+| 1-7 | models.py 更新: Field.owner_id, FieldContract, Contractor, CropSeason dataclass追加 | 1 subtask |
+
+**計: 5-6 subtask、足軽2名で2-3日**
+
+### Phase 2: フロントエンド + 委託管理画面
+
+| 順序 | 作業 | subtask粒度 |
+|------|------|------------|
+| 2-1 | ほ場一覧に「地主」表示欄追加 | 1 subtask |
+| 2-2 | 委託管理画面（CRUD） | 2-3 subtask |
+| 2-3 | 作期管理画面 | 1-2 subtask |
+| 2-4 | 年度/作期切替時の契約コピー機能 | 1 subtask |
+
+**計: 5-7 subtask、足軽2-3名で3-5日**
+
+---
+
+## 11. 見落としの可能性（更新）
+
+前回の6件に加えて:
+
+7. **crop_seasons の粒度問題**: 作期をほ場単位にするか全体単位にするか。秋小麦の播種時期がほ場ごとに異なる場合、ほ場単位の作期が必要になる可能性。ただし現時点では全体単位で十分
+8. **crop_seasons と crop_history の二重管理**: crop_history.year と crop_seasons.fiscal_year が異なる意味を持つ可能性。統合は Phase 2以降
+9. **contractors テーブルの肥大化**: 受託者が多い地域では contractors が大きくなる。ただし農業法人が数十〜数百件程度なので実用上の問題なし
+10. **fiscal_year の定義**: 播種年度 vs 収穫年度で混乱が生じうる。**播種年度で統一**する設計原則を明示すべき
+
+---
+
+*本文書は軍師（gunshi）による戦略分析である。殿裁定により設計更新（2026-03-24）。*

@@ -106,6 +106,11 @@ def search(args) -> None:
         search_similar(args)
         return
 
+    # --hybrid: ベクトル検索+FTS5のRRFハイブリッド
+    if getattr(args, "hybrid", False):
+        _search_hybrid(args)
+        return
+
     query: str = args.query
     limit: int = args.limit
     project: str | None = args.project
@@ -230,6 +235,85 @@ def search(args) -> None:
         print(
             f"{src_type:<{TYPE_W}}  {src_id:<{ID_W}}  {proj:<{PROJ_W}}  "
             f"{status:<{STATUS_W}}  {snip}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Hybrid search (FTS5 + sqlite-vec RRF)
+# ---------------------------------------------------------------------------
+
+def _search_hybrid(args) -> None:
+    """FTS5 + ベクトル検索のRRFハイブリッド検索。"""
+    query: str = args.query
+    limit: int = args.limit
+    project: str | None = args.project
+
+    if not query or not query.strip():
+        print("Error: 検索クエリが空です。", file=sys.stderr)
+        sys.exit(1)
+
+    conn = get_connection()
+    try:
+        # sqlite-vec拡張ロード
+        try:
+            from botsu.vec import _load_vec, hybrid_search
+            if not _load_vec(conn):
+                print("Error: sqlite-vec が利用できません。pip install sqlite-vec を実行してください。",
+                      file=sys.stderr)
+                sys.exit(1)
+        except ImportError:
+            print("Error: botsu.vec モジュールが見つかりません。", file=sys.stderr)
+            sys.exit(1)
+
+        # vec_indexの存在チェック
+        has_vec = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_meta'"
+        ).fetchone()
+        if not has_vec:
+            print("Error: vec_index が未作成です。python3 scripts/migrate_vec.py を実行してください。",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        results = hybrid_search(
+            conn, query, top_n=limit,
+            source_type=None, project=project,
+        )
+    except Exception as exc:
+        print(f"Error: ハイブリッド検索失敗: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+    # 表示
+    print(f"Query: {query} [hybrid]")
+    if project:
+        print(f"Project: {project}")
+    print(f"Results: {len(results)}")
+    print()
+
+    if not results:
+        print("(結果なし)")
+        return
+
+    TYPE_W = 10; ID_W = 16; PROJ_W = 14; SCORE_W = 8; SNIP_W = 60
+    print(
+        f"{'TYPE':<{TYPE_W}}  {'ID':<{ID_W}}  {'PROJECT':<{PROJ_W}}  "
+        f"{'SCORE':<{SCORE_W}}  SNIPPET"
+    )
+    print(
+        f"{'-'*TYPE_W}  {'-'*ID_W}  {'-'*PROJ_W}  "
+        f"{'-'*SCORE_W}  {'-'*SNIP_W}"
+    )
+    for r in results:
+        snip = (r.get("content") or "").replace("\n", " ").strip()
+        if len(snip) > SNIP_W:
+            snip = snip[:SNIP_W - 1] + "…"
+        score = f"{r['hybrid_score']:.4f}"
+        print(
+            f"{(r['source_type'] or '')[:TYPE_W]:<{TYPE_W}}  "
+            f"{(r['source_id'] or '')[:ID_W]:<{ID_W}}  "
+            f"{(r.get('project') or '')[:PROJ_W]:<{PROJ_W}}  "
+            f"{score:<{SCORE_W}}  {snip}"
         )
 
 

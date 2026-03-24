@@ -722,6 +722,35 @@ class DatHandler(BaseHTTPRequestHandler):
             self.send_cp932(content)
             return
 
+        # test/read.cgi/{board}/{thread_id} ルート（JDim互換 read.cgi形式）
+        if len(parts) == 4 and parts[0] == "test" and parts[1] == "read.cgi":
+            board = parts[2]
+            num_id_str = parts[3]
+            if board not in BOARDS:
+                self.send_cp932("404 Not Found\n", status=404)
+                return
+            try:
+                num_id = int(num_id_str)
+                thread_id = lookup_id(board, num_id) or num_id_str
+            except ValueError:
+                thread_id = num_id_str
+            if thread_id == num_id_str and board in SUBJECT_FUNCS:
+                try:
+                    SUBJECT_FUNCS[board]()
+                    thread_id = lookup_id(board, int(num_id_str)) or num_id_str
+                except Exception:
+                    pass
+            try:
+                content = DAT_FUNCS[board](thread_id)
+            except Exception as e:
+                content = None
+                print(f"[ERROR] dat {board}/{thread_id}: {e}")
+            if content is None:
+                self.send_cp932("404 Not Found\n", status=404)
+                return
+            self.send_cp932(content)
+            return
+
         self.send_cp932("404 Not Found\n", status=404)
 
 

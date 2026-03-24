@@ -46,7 +46,22 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 /home/yasu/multi-agent-shogun/scripts/policy_checker.py",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "bash /home/yasu/multi-agent-shogun/scripts/gatekeeper_f006.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/yasu/multi-agent-shogun/scripts/policy_checker.py",
             "timeout": 5
           }
         ]

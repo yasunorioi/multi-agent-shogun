@@ -192,7 +192,7 @@ _launch_tmux() {
     # ── ペイン1: claude code ──
     tmux split-window -t "${SESSION}:0" -v -p 40
     tmux send-keys -t "${SESSION}:0.1" \
-        "echo '═══ ペイン1: claude code (足軽浪人) ═══' && cd \"\${SHOGUN_ROOT:-\$HOME}\" && $claude_bin" Enter
+        "echo '═══ ペイン1: claude code (足軽浪人) ═══' && cd \"\${SHOGUN_ROOT:-\$HOME}\" && $claude_bin --effort low" Enter
 
     # ── ペイン2: 予備（ベンチマーク用） ──
     tmux split-window -t "${SESSION}:0" -v -p 50

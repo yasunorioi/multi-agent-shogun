@@ -6,6 +6,7 @@ description: >
   "system dependency test", "MeCab test", "CI equivalent local test", "CI同等ローカルテスト".
   Do NOT use for: Docker Compose environment testing (use docker-compose-test) or non-Python test frameworks.
 argument-hint: "<project_path> [--test-target tests/] [--apt-packages mecab,libmecab-dev]"
+allowed-tools: Bash(docker *), Bash(python3 -m pytest *)
 ---
 # Docker Pytest Runner - Skill Definition
 
@@ -13,6 +14,25 @@ argument-hint: "<project_path> [--test-target tests/] [--apt-packages mecab,libm
 **Category**: Testing / CI
 **Version**: 1.0.0
 **Created**: 2026-02-11
+
+---
+
+## Pre-injected Context (Shell Interpolation)
+
+### テスト設定ファイル検出
+```
+!`ls -1 pytest.ini setup.cfg pyproject.toml tox.ini 2>/dev/null || echo "no test config found"`
+```
+
+### テストディレクトリ構造
+```
+!`find . -maxdepth 3 -type d -name tests -o -type d -name test 2>/dev/null | head -5`
+```
+
+### Dockerfile存在確認
+```
+!`ls -1 Dockerfile* 2>/dev/null || echo "no Dockerfile found"`
+```
 
 ---
 

@@ -60,7 +60,7 @@
 | 部屋子 | 1 | 老中直轄の調査・分析実働 | Opus |
 | 軍師 | 1 | 戦略立案・Bloom L4-L6分析・North Star設計 | Opus |
 | お針子 | 1 | 2段階監査（仕様準拠チェック + ルーブリック採点） | Sonnet |
-| 高札 | 1台 | FTS5全文検索API + 連想記憶エンジン（Docker） | - |
+| 高札 | - | FTS5全文検索エンジン（没日録DB内蔵、Docker不要） | - |
 | 獏 | 1台 | 夢見デーモン（1h周期 Web検索 + 日次サマリ） | - |
 
 ---
@@ -74,12 +74,12 @@
 | **Request ID 相関** | 全通信に UUID 短縮8文字を付与。指示→報告が1対1で紐付き |
 | **Drain-on-Read** | inbox 読み取り時に自動クリア |
 | **Identity Re-injection** | コンパクション復帰時にエージェントの身元・タスクを自動注入 |
-| **高札API報告登録** | 報告本文をDB登録、YAML inboxにはサマリ+参照IDのみ |
+| **没日録CLI報告登録** | 報告本文をDB登録、YAML inboxにはサマリ+参照IDのみ |
 
 ```
 指示: 将軍 → YAML → 老中 → YAML → 足軽/部屋子
 分析: 老中 → YAML → 軍師 → YAML → 老中（Bloom L4-L6委譲）
-報告: 足軽 → 高札API + YAML → 老中 → dashboard.md
+報告: 足軽 → 没日録CLI + YAML → 老中 → dashboard.md
 監査: お針子 → YAML → 老中（2段階: Phase1仕様準拠 + Phase2ルーブリック）
 ```
 
@@ -93,17 +93,18 @@ Layer 3b: 没日録DB      ← 完了済みタスク + 日記（SQLite永続）
 Layer 4: Session        ← instructions/*.md（コンパクションでsummary化）
 ```
 
-instructions は最小限のルール+インデックスのみ保持し、詳細手順は高札（`localhost:8080/docs/`）から必要時に取得する「掟上今日子方式」を採用。
+instructions は最小限のルール+インデックスのみ保持し、詳細手順は `context/*.md` から必要時に取得する「掟上今日子方式」を採用。
 
 ## 主要コンポーネント
 
-### 没日録（データベース）
+### 没日録（データベース + FTS5全文検索）
 
 | コンポーネント | 説明 |
 |--------------|------|
-| `scripts/botsunichiroku.py` | 没日録CLI — cmd/subtask/report/agent/diary の CRUD |
-| `scripts/init_db.py` | DB初期化（commands, subtasks, reports, agents, diary_entries 等） |
-| `data/botsunichiroku.db` | SQLite DB（正データ。dashboard.md は二次情報） |
+| `scripts/botsunichiroku.py` | 没日録CLI — cmd/subtask/report/agent/diary/search/check/enrich |
+| `scripts/botsu/` | 没日録モジュール群（11モジュール。cmd, subtask, report, search, etc.） |
+| `scripts/init_db.py` | DB初期化（commands, subtasks, reports, agents, diary_entries, search_index 等） |
+| `data/botsunichiroku.db` | SQLite DB + FTS5全文検索（正データ。dashboard.md は二次情報） |
 
 ### 通信・制御
 
@@ -115,19 +116,23 @@ instructions は最小限のルール+インデックスのみ保持し、詳細
 | `scripts/worker_ctl.sh` | ワーカー動的起動/停止 |
 | `scripts/shogun-gc.sh` | 報告 YAML 自動 GC（直近10件保持） |
 
-### 高札（検索・知識API）
+### 検索・2ch表示
 
 | コンポーネント | 説明 |
 |--------------|------|
-| `tools/kousatsu/` | 高札API — FTS5全文検索 + docs配信 + 連想記憶エンジン（Docker） |
+| `botsunichiroku.py search` | FTS5全文検索（横断: cmd/subtask/report/diary/dashboard） |
+| `botsunichiroku.py search --similar` | 類似タスク検索 |
+| `botsunichiroku.py check orphans` | 矛盾・放置タスク検出 |
+| `botsunichiroku.py check coverage` | カバレッジチェック |
+| `botsunichiroku.py enrich` | 関連知見・pitfalls自動抽出 |
+| `scripts/botsunichiroku_2ch.py` | 2ch DAT表示レイヤー（没日録データを2chスレッド形式で表示） |
 | `scripts/build_cooccurrence.py` | 共起行列構築（連想記憶用） |
 
 ### 夢見・探索
 
 | コンポーネント | 説明 |
 |--------------|------|
-| `scripts/dream.py` | 夢見機能 — 殿の興味マップ × 直近キーワードで Web検索 |
-| `scripts/baku.py` | 獏デーモン — 1時間毎に dream.py 実行、毎朝7時に日次サマリ |
+| `scripts/baku.py` | 獏デーモン — 1時間毎に殿の興味マップ × Web検索、毎朝7時に日次サマリ |
 
 ### 監査・品質
 
@@ -135,6 +140,7 @@ instructions は最小限のルール+インデックスのみ保持し、詳細
 |--------------|------|
 | `scripts/audit_grading.py` | お針子ルーブリック採点（5カテゴリ × 3点 = 15点満点） |
 | `scripts/gatekeeper_f006.sh` | pre-commit フック — GitHub Issue/PR 誤投稿防止 |
+| `context/ohariko-audit.md` | 2段階レビュー手順書（Phase1: P1-1〜P1-5仕様準拠、Phase2: 15点ルーブリック） |
 | `context/ohariko-kenchi.md` | 検地監査手順書（K-1〜K-5の5観点でリソース実在性・記述精度を検証） |
 
 ### 検地帳（リソースレジストリ）
@@ -185,8 +191,8 @@ python3 scripts/botsunichiroku.py kenchi search "notify"
 | tmux | `sudo apt install tmux` |
 | Node.js v20+ | Claude Code CLI に必要 |
 | Claude Code CLI | `npm install -g @anthropic-ai/claude-code` |
-| Docker | 高札API に必要 |
 | Python 3.10+ | 没日録CLI・夢見機能に必要 |
+| MeCab（任意） | FTS5日本語検索精度向上。なくても `unicode61` トークナイザで動作 |
 | nginx（任意） | 2chまとめHTMLの配信用 |
 
 ## インストール
@@ -270,11 +276,11 @@ scripts/worker_ctl.sh start ashigaru1 # 個別に起動
 
 MCP ツールは遅延ロード方式。先に `ToolSearch` でロードしてから使用。
 
-### 高札APIが応答しない
+### FTS5検索が動かない
 
 ```bash
-cd tools/kousatsu && docker compose up -d   # 高札を起動
-curl -s http://localhost:8080/health        # ヘルスチェック
+python3 scripts/botsunichiroku.py search "テスト"  # 検索テスト
+python3 scripts/migrate_fts5.py                    # FTS5インデックス再構築
 ```
 
 </details>
@@ -287,14 +293,16 @@ curl -s http://localhost:8080/health        # ヘルスチェック
 
 | 機能 | 概要 |
 |------|------|
-| **高札 v2 連想記憶エンジン** | FTS5全文検索 + Hopfield共起行列による関連知見の自動抽出 |
+| **FTS5全文検索統合** | 没日録DB内蔵FTS5 + 共起行列連想記憶。Docker不要、CLI完結 |
 | **軍師 (GUNSHI)** | Bloom-based routing による戦略立案・L4-L6分析の専門エージェント |
 | **お針子2段階監査** | Phase1: 仕様準拠チェック（早期FAIL）、Phase2: 15点ルーブリック採点 |
 | **夢見システム** | 殿の興味マップ × 没日録キーワードのクロスによるセレンディピティ検索 |
 | **獏デーモン** | 1時間毎の夢見 + 日次サマリ（人間が寝ている間もシステムが学習） |
 | **AI日記** | エージェントの思考過程を記録。コンパクション復帰時の文脈補完 |
-| **2ch互換dat生成** | 没日録の全活動を2chブラウザで閲覧可能（dat + subject.txt） |
-| **没日録 auto-enrich** | cmd 登録時に自動で高札APIに知見キャッシュ |
+| **2ch互換表示** | 没日録を2chスレッド形式で表示（CLI + dat + subject.txt、2chブラウザ対応） |
+| **スキル自動トリガー** | 全エージェントがタスク開始前にスキル該当性を自動チェック（[superpowers](https://github.com/obra/superpowers)着想） |
+| **言い訳テーブル** | LLMの典型的逃避パターンを事前封殺（足軽6項目 + お針子6項目 + スキル回避4項目） |
+| **没日録 auto-enrich** | cmd 登録時にFTS5で関連知見・pitfallsを自動抽出 |
 | **通信プロトコル v3** | Request ID相関、Drain-on-Read、高札API報告登録 |
 | **Identity Re-injection** | コンパクション復帰時の身元・タスク自動注入 |
 | **pre-commit Gatekeeper** | GitHub Issue/PR 誤投稿・リポ誤爆の自動防止 |

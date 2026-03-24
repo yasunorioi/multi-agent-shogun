@@ -65,7 +65,7 @@ JSON形式の `PreAuditReport`:
 
 ## 設計書
 
-設計書はローカル `docs/kanjou_ginmiyaku_design.md` に存在（git管理外）。
+設計書はローカル `docs/shogun/kanjou_ginmiyaku_design.md` に存在（git管理外）。
 
 ## 前提条件
 

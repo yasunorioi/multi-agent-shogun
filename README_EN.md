@@ -23,7 +23,7 @@ Run multiple Claude Code instances simultaneously on tmux, orchestrated in a feu
 
 ![multiagent session](assets/screenshot-multiagent.png)
 
-**ooku session** — Gunshi (strategy) + Ohariko (audit) + Kousatsu API (Docker) + Baku (dream daemon)
+**ooku session** — Gunshi (strategy) + Ohariko (audit) + Baku (dream daemon)
 
 ![ooku session](assets/screenshot-ooku.png)
 
@@ -63,7 +63,7 @@ Lord (Human)
 | Heyago | 1 | Roju's direct research & analysis unit | Opus |
 | Gunshi | 1 | Strategy. Bloom L4-L6 analysis & North Star design | Opus |
 | Ohariko | 1 | Two-phase audit (spec compliance + rubric scoring) | Sonnet |
-| Kousatsu | 1 | FTS5 full-text search API + associative memory engine (Docker) | - |
+| Kousatsu | 1 | FTS5 full-text search in Botsunichiroku DB (no Docker required) | - |
 | Baku | 1 | Dream daemon (hourly web search + daily summary) | - |
 
 ---
@@ -77,12 +77,12 @@ All inter-agent communication is event-driven (polling is forbidden). Async coor
 | **Request ID Correlation** | Every message gets a truncated 8-char UUID. Instructions and reports are 1:1 linked |
 | **Drain-on-Read** | Inbox auto-clears on read |
 | **Identity Re-injection** | Agent identity and tasks are auto-injected on context compaction recovery |
-| **Kousatsu API Reporting** | Full report body stored in DB; YAML inbox receives only summary + reference ID |
+| **CLI-Based Reporting** | Full report body stored in DB via CLI; YAML inbox receives only summary + reference ID |
 
 ```
 Orders:  Shogun -> YAML -> Roju -> YAML -> Ashigaru/Heyago
 Analysis: Roju -> YAML -> Gunshi -> YAML -> Roju (Bloom L4-L6 delegation)
-Reports:  Ashigaru -> Kousatsu API + YAML -> Roju -> dashboard.md
+Reports:  Ashigaru -> Botsunichiroku CLI + YAML -> Roju -> dashboard.md
 Audit:    Ohariko -> YAML -> Roju (Phase 1: spec compliance -> Phase 2: rubric)
 ```
 
@@ -96,7 +96,7 @@ Layer 3b: Botsunichiroku DB <- Completed tasks + diary (SQLite, persistent)
 Layer 4: Session        <- instructions/*.md (summarized on compaction)
 ```
 
-Instructions hold minimal rules + index only. Detailed procedures are fetched on-demand from the Kousatsu API (`localhost:8080/docs/`) — a pattern we call "Okitegami-style" (after the fictional detective who forgets everything daily).
+Instructions hold minimal rules + index only. Detailed procedures are fetched on-demand from the Botsunichiroku CLI (`scripts/botsunichiroku.py`) — a pattern we call "Okitegami-style" (after the fictional detective who forgets everything daily).
 
 ## Key Components
 
@@ -106,9 +106,10 @@ Instructions hold minimal rules + index only. Detailed procedures are fetched on
 
 | Component | Description |
 |-----------|-------------|
-| `scripts/botsunichiroku.py` | CLI — CRUD for commands, subtasks, reports, agents & diary |
-| `scripts/init_db.py` | DB initialization (commands, subtasks, reports, agents, diary_entries, etc.) |
-| `data/botsunichiroku.db` | SQLite DB (source of truth; dashboard.md is secondary) |
+| `scripts/botsunichiroku.py` | CLI — CRUD for commands, subtasks, reports, agents, diary + search/check/enrich |
+| `scripts/botsu/` | Modular subcommands (search, check, enrich, diary_matome, etc.) |
+| `scripts/init_db.py` | DB initialization (commands, subtasks, reports, agents, diary_entries, search_index, etc.) |
+| `data/botsunichiroku.db` | SQLite DB with FTS5 search index (source of truth; dashboard.md is secondary) |
 
 ### Communication & Control
 
@@ -120,21 +121,21 @@ Instructions hold minimal rules + index only. Detailed procedures are fetched on
 | `scripts/worker_ctl.sh` | Dynamic worker start/stop |
 | `scripts/shogun-gc.sh` | Report YAML auto-GC (retains last 10) |
 
-### Kousatsu (Search & Knowledge API)
+### Search & 2ch Display
 
-> *Kousatsu* = public notice board — the system's knowledge retrieval layer.
+> *Kousatsu* = public notice board — the system's knowledge retrieval layer. Now integrated into the Botsunichiroku DB (no Docker required).
 
 | Component | Description |
 |-----------|-------------|
-| `tools/kousatsu/` | Kousatsu API — FTS5 full-text search + doc serving + associative memory engine (Docker) |
+| `botsunichiroku.py search` | FTS5 full-text search across commands, subtasks, reports & diary |
 | `scripts/build_cooccurrence.py` | Co-occurrence matrix builder (for associative memory) |
+| `scripts/diary_matome.py` | 2ch-compatible dat generation (JDim/Jane Style compatible) |
 
 ### Dream & Exploration
 
 | Component | Description |
 |-----------|-------------|
-| `scripts/dream.py` | Dream feature — cross-references lord's interest map with recent keywords for web search |
-| `scripts/baku.py` | Baku daemon — runs dream.py hourly, generates daily summary at 7 AM |
+| `scripts/baku.py` | Baku daemon — cross-references lord's interest map with recent keywords, hourly web search + daily summary at 7 AM |
 
 > *Baku* = a mythical creature that eats nightmares. Here it "dreams" on behalf of the system while humans sleep.
 
@@ -143,8 +144,10 @@ Instructions hold minimal rules + index only. Detailed procedures are fetched on
 | Component | Description |
 |-----------|-------------|
 | `scripts/audit_grading.py` | Ohariko rubric scoring (5 categories x 3 points = 15 max) |
+| `.claude/skills/audit/SKILL.md` | Audit skill definition (auto-triggered by LLM judgment) |
 | `scripts/gatekeeper_f006.sh` | Pre-commit hook — prevents accidental GitHub Issue/PR creation |
 | `context/ohariko-kenchi.md` | Kenchi audit procedures (K-1 to K-5: existence, description accuracy, dependency integrity) |
+| `instructions/ohariko.md` | Ohariko instructions with rationalization table (anti-escape patterns) |
 
 ### Kenchi (Resource Registry)
 
@@ -198,8 +201,8 @@ Enable with `notify.enable: true` in `config/settings.yaml`. Auto-notifies on co
 | tmux | `sudo apt install tmux` |
 | Node.js v20+ | Required for Claude Code CLI |
 | Claude Code CLI | `npm install -g @anthropic-ai/claude-code` |
-| Docker | Required for Kousatsu API |
 | Python 3.10+ | Required for Botsunichiroku CLI & Dream feature |
+| MeCab (optional) | For Japanese tokenization in FTS5 search (`sudo apt install mecab libmecab-dev`) |
 | nginx (optional) | For serving matome HTML |
 
 ## Installation
@@ -283,11 +286,11 @@ scripts/worker_ctl.sh start ashigaru1 # Start individually
 
 MCP tools use deferred loading. Run `ToolSearch` to load them first.
 
-### Kousatsu API not responding
+### FTS5 search not working
 
 ```bash
-cd tools/kousatsu && docker compose up -d   # Start Kousatsu
-curl -s http://localhost:8080/health        # Health check
+python3 scripts/botsunichiroku.py search "keyword"  # Test search
+python3 scripts/botsunichiroku.py search reindex     # Rebuild FTS5 index
 ```
 
 </details>
@@ -300,19 +303,20 @@ This repository is a fork of [yohey-w/multi-agent-shogun](https://github.com/yoh
 
 | Feature | Description |
 |---------|-------------|
-| **Kousatsu v2 Associative Memory** | FTS5 full-text search + Hopfield co-occurrence matrix for automatic knowledge retrieval |
+| **FTS5 Full-Text Search** | FTS5 search integrated into Botsunichiroku DB. No Docker required. Hopfield co-occurrence matrix for associative memory |
 | **Gunshi (Strategist)** | Dedicated strategy agent with Bloom-based routing for L4-L6 analysis |
-| **Ohariko Two-Phase Audit** | Phase 1: spec compliance (early FAIL), Phase 2: 15-point rubric scoring |
+| **Ohariko Two-Phase Audit** | Phase 1: spec compliance (early FAIL), Phase 2: 15-point rubric scoring. Rationalization table for anti-escape patterns |
 | **Dream System** | Serendipity search by crossing lord's interest map with Botsunichiroku keywords |
 | **Baku Daemon** | Hourly dreaming + daily summary (system learns while humans sleep) |
 | **AI Diary** | Records agent thought processes. Supplements context on compaction recovery |
-| **2ch-Compatible dat** | All activity viewable in 2ch browsers (dat + subject.txt) |
-| **Botsunichiroku Auto-Enrich** | Auto-caches knowledge in Kousatsu API on command registration |
-| **Communication Protocol v3** | Request ID correlation, Drain-on-Read, Kousatsu API report registration |
+| **2ch-Compatible dat** | All activity viewable in 2ch browsers (dat + subject.txt). CMD=thread, subtasks/reports=replies |
+| **Botsunichiroku Auto-Enrich** | Auto-caches knowledge on command registration via CLI |
+| **Communication Protocol v3** | Request ID correlation, Drain-on-Read, CLI-based report registration |
 | **Identity Re-injection** | Auto-inject agent identity and tasks on compaction recovery |
 | **Pre-commit Gatekeeper** | Prevents accidental GitHub Issue/PR creation and repo misfires |
 | **External Notifications** | Four backends (ntfy/Discord/Slack/MQTT). No external deps, non-blocking fire-and-forget |
 | **Kenchi (Resource Registry)** | Domain resource registration & search. Ohariko Kenchi Audit (K-1 to K-5) verifies existence & integrity |
+| **Superpowers** | Skill auto-trigger via LLM judgment, "Use when:" description format, rationalization tables |
 | **Slash Commands** | Custom skills: `/md2pdf` (Japanese PDF), `/audit` (audit), and more |
 
 ---

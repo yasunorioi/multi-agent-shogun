@@ -7,11 +7,24 @@ description: >
   "コンテナテスト", "compose verify", "compose検証", "docker health check".
   Do NOT use for: generating Docker Compose files (use docker-compose-generator) or running pytest (use docker-pytest-runner).
 argument-hint: "[path/to/docker-compose.yaml]"
+allowed-tools: Bash(docker *), Bash(docker compose *)
 ---
 # Docker Compose テスト自動化スキル
 
 Docker Compose環境の起動確認・動作テストを自動化する。
 コンテナ起動、ポートリッスン、サービス間接続、ヘルスチェックを一括検証。
+
+## Pre-injected Context (Shell Interpolation)
+
+### 現在のコンテナ状態
+```
+!`docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "compose未起動"`
+```
+
+### docker-compose.yaml検出
+```
+!`ls -1 docker-compose*.y*ml 2>/dev/null || echo "docker-compose.yaml not found in cwd"`
+```
 
 ---
 

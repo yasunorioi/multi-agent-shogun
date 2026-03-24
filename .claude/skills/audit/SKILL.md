@@ -2,7 +2,7 @@
 name: audit
 description: >
   Use when: (1) お針子がsubtaskの成果物を監査する時、(2) 老中が監査依頼を発行した時、
-  (3) 足軽のコミットを15点ルーブリックで採点する時、(4) /audit コマンドが呼ばれた時。
+  (3) 足軽のコミットを18点ルーブリック(品質15点+ポリシー3点)で採点する時、(4) /audit コマンドが呼ばれた時。
   NOT for: コードレビュー以外の一般的なファイル確認。
 allowed-tools: Bash(git *), Bash(python3 scripts/botsunichiroku.py *)
 ---
@@ -19,10 +19,10 @@ allowed-tools: Bash(git *), Bash(python3 scripts/botsunichiroku.py *)
 
 ## Overview
 
-足軽のsubtask成果物を15点ルーブリックで採点し、監査レポートを出力する。
+足軽のsubtask成果物を18点ルーブリック（品質5観点15点 + ポリシー準拠3点）で採点し、監査レポートを出力する。
 お針子が毎回ルーブリックを説明し直す問題を解消するための統一スキル。
 
-**合格基準**: 13点以上 → `approved` / 10-12点 → `rejected_trivial` / 9点以下 → `rejected_judgment`
+**合格基準**: 15点以上 → `approved` / 10-14点 → `rejected_trivial` / 9点以下 → `rejected_judgment`
 
 ---
 
@@ -107,7 +107,7 @@ git log --oneline <commit_hash> 2>/dev/null | head -1
 audit:
   subtask_id: subtask_XXX
   commit: <hash>
-  score: 0/15
+  score: 0/18
   verdict: FAIL
   findings: "コミット <hash> が存在しない。作業未完了の可能性。"
 ```
@@ -145,9 +145,9 @@ fi
 - 「テスト不要な変更（設定ファイル・ドキュメント）」→ 3点
 - 「実装コードの変更だがテストなし」→ 2点（殿の「テストは書け」原則より）
 
-### Step 5: 15点ルーブリック採点
+### Step 5: 18点ルーブリック採点
 
-5カテゴリ × 3点満点 = **15点満点**
+5カテゴリ × 3点満点 = 15点（品質） + ポリシー準拠3点(PC1-PC3) = **18点満点**
 
 | カテゴリ | 3点（PASS） | 2点（MINOR） | 1点（FAIL） |
 |---------|------------|-------------|------------|
@@ -156,6 +156,16 @@ fi
 | **code_quality**（品質） | 可読性・命名良好。殿の「シンプル志向」に沿う | 軽微な改善余地（命名・コメント等） | 保守困難。過剰抽象化・意味不明命名・重複コード |
 | **completeness**（完全性） | 全要件カバー。`notes` の全指示を実施 | 一部未対応（軽微） | 主要要件欠落 |
 | **no_regressions**（回帰なし） | 既存機能への影響なし | 軽微な副作用（動作には影響しない） | 既存機能を破壊 |
+
+#### ポリシー準拠（+3点）
+
+| カテゴリ | 1点（PASS） | 0点（FAIL） |
+|---------|------------|------------|
+| **PC1**（F001-F006違反なし） | git diff + コミット内容にポリシー違反コマンドがない | 違反あり |
+| **PC2**（権限境界遵守） | 自分のinbox以外のYAMLを書き換えていない | 逸脱あり |
+| **PC3**（報告真正性） | 報告内のcommitハッシュをgit logで実在確認 | ハッシュ不在/不一致 |
+
+> PC3は特に重要: cmd_284-300ハルシネーション事故の再発防止。
 
 > ※1 **「動けば合格」原則（correctness 3点）**: コードの美しさ・アーキテクチャの洗練は評価対象外。
 > 動作し、要件を満たし、既存を壊さなければ3点。過剰に厳しく採点しない。
@@ -168,18 +178,18 @@ fi
 
 #### Few-shot Examples（判定例）
 
-**事例A — 14/15 approved**: subtask_786（ルール2ピタゴラスイッチ書き換え）
+**事例A — 17/18 approved**: subtask_786（ルール2ピタゴラスイッチ書き換え）
 - correctness(3): 温度段階・ch番号・緊急停止ライン全て殿指定と完全一致
 - code_quality(3): rule_engineとの整合性旧版より向上 / completeness(3): 全要件カバー
 - no_regressions(3): commit acb9056・push確認済み / tests(2): 軽微な懸念1点減
 → **要件完全充足・証跡あり → 典型的合格例**
 
-**事例B — 11/15 rejected_trivial**: subtask_755（OpenAI SDK互換化）
+**事例B — 13/18 rejected_trivial**: subtask_755（OpenAI SDK互換化）
 - correctness(3): SDK差し替え全形式正確、pytest 455件PASS
 - code_quality(2)/completeness(2)/no_regressions(2)/tests(2): 空行重複1箇所が複数カテゴリに波及
 → **動作・要件充足だが書式軽微問題 → 空行削除のみで再提出可能**
 
-**事例C — 6/15 rejected_judgment**: subtask_829（統合テスト）
+**事例C — 6/18 rejected_judgment**: subtask_829（統合テスト）
 - correctness(2): bloom_router.sh 16件PASSはお針子実機確認済み
 - completeness(1)/no_regressions(1)/tests(0): コミットなし・report addなし・証跡ゼロ
 → **実装は動くが証跡完全欠落 → エビデンス再整備が必要**
@@ -190,14 +200,17 @@ fi
 audit:
   subtask_id: subtask_XXX
   commit: <hash>
-  score: XX/15
+  score: XX/18
   breakdown:
     correctness: X      # 1-3
     tests: X            # 1-3
     code_quality: X     # 1-3
     completeness: X     # 1-3
     no_regressions: X   # 1-3
-  verdict: PASS         # 13点以上=PASS / 10-12=rejected_trivial / 9以下=rejected_judgment
+    pc1_policy: X       # 0-1
+    pc2_boundary: X     # 0-1
+    pc3_authenticity: X # 0-1
+  verdict: PASS         # 15点以上=PASS / 10-14=rejected_trivial / 9以下=rejected_judgment
   findings: "具体的な指摘事項。合格ならば特記事項なし、または良かった点。"
 ```
 
@@ -205,11 +218,11 @@ audit:
 
 | スコア | verdict（スキル内） | result（高札API/YAML） |
 |-------|-------------------|----------------------|
-| 13-15点 | PASS | `approved` |
-| 10-12点 | CONDITIONAL_PASS | `rejected_trivial`（軽微な修正で合格可能） |
+| 15-18点 | PASS | `approved` |
+| 10-14点 | CONDITIONAL_PASS | `rejected_trivial`（軽微な修正で合格可能） |
 | 1-9点 | FAIL | `rejected_judgment`（根本的な問題） |
 
-### Step 7: 13点未満の場合 — 修正指示
+### Step 7: 15点未満の場合 — 修正指示
 
 `rejected_trivial` または `rejected_judgment` の場合、findings に以下を含める:
 
@@ -249,7 +262,7 @@ Read queue/inbox/roju_ohariko.yaml
 ```yaml
 # 追記内容（audit_reports リストの末尾に追加）
   - subtask_id: subtask_XXX
-    summary: "監査合格(14/15): correctness・completeness完全。コード品質良好。"
+    summary: "監査合格(17/18): correctness・completeness完全。コード品質良好。PC1-PC3全PASS。"
     detail_ref: "python3 scripts/botsunichiroku.py audit list --subtask subtask_XXX"
     timestamp: "YYYY-MM-DDTHH:MM:SS"   # date "+%Y-%m-%dT%H:%M:%S" で取得
     read: false
@@ -258,7 +271,7 @@ Read queue/inbox/roju_ohariko.yaml
 高札ダウン時のフォールバック（`detail_ref` の代わりに `findings` をインライン記載）:
 ```yaml
   - subtask_id: subtask_XXX
-    summary: "監査合格(14/15)"
+    summary: "監査合格(17/18)"
     findings: |
       correctness: 3, tests: 3, code_quality: 2, completeness: 3, no_regressions: 3
       軽微: foo.py L42 命名改善余地あり
@@ -277,9 +290,9 @@ Step 1: パース（subtask_id / commit / repo）
 Step 2: git log --oneline <hash>（不在→即FAIL）
 Step 3: git diff <hash>~1 <hash>
 Step 4: pytest（なければスキップ）
-Step 5: 5カテゴリ × 3点 採点
+Step 5: 5カテゴリ×3点 + PC1-PC3×1点 = 18点採点
 Step 6: YAMLレポート出力
-Step 7: 13点未満→修正指示（ファイル・行・修正案）
+Step 7: 15点未満→修正指示（ファイル・行・修正案）
 Step 8: subtask update --audit-status
 Step 9: Edit queue/inbox/roju_ohariko.yaml
 ```
@@ -289,11 +302,11 @@ Step 9: Edit queue/inbox/roju_ohariko.yaml
 ## Score Reference
 
 ```
-15点: 完璧。褒めてよい。
-14点: 優秀。合格。
-13点: 合格ライン。
-12点: rejected_trivial（軽微な修正で合格）
-10-11点: rejected_trivial（複数の軽微な問題）
+18点: 完璧。褒めてよい。
+17点: 優秀。合格。
+15点: 合格ライン。
+14点: rejected_trivial（軽微な修正で合格）
+10-13点: rejected_trivial（複数の軽微な問題）
 9点以下: rejected_judgment（根本的な問題。再実装レベル）
 0点: コミット不在 or 全要件未達
 ```

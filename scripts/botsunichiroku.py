@@ -68,7 +68,7 @@ from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, ke
 from botsu.dashboard import dashboard_add, dashboard_list, dashboard_search
 from botsu.search import search, enrich_cmd
 from botsu.check import check_orphans, check_coverage
-from botsu.reply import reply_add, reply_list
+from botsu.reply import reply_add, reply_list, reply_list_for, reply_list_unread
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +340,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", metavar="PROJECT", help="projectで絞り込み")
     p.add_argument("--similar", metavar="SUBTASK_ID", help="指定subtaskのdescriptionで類似タスクを検索")
     p.add_argument("--enrich", metavar="CMD_ID", help="cmd_idに対してenrich（関連知見・pitfalls・成功パターン）を表示")
+    p.add_argument("--hybrid", action="store_true", help="FTS5+ベクトル検索のRRFハイブリッド検索")
     p.set_defaults(func=lambda args: enrich_cmd(args) if getattr(args, "enrich", None) else search(args))
 
     # === reply ===
@@ -357,6 +358,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("thread_id", help="スレッドID")
     p.add_argument("--limit", type=int, default=20, metavar="N", help="最大表示件数 (デフォルト: 20)")
     p.set_defaults(func=reply_list)
+
+    p = reply_sub.add_parser("list-for", help="指定エージェント宛の@メンション検索")
+    p.add_argument("agent", help="エージェントID (例: @ashigaru1 or ashigaru1)")
+    p.add_argument("--board", required=True, metavar="BOARD", help="板名 (例: ninmu)")
+    p.add_argument("--unread", action="store_true", help="未読のみ表示")
+    p.add_argument("--mark-read", action="store_true", help="表示後に既読マーク更新")
+    p.add_argument("--limit", type=int, default=50, metavar="N", help="最大表示件数 (デフォルト: 50)")
+    p.set_defaults(func=reply_list_for)
+
+    p = reply_sub.add_parser("list-unread", help="指定板の未読レス一覧")
+    p.add_argument("--board", required=True, metavar="BOARD", help="板名 (例: ninmu)")
+    p.add_argument("--agent", required=True, metavar="AGENT", help="誰の視点で未読判定するか (例: roju)")
+    p.add_argument("--mark-read", action="store_true", help="表示後に既読マーク更新")
+    p.add_argument("--limit", type=int, default=50, metavar="N", help="最大表示件数 (デフォルト: 50)")
+    p.set_defaults(func=reply_list_unread)
 
     # === check ===
     check_parser = top_sub.add_parser("check", help="矛盾・放置検出 / カバレッジチェック")

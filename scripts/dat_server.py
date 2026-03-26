@@ -176,7 +176,7 @@ def _load_dreams() -> dict[str, list]:
     return by_date
 
 
-SUMMARY_THREAD_ID = 9999999999  # リサーチ概要の固定スレッドID
+SUMMARY_THREAD_ID = 1700000000  # リサーチ概要の固定スレッドID (2023-11-14 — JDim互換のUNIXタイムスタンプ)
 
 
 def subject_dreams() -> str:

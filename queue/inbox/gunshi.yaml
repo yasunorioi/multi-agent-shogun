@@ -1,0 +1,767 @@
+reports:
+- assigned_by: shogun
+  cmd_id: null
+  subtask_id: null
+  status: done
+  priority: high
+  project: systrade
+  description: |
+    ■ Dexter（金融リサーチエージェント）設計分析 — 殿の勅命
+
+    https://github.com/virattt/dexter/
+
+    TypeScript/Bun製の自律金融リサーチエージェント。18k+ stars。MIT。
+    バフェット/マンガーの投資哲学をSOUL.mdに組み込み、
+    DCF分析・SEC Filing・内部者取引・株価スクリーニングを自動実行。
+
+    【分析せよ】
+    1. アーキテクチャ設計の強み・弱み（SOUL.md/Scratchpad/ループ制御）
+    2. shogunシステムとの設計パターン比較（没日録=Scratchpad、スキル=SKILL.md等）
+    3. systrade_asia_thesis.md との適合性（アジアインフラ×ファンダメンタルズ戦略に使えるか）
+    4. 導入する場合のコスト・制約（APIキー、データソース課金、Bun依存）
+    5. shogunとの統合案（agent-swarm連携、軍師の下位ツールとして使えるか等）
+
+    【調査方法】
+    - WebFetch/WebSearchでGitHubリポジトリ精読（README, SOUL.md, src/構造）
+    - Financial Datasets APIの料金体系確認
+    - 類似ツール（OpenBB等）との比較は任意
+
+    【成果物】
+    docs/shogun/dexter_analysis.md に分析書を出力
+    完了後、roju_reports.yaml + 老中にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- assigned_by: roju
+  cmd_id: cmd_436
+  subtask_id: subtask_966
+  status: done
+  project: shogun
+  needs_audit: false
+  description: |
+    ■ 課題横断サーベイ+統合分析【殿の勅命・最優先】
+
+    3本柱（思考深度制御・ポリシー機械検証・不可能タスク拒否）の学術論文・先行研究を
+    横断サーベイし、shogunへの適用設計を策定せよ。
+
+    【起点】
+    docs/shogun/enterpriseops_gym_analysis.md（汝自身の分析）
+
+    【調査範囲】
+    - 思考深度制御: adaptive reasoning, planning depth, thinking budget
+    - ポリシー機械検証: guardrails, constitutional AI, policy compliance verification
+    - 不可能タスク拒否: infeasible task detection, agent refusal mechanisms
+    - 横断テーマ: agent safety, reliability engineering for LLM agents
+
+    【進め方】
+    足軽3名(subtask_963/964/965)が並列リサーチ中。
+    1. 足軽の報告を待たず独自サーベイを先行開始
+    2. 足軽の報告が届いたら統合分析に反映
+    3. shogunへの適用設計を docs/shogun/quality_guardrails_research.md に出力
+
+    【成果物】
+    - docs/shogun/quality_guardrails_research.md（統合分析・適用設計）
+    - roju_reports.yaml に報告
+
+    報告先: roju_reports.yaml
+  assigned_at: '2026-03-24T20:10:00'
+- assigned_by: shogun
+  cmd_id: null
+  context_files:
+  - /tmp/gunshi_baku_cosmos.txt
+  - scripts/baku.py
+  - docs/dream_pipeline_design.md
+  description: '獏（baku.py）全面改修の戦略助言。GPS三角測量×情報勾配で好奇心エンジンを設計する「宇宙を作る」構想。アナロジーの妥当性検証、座標系設計案、Phase0の最小テーブル提案、落とし穴の指摘、冒険的対案を求む。詳細:
+    cat /tmp/gunshi_baku_cosmos.txt'
+  north_star: 好奇心に物理法則を与えよ。方向性のある爆発を設計せよ
+  project: shogun
+  read: false
+  status: done
+  subtask_id: null
+- assigned_by: roju
+  cmd_id: cmd_384
+  context_files:
+  - docs/anbai_article_design.md
+  - docs/anbai_research_academic.md
+  - docs/anbai_research_llm_aprilfool.md
+  - docs/anbai_research_agri_ai.md
+  description: 'Anbai論文 統合叩き台作成（W2）。W1の4成果物を統合し殿の執筆用叩き台をdocs/anbai_draft_outline.mdに出力。(1)自身の構成案docs/anbai_article_design.md
+    (2)学術リサーチdocs/anbai_research_academic.md (3)LLM/AprilFoolリサーチdocs/anbai_research_llm_aprilfool.md
+    (4)農業AIリサーチdocs/anbai_research_agri_ai.md。構成案の骨格(§0-§7)にリサーチ素材を配置し、各節で使える具体的ネタ・引用・数値を埋め込め。殿が記事を書くための完成品ではなく叩き台。report先:
+    roju_reports.yaml'
+  north_star: 殿が読んで即座に執筆に取りかかれる素材集を作れ
+  project: personal
+  read: false
+  status: done
+  subtask_id: subtask_855
+- assigned_by: roju
+  cmd_id: cmd_384
+  context_files:
+  - python3 scripts/botsunichiroku.py cmd show cmd_384
+  description: 'Anbai論文 記事構成案設計。塩見あんばいキャラの語り口設計(一人称/口調/文体)、記事全体の節構成(Anbai理論→Curve→実証→応用→秘伝のタレ→婚活証明)、風刺と真実のバランス設計(笑い/ガチの境界線)、伏線と回収の設計(キャラフラグ回収ポイント)。コンセプト:嘘の日に真実を出す。笑えない風刺はただの悪口。塩見あんばいは憎めない残念な人であって嫌な人ではない。成果物はdocs/anbai_article_design.mdに出力。report先:
+    roju_reports.yaml'
+  north_star: 読者が笑った後に「あれ、これ全部本当じゃないか」と気づく構造を設計せよ
+  project: personal
+  read: false
+  status: done
+  subtask_id: subtask_851
+- read: false
+  reported_at: '2026-03-08T17:36:36'
+  status: notification
+  subtask_id: stophook_notification
+  summary: '統合テスト: gunshi inbox書き込みテスト'
+  type: test_write
+  worker: ashigaru1
+- full_summary: "subtask_id: subtask_945\ncmd_id: cmd_424\nstatus: assigned\ndescription:\
+    \ |\n  ■ Agent Teams/Claude Channels調査結果を統合し、現行shogunシステムとの対応表・移行パス策定\n  \n  入力資料（必読）:\n\
+    \  - context/agent-teams-research.md（Agent Teams仕様・247行）\n  - context/claude-channels-research.md（Claude\
+    \ Channels仕様・169行）\n  - instructions/karo.md（現行老中指示書）\n  \n  成果物: context/agent-teams-channels.md\
+    \ に以下をまとめよ:\n  1. 各機能の仕様サマリ（調査結果の要点）\n  2. 現行shogunシステムとの対応表（何が置き換わり、何が残るか）\n\
+    \     - tmux send-keys ↔ SendMessage/Channels\n     - YAML inbox ↔ TaskList\n\
+    \     - 没日録DB ↔ ?\n     - お針子監査 ↔ ?\n     - ペルソナ分離 ↔ ?\n  3. 段階的移行プラン（Phase 0:\
+    \ 共存試行 → Phase 1: 部分移行 → Phase 2: 完全移行）\n  4. リスク・制約（実験的機能の不安定性、セッション復元不可、トークンコスト増大等）\n\
+    \  5. 推奨案（老中ボトルネック解消の観点で、どこまで移行すべきか）\n  \n  ■ 観点: 殿の課題は「老中ばかり仕事している」「タスク分解に時間がかかる」。\n\
+    \  Agent TeamsのTaskList自律claimやChannelsの非同期通知が解消策になるか評価せよ。\n  ■ 作業完了後 git add\
+    \ + git commit + push を忘れるな\nproject: shogun\nassigned_by: roju\nnorth_star: \"\
+    老中を殺すな — 通信ハブ負荷の分散が目的\"\ncontext_files:\n  - context/agent-teams-research.md\n\
+    \  - context/claude-channels-research.md\n  - instructions/karo.md"
+  read: false
+  reported_at: '2026-03-21T02:00:55'
+  request_id: subtask_945
+  status: notification
+  subtask_id: stophook_notification
+  summary: "subtask_id: subtask_945\ncmd_id: cmd_424\nstatus: assigned\ndescription:\
+    \ |\n  ■ Agen…"
+  type: task
+  worker: roju
+- full_summary: "subtask_id: subtask_947\ncmd_id: cmd_426\nstatus: assigned\ndescription:\
+    \ |\n  ■ 軍師権限拡大の設計\n  現行instructions/gunshi.mdを読み、タスク分解権限拡大の設計案を策定せよ。\n  1. 軍師がL4-L5のsubtask分解まで実施する新フロー設計\n\
+    \     - 現状: 軍師は分析のみ → 改修後: subtask分解+足軽配布案の策定まで\n  2. 老中の承認ステップ設計（軍師が分解→老中が承認→足軽に配布）\n\
+    \  3. gunshi.md改修差分案\n  4. context/karo-*.md 改修差分案\n  5. 権限境界（軍師がやること/やらないこと）の明確化\n\
+    \     - やること: タスク分解、Bloom判定、subtask設計\n     - やらないこと: DB書き込み、足軽へのsend-keys、dashboard更新\n\
+    \  成果物: gunshi_analysis.yaml に出力\n  ■ 参照: context/agent-teams-channels.md §5b,§5d\n\
+    project: shogun\nassigned_by: roju\nnorth_star: \"老中を殺すな — タスク分解の認知負荷を軍師に分散\"\n\
+    context_files:\n  - instructions/gunshi.md\n  - context/agent-teams-channels.md"
+  read: false
+  reported_at: '2026-03-21T02:13:29'
+  request_id: subtask_947
+  status: notification
+  subtask_id: stophook_notification
+  summary: "subtask_id: subtask_947\ncmd_id: cmd_426\nstatus: assigned\ndescription:\
+    \ |\n  ■ 軍師権限…"
+  type: task
+  worker: roju
+tasks:
+- assigned_at: '2026-03-24T00:00:00'
+  assigned_by: shogun
+  bloom_level: L5-L6
+  cmd_id: null
+  context_files:
+  - data/botsunichiroku.db
+  - scripts/botsu/__init__.py
+  - scripts/botsunichiroku.py
+  - /home/yasu/agent-swarm/server/botsu/reply.py
+  - /home/yasu/agent-swarm/server/dat_server.py
+  description: |
+    ■ 戦略分析: ベクトル検索（sqlite-vec + Ruri v3）導入設計
+
+    【背景・参考記事】
+    sui-memory (https://zenn.dev/noprogllama/articles/7c24b2c2410213) の設計を参考に、
+    没日録DB / agent-swarm DBにベクトル検索を導入する。
+
+    sui-memoryの要点:
+    - SQLite FTS5(trigram) + sqlite-vec + Ruri v3-310m のハイブリッド検索
+    - RRF（Reciprocal Rank Fusion）でスコア統合
+    - 時間減衰（半減期30日）
+    - LLM要約なし（生データをチャンク分割して保存）
+    - 検索100ms前後、7,059件のメモリで実用的
+    - 外部依存: sentence-transformers, sqlite-vec のみ
+
+    現行の没日録FTS5は既に動いている（migrate_fts5.py済み）。
+    これにベクトル検索レイヤーを追加する設計を求む。
+
+    【分析項目（5つ全て所見を出せ）】
+
+    1. **アーキテクチャ設計（最重要）**
+       - 没日録DB vs agent-swarm DB のどちらに入れるか（両方?）
+       - 既存FTS5とベクトル検索の共存方式
+       - RRFの実装（FTS5 BM25スコア + ベクトルコサイン類似度の統合）
+       - 時間減衰の設計（半減期の最適値。没日録の場合30日でいいか?）
+       - チャンク分割戦略（スレのレス単位? cmd単位? 複数レスまとめ?）
+
+    2. **モデル選定**
+       - Ruri v3-310m（日本語特化、CPU動作可能）の適合性
+       - VPS（さくら 4コア/4GB）での推論性能
+       - 代替モデル候補（multilingual-e5-small等、より軽量な選択肢）
+       - ベクトル次元数とsqlite-vecの制約
+
+    3. **実装設計**
+       - sqlite-vecのインストール・セットアップ
+       - ベクトル化のタイミング（書き込み時? バッチ? 検索時オンデマンド?）
+       - 既存CLIへの統合（botsunichiroku.py search の拡張）
+       - agent-swarm CLIへの統合
+
+    4. **コスト・パフォーマンス試算**
+       - 没日録の現行データ量（cmd/subtask/report/reply/diary）
+       - agent-swarmの予想データ増加ペース
+       - Ruri v3のCPU推論時間（1件あたり / バッチ）
+       - メモリ使用量（モデルロード + sqlite-vecインデックス）
+       - VPS 4GBメモリで他サービスと共存可能か
+
+    5. **移行・導入戦略**
+       - Phase 0: sqlite-vec + 最小モデルで没日録searchに統合
+       - Phase 1: agent-swarm側にも展開
+       - Phase 2: 時間減衰・RRF最適化
+       - 既存FTS5検索が壊れないことの保証
+       - ロールバック方式
+
+    【殿の制約・好み】
+    - マクガイバー精神: SQLite + Python、最小構成
+    - 月額忌避: 外部API不使用（ローカル推論のみ）
+    - VPSはさくら 4コア/4GB。他サービスも動いている
+    - 既存のFTS5検索は壊すな
+    - 「バージョンアップしてでも入れたい」と殿が明言
+
+    【成果物】
+    - docs/shogun/vector_search_design.md に設計書を出力
+    - queue/inbox/roju_reports.yaml に報告
+    - Wave分解案（段階的実装計画）
+    - モデル比較表（メモリ・速度・精度）
+  north_star: 意味検索で没日録の知見を掘り起こせ。FTS5を壊すな、拡張せよ
+  project: shogun
+  status: assigned
+  subtask_id: null
+- assigned_at: '2026-03-23T13:30:00'
+  assigned_by: shogun
+  bloom_level: L5-L6
+  cmd_id: null
+  context_files:
+  - docs/shogun/2ch_integration_design.md
+  - scripts/dat_server.py
+  - scripts/botsu/nich.py
+  - scripts/botsu/reply.py
+  - instructions/karo.md
+  - CLAUDE.md
+  description: |
+    ■ 戦略分析: shogunシステム2ch互換CGI全面置換設計
+
+    【背景 — 前回分析からの進展】
+    前回（2026-03-18）の分析で「CMD=スレ/subtask=レスのスキーマ統合はやらない」と結論した。
+    その判断は正しい。構造化データを非構造化テキストに潰すのは退化。
+
+    しかし今回の構想はスキーマ統合ではなく「通信レイヤーの全面2ch化」:
+    - YAML inbox通信 → 2chスレへの書き込み（bbs.cgi POST）
+    - tmux send-keys通知 → bbs.cgi POST + send-keysフック（実装済み）
+    - dashboard.md → 管理板の固定スレ（>>1-10に最新状態、更新時書き換え）
+    - 没日録DBスキーマ → 変更なし（thread_repliesに通信ログが蓄積される副産物）
+    - JDimが殿の統一UI（閲覧+書き込み+対話）
+
+    【本日の実装成果（既に動いている）】
+    1. JDimからの書き込み → dat_server.pyのbbs.cgi POSTが処理
+    2. 殿(shogun)の書き込み → send-keysで老中ペインに対話指示を流し込み
+    3. 老中がcurl経由でbbs.cgiにレス → 殿のペインにsend-keys通知
+    4. cp932エンコード対応、DATファイルID安定化（hashlib.md5）
+    5. 殿↔老中の2chスレ上対話ループが実際に稼働中
+
+    【分析項目（5つ全て所見を出せ）】
+
+    1. **YAML inbox → 2chスレ置換の設計（最重要）**
+       - 現行: 老中がashigaru{N}.yamlにタスク記入 + send-keysで通知
+       - 新案: 老中が管理板にスレ立て（=タスク指示）+ send-keysで通知
+       - 足軽はスレを読んでタスク内容を把握、完了報告もスレにレス
+       - YAML通信の何を2chに移し、何をYAML/DBに残すべきか
+       - status管理（assigned/in_progress/done）をスレ上でどう表現するか
+
+    2. **dashboard.md → 管理板固定スレ設計**
+       - >>1-10にダッシュボード情報を固定表示
+       - 更新時の書き換え方式（レス削除+再投稿? 特殊コマンド?）
+       - 老中のdashboard.md更新フローをどう変えるか
+
+    3. **権限・板設計の拡張**
+       - 現行WRITABLE_BOARDS = {"zatsudan"} のみ
+       - 管理板への書き込み許可が必要（老中・足軽）
+       - 板ごとの書き込み権限設計（FROM欄のagent認証で制御）
+       - 新規板の要否（タスク専用板? 報告板?）
+
+    4. **老中ワークフローの変更設計**
+       - 現行karo.mdのワークフロー12ステップのうち、何が変わるか
+       - shogun_to_karo.yaml → 殿が管理板に直接スレ立て?
+       - roju_reports.yaml → 足軽が管理板スレにレス?
+       - お針子への監査依頼もスレ経由?
+
+    5. **移行戦略とリスク**
+       - 既存YAML通信との共存期間は必要か
+       - 段階的移行（Phase 0: 雑談板対話のみ → Phase 1: タスク指示 → Phase 2: 全面置換）
+       - ロールバック可能性
+       - 「やらない」部分の明示（何を2ch化せず残すか）
+
+    【殿の所感】
+    - 「YAMLでやってたから、そんなに違和感はないかも」
+    - 「send-keysで起こす部分はもう実装してるし」
+    - 「管理板専用スレに>>1-10に固めて更新の際に捨てるとかにすれば」
+    - 「セキュリティー的にも行けそうだし」
+    - SQLiteのDB排他制御がYAMLより安全な点も利点
+
+    【殿の制約・好み】
+    - マクガイバー精神: SQLite + Python + JDim、最小構成
+    - 没日録DBスキーマは壊すな（前回分析の結論を踏襲）
+    - 既存の没日録CLIは残す
+    - 「つい面白くて2chで遊んでしまう」程度に殿はモチベ高い
+    - 老中の話が長い問題も解決したい（スレ上なら流し読みできる）
+
+    【参照すべきもの】
+    - docs/shogun/2ch_integration_design.md（前回の軍師分析 — 必読）
+    - scripts/dat_server.py（本日改修済み — bbs.cgi POST + send-keysフック）
+    - scripts/botsu/nich.py（共通定数・ヘルパー）
+    - instructions/karo.md（老中ワークフロー12ステップ）
+    - CLAUDE.md（通信プロトコル、権限マトリクス）
+
+    【成果物】
+    - docs/shogun/2ch_workflow_design.md に設計書を出力
+    - queue/inbox/roju_reports.yaml に報告
+    - Phase分解案（段階的移行計画）
+    - 老中instructions変更案（差分レベル）
+  north_star: 通信レイヤーを2chに統一せよ。没日録スキーマは壊すな。殿がJDimだけで全てを把握できる世界を設計せよ
+  project: shogun
+  status: assigned
+  subtask_id: null
+- assigned_at: '2026-03-22T15:00:00'
+  assigned_by: shogun
+  bloom_level: L5-L6
+  cmd_id: null
+  context_files:
+  - /home/yasu/rotation-planner/db_schema.sql
+  - /home/yasu/rotation-planner/rotation_planner/common/models.py
+  - /home/yasu/rotation-planner/rotation_planner/common/db_access.py
+  - /home/yasu/rotation-planner/api/routers/fields.py
+  description: |
+    ■ 戦略分析: rotation-planner「委託業務モデル」拡張設計
+
+    【背景】
+    出荷管理ロット管理システム設計中に、rotation-plannerに「荷主」と「委託業務」の
+    概念が欠落していることが判明。現状 users ≒ 荷主 で回っているが、実際は:
+    - 地主（荷主）と作業者（受託者）が異なる場合がある
+    - 委託の粒度がバラバラ（耕起だけ / 管理全部 / コンバイン刈り取りだけ）
+    - ほ場単位で混在（F001は自作、F002は委託）
+    - 年度で変わる（今年は委託、来年は自作）
+
+    出荷管理システムは別DBで独立開発するため、rotation-planner側の拡張は急がない。
+    しかし将来の統合を見据えた設計が必要。
+
+    【分析項目（4つ全て所見を出せ）】
+
+    1. **データモデル設計（最重要）**
+       - fields.owner_id（地主）と fields.user_id（アプリユーザー）の分離
+       - 委託関係テーブル設計（field_contracts等）
+       - 委託スコープの表現方法（作業単位 / 工程一括 / 全委託）
+       - 年度によるスコープ変更への対応
+       - 既存 fields, users テーブルへの影響最小化
+
+    2. **輪作計画への影響**
+       - 受託者が輪作計画を見る/編集する権限設計
+       - 全委託の場合、輪作計画の責任者は誰か
+       - CropHistory, RotationPlan への影響
+
+    3. **出荷管理システムとの連携設計**
+       - 出荷管理側の lots.owner_id とrotation-planner側の荷主の紐付け
+       - API経由での荷主・ほ場情報取得インターフェース
+       - rotation-planner未拡張の間の暫定運用（出荷管理側で独自owner管理）
+
+    4. **マイグレーション戦略**
+       - 既存データ（users ≒ 荷主の前提で入っているデータ）の移行パス
+       - 破壊的変更を避ける段階的移行案
+       - 既存APIエンドポイントの後方互換性
+
+    【殿の制約・好み】
+    - マクガイバー精神: SQLite + Python、最小構成
+    - rotation-plannerは既に本番稼働中。破壊的変更は避けたい
+    - 出荷管理は別DB・別アプリとして独立開発する方針が決定済み
+    - 将来の統合は視野に入れるが、今すぐではない
+
+    【参照すべきもの】
+    - rotation-planner/db_schema.sql（現行スキーマ全体）
+    - rotation-planner/rotation_planner/common/models.py（データモデル）
+    - rotation-planner/rotation_planner/common/db_access.py（リポジトリ層）
+    - rotation-planner/api/routers/fields.py（API層）
+
+    【成果物】
+    - docs/rotation_planner_contract_design.md に設計書を出力
+    - queue/inbox/roju_reports.yaml に報告
+    - 段階的実装Wave案（Phase 0: 出荷管理暫定運用 → Phase 1: owner分離 → Phase 2: 委託テーブル）
+  north_star: 農業の現実を写し取れ。地主と作業者は別の人間だ
+  project: rotation_planner
+  status: assigned
+  subtask_id: null
+- assigned_at: '2026-03-14T09:59:00'
+  assigned_by: roju
+  bloom_level: L5-L6
+  cmd_id: cmd_405
+  context_files:
+  - scripts/baku.py
+  - data/dreams.jsonl
+  - instructions/ashigaru.md
+  - instructions/ohariko.md
+  - docs/kosatsu_v2_bridgehead.md
+  description: "■ 戦略分析: 獏×部屋子×お針子 夢見自動解釈パイプライン設計\n\n【背景】\n獏(baku.py)が毎時Web検索で拾った夢データ(dreams.jsonl)を、自動で解釈・選別・蔵書化する\n\
+    パイプラインの設計。殿裁定: 毎回パターン（1件ごと起動）、Haiku漏斗+Sonnet選別、蔵書拡充フェーズ。\n\n【設計項目（5つ全て所見を出せ）】\n\
+    \n1. **トリガー機構の設計判断（最重要）**\n   - 案A: baku.py内からtmux send-keysで部屋子ペイン(multiagent:agents.3)に通知\n\
+    \     → Claude Codeの料金体系がかかる。ペイン占有問題\n   - 案B: baku.py内から直接Haiku APIを叩いて解釈結果をjsonlに追記\n\
+    \     → 部屋子ペイン不要。API直叩きの方が安い可能性\n   - 案C: その他（cronバッチ、イベントキュー等）\n   - コスト・実装複雑性・既存アーキテクチャとの整合で判断せよ\n\
+    \n2. **部屋子の夢解釈（Haiku層）**\n   - 入力: 夢1件JSON + 既存蔵書コンテキスト\n   - 蔵書コンテキストをどう渡すか設計（全context/*.md?\
+    \ FTS5検索結果? 固定プロンプト?）\n   - 出力フォーマット: 関連性評価、既存知見との接続、推奨アクション\n   - Haikuのコンテキスト窓(200K)内でどこまで載せるか\n\
+    \   - system_promptの設計（獏が取り憑いた部屋子の口調）\n\n3. **お針子の選別（Sonnet層）**\n   - 入力: 部屋子の報告書\n\
+    \   - 判定基準: 「使える/くだらない」の線引き\n   - 出力: 採用/不採用 + 理由 + 蔵書化すべき知見の抽出\n   - Sonnetは高価（$3/$15\
+    \ per MTok）→ 効率的なプロンプト設計が必要\n\n4. **蔵書化フロー**\n   - お針子PASSの知見をどこに蓄積するか\n     -\
+    \ 没日録DB? 高札v2のdashboard_entries? Memory MCP? context/*.md?\n   - 蓄積フォーマット（後から検索・活用できる構造）\n\
+    \   - 橋頭堡設計v2.1のdream.pyクロス相関との関係\n\n5. **コスト試算**\n   - 獏の現行頻度: 毎時1件 → 24件/日 →\
+    \ 720件/月\n   - 各夢の平均トークン数を推定\n   - Haiku層: 720件×(input+output)トークン×単価\n   - Sonnet層:\
+    \ Haiku通過分×(input+output)トークン×単価\n   - 月額$8目標に収まるか。収まらない場合の調整案\n\n【殿の制約・好み】\n\
+    - 蔵書を増やすフェーズ: 広く拾う方針（お針子の選別はゆるめでよい）\n- 獏が部屋子に取り憑いている設定: 夢うつつの奥女中口調\n- マクガイバー精神:\
+    \ シンプルな構成を優先\n- 月額$8以内を強く意識\n\n【参照すべきもの】\n- scripts/baku.py（獏の現行実装・夢データ構造）\n-\
+    \ data/dreams.jsonl（夢データ94件の実データ）\n- data/dreams_daily.md（日次サマリ）\n- instructions/ashigaru.md（部屋子の既存設定）\n\
+    - instructions/ohariko.md（お針子の既存設定）\n- docs/kosatsu_v2_bridgehead.md（高札v2橋頭堡設計書）\n\
+    - context/hopfield_associative.md（共起行列設計）\n\n【成果物】\n- docs/dream_pipeline_design.md\
+    \ に設計書を出力\n- queue/inbox/roju_reports.yaml に報告\n- 足軽向けsubtask分解案（Wave/並列化設計）を含めよ\n"
+  north_star: 夢を蔵書に変える。広く拾い、賢く選び、安く回す
+  project: shogun
+  status: done
+  subtask_id: subtask_895
+- assigned_at: '2026-03-14T00:45:00'
+  assigned_by: roju
+  bloom_level: L4-L5
+  cmd_id: cmd_402
+  context_files:
+  - docs/kosatsu_v2_bridgehead.md
+  - data/dreams_daily.md
+  - data/botsunichiroku.db
+  - instructions/gunshi.md
+  description: "■ 戦略分析: Hopfield連想記憶×高札v2 理論リサーチ（FTS5重み付け応用可能性）\n\n【背景・起点】\n獏の夢#45(associative\
+    \ memory neural network)・#46(Algebraic Hopfield Network)が起点。\n高札v2のFTS5連想検索に理論的な重み付け手法を導入できるか調査せよ。\n\
+    \n【リサーチ項目】\n1. **古典Hopfieldネットの連想記憶の仕組み**\n   - エネルギー関数、アトラクター、パターン復元の基本原理\n \
+    \  - 重み行列の学習則（Hebbian learning等）\n2. **Algebraic Hopfield Network（代数拡張）の要点**\n\
+    \   - 古典との差分、何が改善されたか\n   - 連想記憶の容量・精度がどう変わるか\n3. **Modern Hopfield Network（Ramsauer\
+    \ et al. 2021等）**\n   - Transformerとの関係（attention ≈ Hopfield update）\n   - 連続値Hopfieldの連想記憶としての特性\n\
+    4. **高札v2への応用可能性（最重要）**\n   - FTS5のBM25スコアリングにHopfield的な重み付けを組み合わせる方法\n   - cmdのキーワード共起パターンから重み行列を学習し、部分一致から関連cmd群を「連想」で復元\n\
+    \   - **SQLiteだけで実装可能な範囲に収めること（外部ML不要）**\n   - 実装コストと精度改善のトレードオフ\n   - 「高札v2に入れるべきか」の所見（やる/やらない/部分的に採用の3択で明言）\n\
+    \n【参照すべき既存設計】\n- docs/kosatsu_v2_bridgehead.md（高札v2橋頭堡設計書 — FTS5+lazy decay+TAGE+夢見機能）\n\
+    - data/dreams_daily.md 行53-54（獏の夢#45, #46の外部検索結果）\n- data/botsunichiroku.db（没日録DB:\
+    \ 実データのパターンを見て応用を考えよ）\n\n【殿の制約・好み】\n- マクガイバー精神: SQLite+Python以外の新規依存は禁止\n- 理論の網羅が目的ではない。高札v2の連想検索精度向上に使える部分だけ抽出せよ\n\
+    - 過剰にならない「塩梅」を意識すること\n- 既に橋頭堡設計にlazy decay（忘却曲線）やTAGE（判断予測）が入っている。それらとの整合性も考慮\n\
+    \n【成果物】\n- context/hopfield_associative.md にまとめよ\n- queue/inbox/roju_reports.yaml\
+    \ に報告\n"
+  north_star: 理論を実装可能な塩梅に落とし込め。SQLiteで出来ることだけ提案せよ
+  project: shogun
+  status: done
+  subtask_id: subtask_891
+- assigned_at: '2026-03-13T23:25:14'
+  assigned_by: roju
+  bloom_level: L4-L5
+  cmd_id: cmd_399
+  context_files:
+  - ~/uecs-llm/
+  - python3 scripts/botsunichiroku.py cmd show cmd_399
+  - instructions/gunshi.md
+  description: "■ 戦略分析: RPi5エッジLLM設計リサーチ（モデル選定・蒸留・推論サーバー・LINE Bot統合）\n\n【背景】\nRPi5(8GB)上で蒸留小型LLMを動かし、LINE\
+    \ Bot経由でtool calling（UECSセンサー読み/制御弁操作）を\n実現する設計のためのリサーチ。殿のマクガイバー精神（月額忌避・ローカル完結）に直結する案件。\n\
+    \n【リサーチ項目】\n1. **RPi5 8GBで実用的に動くモデルサイズ・アーキテクチャ**\n   - 1B-3B帯のモデル比較（Llama系, Qwen系,\
+    \ Gemma系, Phi系等）\n   - tool calling能力のあるベースモデルの選定\n   - 量子化（Q4/Q8等）込みでの実メモリ使用量・推論速度\n\
+    2. **蒸留の教師モデル選定**\n   - ローカル実行可能な教師モデル（月額API課金は避けたい）\n   - MBP(M4 Pro 48GB)で実行可能なサイズ\n\
+    \   - tool calling能力の蒸留に適したモデル\n   - ※ MBPにはollama導入済み、qwen3:8b + qwen3.5:35b-a3b(23GB\
+    \ MoE)あり\n3. **蒸留フレームワーク**\n   - HuggingFace Transformers distillation\n   - Knowledge\
+    \ Distillation toolkit\n   - 実績のある手法・チュートリアル\n4. **RPi5での推論サーバー選定**\n   - vLLM\
+    \ vs llama.cpp vs その他\n   - RPi5(ARM)での対応状況・パフォーマンス\n   - tool calling対応のサーバーフレームワーク\n\
+    5. **既存LINE Botとの統合方式**\n   - 既存のLINE Bot構成（~/uecs-llm/）を確認し、エッジLLMとの接続方式を提案\n\
+    \n【殿の制約・好み（Memory MCPより）】\n- 月額忌避: API課金を避け、ハード一括投資で完結したい\n- Claude API専用リリース決定済み(2026-02-24)だが、将来ローカルLLMオプション化を視野\n\
+    - LLMデフォルト設計: NullClaw(ゼロコスト・オフライン)がデフォルト、API接続はオプション\n- Picoは消耗品、HAが頭脳の設計哲学\n\
+    - 三層構造（爆発/ガムテ/知恵）: LLMは知恵層のみ、出番は多くて10回/日\n- オフライン動作は必須要件\n- AssemblyClaw/NullClaw(Zig,2.8MB)のRPi動作実績あり\n\
+    \n【成果物】\n- 各項目の比較表・推奨案\n- 設計判断に必要な数値（メモリ、推論速度、精度）\n- **context/rpi_edge_llm.md**\
+    \ にまとめよ\n- queue/inbox/roju_reports.yaml に報告\n\n【参照】\n- ~/uecs-llm/（既存LINE Bot構成）\n\
+    - python3 scripts/botsunichiroku.py cmd show cmd_399（指令詳細）\n- Web検索を活用し、2025-2026年の最新ベンチマーク・リリース情報を取得せよ\n"
+  north_star: RPi5 8GBで実用的なtool calling LLMを動かす最適解を見つけよ。月額ゼロ・オフライン動作が前提
+  project: uecs_llm
+  status: done
+  subtask_id: subtask_890
+- assigned_at: '2026-03-18T12:00:00'
+  assigned_by: shogun
+  bloom_level: L4-L6
+  cmd_id: null
+  context_files:
+  - instructions/ashigaru.md
+  - instructions/karo.md
+  - scripts/identity_inject.sh
+  - scripts/botsu/__init__.py
+  - ~/.claude/projects/-home-yasu-multi-agent-shogun/memory/superpowers_research.md
+  description: "■ 戦略分析: git worktree活用による足軽並列作業の衝突回避設計\n\n【背景】\nsuperpowers(obra/superpowers)の3要素のうち「worktree活用」の設計。\n\
+    現状、複数足軽が同一リポジトリで並列作業すると衝突する。\nClaude Code Agent toolに `isolation: \"worktree\"\
+    ` が組み込み済み。\nsuperpowersは `.worktrees/` に自前管理 + 終了時4択（マージ/PR/維持/破棄）。\n\n【分析項目（5つ全て所見を出せ）】\n\
+    \n1. **Claude Code `isolation: \"worktree\"` の仕様調査（最重要）**\n   - Agent toolのworktreeオプションの実際の挙動\n\
+    \   - worktreeの作成場所、ブランチ命名規則、クリーンアップタイミング\n   - 制約: サブエージェントでしか使えない？メインエージェントは？\n\
+    \   - shogunの老中→足軽(tmux send-keys)の起動方式との互換性\n   - tmux paneごとにCWDが変わることの影響\n\n\
+    2. **superpowers方式 vs Claude Code組み込み方式の比較**\n   - superpowers: `.worktrees/`\
+    \ 自前管理、プロジェクトタイプ自動検出、ベースラインテスト\n   - Claude Code: `isolation: \"worktree\"` で自動作成・クリーンアップ\n\
+    \   - shogunの既存アーキテクチャ（tmux + YAML通信）との相性\n   - どちらを採用すべきか、またはハイブリッドか\n\n3. **老中のタスク振り出しフローへの影響**\n\
+    \   - 老中がinbox YAMLにworktree指示を含めるか\n   - 足軽が作業開始時に自分でworktreeを作るか\n   - worktree情報をどこに記録するか（inbox\
+    \ YAML? 没日録?）\n\n4. **作業完了後のマージフロー設計**\n   - superpowers式4択（ローカルマージ / PR作成 / 維持\
+    \ / 破棄）の適用\n   - shogunでは老中 or お針子が監査後にマージ判断すべき\n   - コンフリクト発生時の対処フロー\n   - お針子の監査はworktree上で行うか、マージ後に行うか\n\
+    \n5. **既存スクリプト・設定との整合性**\n   - identity_inject.sh: CWDがworktreeに変わった場合の動作\n  \
+    \ - botsunichiroku.py: DB_PATHが相対パスの場合の影響\n   - config/settings.yaml, context/*.md:\
+    \ worktreeからの参照パス\n   - .gitignore に `.worktrees/` 追加の要否\n\n【殿の制約・好み】\n- マクガイバー精神:\
+    \ 最小構成で最大効果\n- 既存の tmux + YAML通信を壊さない\n- 足軽のinstructions変更は最小限に\n- superpowersリサーチ結果:\
+    \ ~/.claude/projects/-home-yasu-multi-agent-shogun/memory/superpowers_research.md\n\
+    \n【成果物】\n- docs/worktree_design.md に設計書を出力\n- queue/inbox/roju_reports.yaml に報告\n\
+    - 採用案の明示（A案/B案/ハイブリッド + 理由）\n- 足軽instructions変更案（差分レベルでよい）\n"
+  north_star: 衝突ゼロで並列作業。既存アーキテクチャを壊さず、最小の変更で最大の効果を出せ
+  project: shogun
+  status: done
+  subtask_id: null
+- assigned_at: '2026-03-18T13:00:00'
+  assigned_by: shogun
+  bloom_level: L5-L6
+  cmd_id: null
+  context_files:
+  - scripts/botsu/__init__.py
+  - scripts/botsunichiroku.py
+  - scripts/botsunichiroku_2ch.py
+  - scripts/baku.py
+  - docs/shogun/kosatsu_v2_bridgehead.md
+  - docs/shogun/kosatsu_v2_design.md
+  - data/botsunichiroku.db
+  description: "■ 戦略分析: 2ch型統合基盤の論理検証 — 没日録×高札×2ch DAT×獏の統合設計\n\n【背景】\n現在3つの情報システムが並立している:\n\
+    - 没日録DB: タスク管理（cmd/subtask/report/audit/diary/kenchi テーブル）\n- 高札API: ダッシュボード +\
+    \ FTS5検索（Docker + FastAPI）\n- 2ch DAT: 日記・閲覧レイヤー（テキスト出力）\n\n本質的には全て「書いて」「読んで」「検索する」だけ。\n\
+    これを2chスレッド型に統合し、SQLite 1本で完結させる構想。\nDocker（高札v1）を撤廃できる可能性がある。\n\n【構想の骨子】\n- CMD\
+    \ = スレッド（DAT ID = CMD ID）\n- subtask = 関連スレ（>>1に親スレリンク）\n- report/audit = レス（時系列で蓄積）\n\
+    - 獏の夢 = 「獏の夢見スレ」に自動投稿\n- docs索引 = 「書庫スレ」にメタデータ投稿\n- 権限 = tripコード認証（管理職者スレは将軍・老中のみ書き込み可）\n\
+    - 検索 = FTS5でスレ横断全文検索\n- >>レス番号で既存のblocked_by等のリレーションを表現\n\n【分析項目（6つ全て所見を出せ）】\n\
+    \n1. **論理整合性の検証（最重要）**\n   - CMD↔スレッドの1:1対応は成立するか\n   - CMDに紐づかないsubtask（先行割当、orphan）の扱い\n\
+    \   - レス番号とsubtask_id/report_idの対応が崩れないか\n   - 既存の没日録CLIコマンド体系（cmd list, subtask\
+    \ add等）を維持できるか\n   - blocked_by のDAG構造を>>アンカーで表現可能か\n\n2. **スレッド分類設計**\n   - CMD単位でスレ立て\
+    \ vs カテゴリ別（管理職者/足軽/監査...）\n   - スレが大量になる問題の対処（dat落ち? アーカイブ?）\n   - 獏の夢・docs索引など非CMD系データのスレ設計\n\
+    \   - 板（board）の概念は必要か\n\n3. **高札機能の吸収可能性**\n   - 現行高札v1の機能一覧（dashboard_entries\
+    \ CRUD + 検索）\n   - 高札v2橋頭堡設計（FTS5 + lazy decay + TAGE + 夢見）との関係\n   - Docker撤廃の可否。REST\
+    \ APIが必要な場面は残るか\n   - FTS5を没日録DB内に統合する設計\n\n4. **権限・認証設計**\n   - tripコード方式の実装コスト\n\
+    \   - 現状のYAML通信による分離との整合性\n   - 実運用で権限制御が本当に必要か（全エージェントが同一マシン上）\n\n5. **既存データ移行**\n\
+    \   - 没日録DBの既存6テーブルのデータをどう移行するか\n   - 破壊的移行 vs 閲覧レイヤーとして被せるだけ\n   - 移行コストと互換性のトレードオフ\n\
+    \n6. **コスト・リスク分析**\n   - 実装規模の見積もり（Wave分解案）\n   - 統合のメリット（Docker撤廃、検索統一、コード削減）\n\
+    \   - 統合のリスク（複雑化、移行バグ、学習コスト）\n   - 「やらない」という選択肢の評価\n\n【殿の制約・好み】\n- マクガイバー精神: SQLite\
+    \ + CLIだけで完結が理想\n- Docker撤廃は歓迎（月額忌避・シンプル志向）\n- 既存の没日録CLIは使い慣れている。体験を壊すな\n- 2chモチーフは楽しんでいる（エージェント全員ねらー化ｗ）\n\
+    - 「論理破綻してないか検証が必要」と殿自ら言っている。冷静な分析を\n\n【参照すべきもの】\n- scripts/botsu/*.py（没日録モジュール群\
+    \ — 現行テーブル構造の理解）\n- scripts/botsunichiroku.py（CLI エントリポイント）\n- scripts/botsunichiroku_2ch.py（2ch\
+    \ DAT生成スクリプト）\n- docs/shogun/kosatsu_v2_bridgehead.md（高札v2橋頭堡設計書）\n- docs/shogun/kosatsu_v2_design.md（高札v2設計書）\n\
+    - data/botsunichiroku.db（没日録DB — 実データのテーブル構造を確認せよ）\n- scripts/baku.py（獏 — dreams.jsonlの構造）\n\
+    \n【成果物】\n- docs/shogun/2ch_integration_design.md に設計書を出力\n- queue/inbox/roju_reports.yaml\
+    \ に報告\n- 「やる/やらない/部分的に採用」の明確な所見\n- やる場合: Wave分解案 + 移行戦略\n"
+  north_star: 3つのシステムを統合して1つにせよ。ただし論理破綻があるなら正直に言え
+  project: shogun
+  status: done
+  subtask_id: null
+- assigned_at: '2026-03-18T13:37:00'
+  assigned_by: shogun
+  bloom_level: L5-L6
+  cmd_id: null
+  context_files:
+  - ~/.claude/projects/-home-yasu-multi-agent-shogun/memory/cca_certification.md
+  - docs/shogun/worktree_design.md
+  - instructions/karo.md
+  - instructions/ohariko.md
+  - .claude/skills/audit/SKILL.md
+  - scripts/identity_inject.sh
+  description: "■ 戦略分析: CCA知見に基づくshogunシステム改善ロードマップ策定\n\n【背景】\nAnthropic公式のClaude\
+    \ Certified Architect(CCA)認定プログラムの出題内容を分析した結果、\nshogunシステムの改善に直結する知見が複数見つかった。\n\
+    これらを優先順位付けし、実装ロードマップを策定せよ。\n\nCCA知見の詳細: ~/.claude/projects/-home-yasu-multi-agent-shogun/memory/cca_certification.md\n\
+    \n【改善候補7件 — 全てに優先度・実装コスト・効果を評価せよ】\n\n1. **hub-and-spoke純化 — 老中過負荷の構造的解決**\n  \
+    \ - 現状: 老中(Roju)が全通信のハブ。タスク分解・割当・監査依頼・報告受理・dashboard更新を全て1エージェントで担当\n   - CCA知見:\
+    \ コーディネーターの分解ミスが最大の失敗原因。注意希薄化(attention dilution)問題\n   - 問いかけ: 老中の責務を分割すべきか？どう分割するか？お針子・軍師にどこまで委譲可能か？\n\
+    \   - 制約: 老中のinstructions/karo.mdは既に巨大。context/karo-*.mdに分割済みだがそれでも過負荷\n\n2. **path-specific\
+    \ rules (.claude/rules/ + glob)**\n   - CCA知見: ディレクトリ別ルール適用が可能。shogun未活用\n   -\
+    \ 具体例: `scripts/**/*.py` に対するPython規約、`instructions/**/*.md` に対する書式ルール\n   - 問いかけ:\
+    \ shogunで活用すべきユースケースは何か？投資対効果は？\n\n3. **tool result trimming — 報告の要約制限強化**\n \
+    \  - CCA知見: 40フィールド中5つだけ必要ならトリムせよ\n   - 現状: 足軽の報告を50行→3行summaryに制限するルールはあるが徹底されていない\n\
+    \   - 問いかけ: どの通信経路で情報過多が起きているか？自動トリム機構は必要か？\n\n4. **validation-retry loop — 監査rejected→修正→再監査の自動化**\n\
+    \   - CCA知見: structured output + validation → retry loop\n   - 現状: rejected時は老中が手動で足軽に再割当。subtask_925→928の事例（手動やり直し）\n\
+    \   - 問いかけ: お針子rejected時に自動で足軽に差し戻すフローは安全か？人間介入ポイントは？\n\n5. **severity calibration\
+    \ — お針子ルーブリックへのコード例追加**\n   - CCA知見: 「Be conservative」は精度改善しない。具体的カテゴリ基準+コード例が必要\n\
+    \   - 現状: 15点ルーブリック + よくある言い訳テーブル（実装済み）\n   - 問いかけ: few-shot examples（2-4件）で監査精度がどこまで上がるか？過剰な仕様化リスクは？\n\
+    \n6. **Worktree実装**\n   - 設計済み: docs/shogun/worktree_design.md（Hybrid D + EnterWorktree\
+    \ A、3Wave/7subtask）\n   - 問いかけ: CCA知見を踏まえた上で設計の追加修正は必要か？優先度は？\n\n7. **通知システム（ntfy/Discord/Slack/MQTT）**\n\
+    \   - Plan存在: ~/.claude/plans/radiant-dancing-snail.md\n   - 問いかけ: 他6件との相対的優先度。独立実装可能か？\n\
+    \n【分析の軸（4つ）】\n\nA. **優先度マトリクス**: 効果(High/Med/Low) × 実装コスト(High/Med/Low) で7件を配置\n\
+    B. **依存関係**: 7件間に順序依存はあるか（例: Worktreeが先でないとX が困る等）\nC. **Wave分解案**: 3-4 Waveで段階的に実装する場合の推奨順序\n\
+    D. **「やらない」判定**: 7件のうちROIが低いものは明確に「やらない」と言え\n\n【殿の制約・好み】\n- マクガイバー精神: 最小構成で最大効果\n\
+    - 過剰設計は不合格（殿の判断基準）\n- 老中過負荷は実感している。構造的解決を望んでいる\n- 「同じ方向に向かっている確信が持てた」とCCA知見を高く評価\n\
+    - 月額忌避。追加コストの発生する案は明示せよ\n\n【参照すべきもの】\n- ~/.claude/projects/-home-yasu-multi-agent-shogun/memory/cca_certification.md（CCA全5ドメイン）\n\
+    - docs/shogun/worktree_design.md（Worktree設計書）\n- instructions/karo.md + context/karo-*.md（老中の現行責務）\n\
+    - instructions/ohariko.md（お針子の現行設計 — 言い訳テーブル含む）\n- .claude/skills/audit/SKILL.md（監査スキル）\n\
+    - scripts/identity_inject.sh（identity injection実装）\n\n【成果物】\n- docs/shogun/cca_roadmap.md\
+    \ に改善ロードマップを出力\n- queue/inbox/roju_reports.yaml に報告\n- 優先度マトリクス（テーブル形式）\n- Wave分解案（依存関係考慮済み）\n\
+    - 各候補の「やる/やらない/後回し」の明確な所見\n"
+  north_star: 公式の知恵を借りて、最小の変更で最大のシステム改善を。老中を殺すな
+  project: shogun
+  status: done
+  subtask_id: null
+- assigned_by: shogun
+  timestamp: '2026-03-24T18:55:20'
+  type: analysis
+  title: "参考文献分析: EnterpriseOps-Gym — ステートフルAIエージェント評価ベンチマーク"
+  detail: |
+    殿からの参考文献。shogunシステム改善に活かせる知見を抽出せよ。
+
+    【論文】
+    EnterpriseOps-Gym: Environments and Evaluations for Stateful Agentic Planning and Tool Use in Enterprise Settings
+    URL: https://arxiv.org/pdf/2603.13594
+    PDF保存先: /home/yasu/.claude/projects/-home-yasu-multi-agent-shogun/6f3f7239-54df-42a3-91a6-06f06b4c1899/tool-results/webfetch-1774346103109-p35172.pdf
+
+    【論文概要】
+    - エンタープライズ環境でのAIエージェントの「段階的計画立案」と「ツール使用能力」を評価するベンチマーク
+    - ステートフル環境: エージェントの行動が環境を変化させ、次の意思決定に反映
+    - 単一タスクではなく「連続的で状態依存的な作業」を評価
+    - GPT-5、Claude Sonnet等の最新LLMで比較評価
+    - 個別エージェント能力より「状態追跡と順序付きツール利用の協調」が重要と示唆
+
+    【分析の軸】
+    A. shogunシステム（将軍→老中→足軽の階層的エージェント協調）との類似点・差異
+    B. 我々のYAML通信・没日録DB・2ch板がステートフル環境としてどう評価されるか
+    C. 論文の評価指標をshogunシステムの品質測定に転用できるか
+    D. 改善提案: 論文の知見からshogunに取り込むべきものがあれば具体的に
+
+    【成果物】
+    - docs/shogun/enterpriseops_gym_analysis.md に分析結果を出力
+    - queue/inbox/roju_reports.yaml に報告
+  north_star: 外の知見を借りて内の仕組みを研ぎ澄ませ。学術と実践の橋渡しが軍師の真骨頂
+  project: shogun
+  status: done
+  subtask_id: null
+
+# === cmd_437 subtask_970 ===
+- subtask_id: subtask_970
+  cmd_id: cmd_437
+  assigned_by: roju
+  status: done
+  priority: high
+  project: shogun
+  description: |
+    横断統合 — Phase 0-2一貫設計書v2策定
+
+    ## 任務
+    1. 足軽1(subtask_967)/足軽2(subtask_968)/部屋子(subtask_969)のリサーチ結果を待って統合
+    2. 核心の問い: Phase 0（instructions変更）で入れたものがPhase 1（スクリプト）で邪魔にならず、
+       Phase 2（高度統合）まで自然に拡張できるデータモデル・インターフェースは何か？
+    3. 前回分析 docs/shogun/quality_guardrails_research.md を基盤とし、実装詳細を追記
+    4. 殿の制約: マクガイバー精神、月額ゼロ、既存の仕組みを壊すな
+    5. 成果物: docs/shogun/quality_guardrails_design_v2.md
+       - Phase 0-2の各ステップで変更するファイル/データモデルを明示
+       - Phase Nで入れたものがPhase N+1で不要になるケースがあれば明示（設計変更コスト）
+
+    ## 依存
+    subtask_967, subtask_968, subtask_969 の完了報告が roju_reports.yaml に届いてから着手せよ。
+    老中がsend-keysで指示を出す。
+
+    ## 報告
+    - python3 scripts/botsunichiroku.py report add subtask_970 "報告内容"
+    - queue/inbox/roju_reports.yaml に報告
+  report_to: roju_reports.yaml
+  blocked_by:
+    - subtask_967
+    - subtask_968
+    - subtask_969
+  context_files:
+    - docs/shogun/quality_guardrails_research.md
+  north_star: 外の知見を借りて内の仕組みを研ぎ澄ませ。学術と実践の橋渡しが軍師の真骨頂
+  needs_audit: true
+- assigned_by: shogun
+  timestamp: '2026-03-24T22:55:31'
+  type: feedback
+  title: "殿裁定: rotation-planner委託業務モデル3件"
+  detail: |
+    殿の裁定を設計書 docs/rotation_planner/contract_design.md に反映し、実装仕様に落とせ。
+
+    【裁定内容】
+    3-a. 複数受託者のUNIQUE制約方針:
+      → 委託元を別機能として新規テーブル作成。contractors テーブル等で受託者を独立管理。
+        fields.user_id とは別の外部キーで紐付け。
+
+    3-b. 地主未登録時の対応:
+      → 登録していない場合は自分（生産者=アプリユーザー）のものとする。
+        NULL不可。デフォルトは自分のuser_id。
+
+    3-c. 年度変更の扱い:
+      → 年度区切りは3/31。ただし秋小麦は畑起こしから8月〜翌年8月で耕作期間があるため、
+        年度またぎ処理が必要。作期（crop_season）の概念を導入し、
+        1つの作期が複数年度にまたがるケースを扱えるようにせよ。
+        単純な年度=作期ではないことに注意。
+
+    【成果物】
+    - docs/rotation_planner/contract_design.md を殿裁定で更新
+    - 実装仕様（テーブル定義・マイグレーション）を追記
+    - queue/inbox/roju_reports.yaml に報告
+  north_star: 農業の現実を写し取れ。地主と作業者は別の人間だ
+  project: rotation-planner
+  status: done
+  subtask_id: null
+- assigned_by: shogun
+  cmd_id: null
+  subtask_id: null
+  status: done
+  priority: high
+  project: systrade
+  description: |
+    ■ カーネル法×systrade統合分析 — Ide-Yairi 2010 SICE論文
+
+    論文: https://ide-research.net/papers/2010_SICE_Ide_Yairi.pdf
+    「Volterra級数＋カーネルトリック」による非線形時系列モデリング。
+    Lasso正則化でスパース化、SLDS切替モデル、GPDMなど。
+
+    Dexter分析(docs/shogun/dexter_analysis.md)と合わせて、
+    systrade_asia_thesis.md への統合可能性を分析せよ。
+
+    【分析せよ】
+    1. Dexter + カーネル法の統合可能性（DCF分析の特徴量にカーネル展開を使えるか）
+    2. Lasso正則化 → アジアインフラ株のファクター選択（スパース化で「棍棒で殴れる」変数を抽出）
+    3. SLDS切替モデル → 温室制御モードとの接続（農業×金融のクロスドメイン）
+    4. 2010→2026の発展（カーネル法→NN→LLMの文脈での位置づけ）
+    5. 実装コスト見積もり（Python/scikit-learn範囲か、専用実装が要るか）
+
+    【成果物】
+    docs/shogun/kernel_systrade_analysis.md に分析書を出力
+    完了後、roju_reports.yaml + 老中にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- assigned_by: shogun
+  cmd_id: null
+  subtask_id: null
+  status: done
+  priority: high
+  project: systrade
+  description: |
+    ■ systrade Phase 0 実装計画策定 — Lasso×OMC絨毯爆撃
+
+    殿GO。カーネル法分析(docs/shogun/kernel_systrade_analysis.md)のPhase 0-2を
+    OMC(oh-my-claudecode)で絨毯爆撃実装する計画を策定せよ。
+
+    【前提】
+    - OMC v4.9.1導入済み。omc team N:claude:role task で外注可能
+    - OMCの実力: テスト実装は動くがflakyバグあり。本店(お針子)監査が必須
+    - 月額ゼロ制約。データはYahoo Finance + World Bank Open Data + 国交省地価公示
+    - systradeリポジトリの現状を確認し、どこに何を置くか決めよ
+
+    【策定せよ】
+    1. Phase 0 Lasso実装のOMC向けタスク分解（何体のworkerに何を投げるか）
+       - データ取得スクリプト（Yahoo Finance API、World Bank）
+       - Lasso変数選択パイプライン（scikit-learn LassoCV）
+       - 可視化（選択された変数の係数プロット）
+       - テスト（pytest）
+    2. Phase 1 カーネルリッジ回帰のタスク分解
+    3. Phase 2 HMMレジーム検出のタスク分解
+    4. OMCへの指示テンプレート（omc team コマンドの雛形）
+    5. お針子検品の観点（各Phaseで何をチェックすべきか）
+    6. Dexter部分導入の判断（Phase 3で統合するか、Phase 0-2で十分か）
+
+    【制約】
+    - 各OMCタスクは「読み取り専用」か「1ファイル作成」に限定。爆発半径を最小化
+    - systradeリポジトリのディレクトリ構成案も含めよ
+    - 殿の「棍棒で殴れる変数」の哲学をOMCに伝える指示文も考えよ
+
+    【成果物】
+    docs/shogun/systrade_phase0_plan.md に実装計画書を出力
+    完了後、roju_reports.yaml + 将軍ペイン(shogun:main.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml

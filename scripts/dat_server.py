@@ -414,11 +414,15 @@ def _fetch_ninmu(path: str) -> str | None:
     try:
         with urlopen(url, timeout=3) as resp:
             return resp.read().decode("utf-8", errors="replace")
-    except URLError:
+    except Exception:
         return None
 
 
 def subject_ninmu() -> str:
+    # ninmu板のthread_idはagent-swarm側の数値ID(UNIXタイムスタンプ系)をそのまま使用。
+    # register_idは不要: JDimから /ninmu/dat/XXX.dat にアクセスする際、
+    # lookup_id未登録でXXXがそのままdat_ninmuに渡されるが、
+    # agent-swarm側も同じ数値IDで受け付けるため動作する。
     result = _fetch_ninmu("subject.txt")
     if result is None:
         return "1000000000.dat<>【任務板】agent-swarm(8824)未接続 (0)\n"
@@ -426,6 +430,10 @@ def subject_ninmu() -> str:
 
 
 def dat_ninmu(thread_id: str) -> str | None:
+    # SSRF対策: thread_idは数値のみ許可
+    import re
+    if not re.fullmatch(r"[0-9]+", thread_id):
+        return None
     return _fetch_ninmu(f"dat/{thread_id}.dat")
 
 

@@ -29,6 +29,8 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
+from urllib.request import urlopen
+from urllib.error import URLError
 
 # ---------------------------------------------------------------------------
 # パス設定
@@ -58,6 +60,9 @@ DREAMS_PATH = PROJECT_ROOT / "data" / "dreams.jsonl"
 
 PORT = 8823
 BASE_PATH = "/botsunichiroku"  # JDim外部板登録時のプレフィックス
+
+# agent-swarm BBS (ninmu板)
+NINMU_BBS_URL = "http://localhost:8824"
 
 # ---------------------------------------------------------------------------
 # 定数（サーバー固有）
@@ -400,6 +405,31 @@ def dat_zatsudan(thread_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# ninmu板 (agent-swarm プロキシ)
+# ---------------------------------------------------------------------------
+
+def _fetch_ninmu(path: str) -> str | None:
+    """agent-swarm BBS(8824)からninmu板データを取得。失敗時はNone。"""
+    url = f"{NINMU_BBS_URL}/bbs/ninmu/{path}"
+    try:
+        with urlopen(url, timeout=3) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except URLError:
+        return None
+
+
+def subject_ninmu() -> str:
+    result = _fetch_ninmu("subject.txt")
+    if result is None:
+        return "1000000000.dat<>【任務板】agent-swarm(8824)未接続 (0)\n"
+    return result
+
+
+def dat_ninmu(thread_id: str) -> str | None:
+    return _fetch_ninmu(f"dat/{thread_id}.dat")
+
+
+# ---------------------------------------------------------------------------
 # 書き込み処理
 # ---------------------------------------------------------------------------
 
@@ -540,6 +570,7 @@ SUBJECT_FUNCS = {
     "dreams":   subject_dreams,
     "diary":    subject_diary,
     "zatsudan": subject_zatsudan,
+    "ninmu":    subject_ninmu,
 }
 
 DAT_FUNCS = {
@@ -547,6 +578,7 @@ DAT_FUNCS = {
     "dreams":   dat_dreams,
     "diary":    dat_diary,
     "zatsudan": dat_zatsudan,
+    "ninmu":    dat_ninmu,
 }
 
 
@@ -560,6 +592,7 @@ def bbsmenu_html(port: int = PORT) -> str:
         "没日録": ["kanri", "diary"],
         "リサーチ": ["dreams"],
         "交流": ["zatsudan"],
+        "任務": ["ninmu"],
     }
     base = f"http://localhost:{port}{BASE_PATH}"
     lines = [

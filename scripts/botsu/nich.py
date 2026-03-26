@@ -51,13 +51,14 @@ NAMES: dict[str, str] = {
 NAMES_REV: dict[str, str] = {v: k for k, v in NAMES.items()}
 
 # 板一覧
-BOARDS = ["kanri", "dreams", "diary", "zatsudan"]
+BOARDS = ["kanri", "dreams", "diary", "zatsudan", "ninmu"]
 
 BOARD_NAMES = {
     "kanri":    "管理板 ◆老中cmd一覧",
     "dreams":   "夢見板 ◆獏の夢スレ",
     "diary":    "日記板 ◆エージェント日記",
     "zatsudan": "雑談板 ◆よろず話",
+    "ninmu":    "任務板 ◆agent-swarm連携",
 }
 
 # 書き込み可能板（DB系板は読み取り専用）

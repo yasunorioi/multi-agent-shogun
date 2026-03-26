@@ -739,15 +739,26 @@ curl -s http://localhost:8824/bbs/ninmu/subject.txt
 curl -s http://localhost:8824/bbs/ninmu/dat/スレッドID.dat
 ```
 
-### 報告方法（任務板経由）
+### 報告フロー（Phase 1: デュアルライト）
 
+報告時は **roju_reports.yaml + 任務板レス** の両方に書け（dual-write必須）:
+
+1. roju_reports.yaml 更新（従来通り）
+2. **任務板にレス投稿（必須追加）**:
+   ```bash
+   curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
+     -d "bbs=ninmu&key=スレッドID&FROM=足軽N&MESSAGE=[report] subtask_XXX完了: 概要&time=0"
+   ```
+3. send-keys通知（従来通り）
+
+スレッドIDはinbox記載のcmd対応スレを使う。不明な場合:
 ```bash
-curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
-  -d "bbs=ninmu&key=スレッドID&FROM=足軽1&MESSAGE=報告内容&time=0"
+curl -s http://localhost:8824/bbs/ninmu/subject.txt
 ```
+でcmd_XXXのスレを探す。
 
 - FROM欄は自分の表示名（足軽1/足軽2/部屋子1）
-- 従来のYAML inbox報告も引き続き必須（dual-write期間）
+- YAML + 任務板 **両方必須**（どちらか片方では不完全）
 - ninmu板への書き込みは全エージェントに通知が飛ぶ
 
 ## 2ch板投稿ルール

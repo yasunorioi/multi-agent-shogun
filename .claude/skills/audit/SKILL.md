@@ -194,6 +194,31 @@ fi
 - completeness(1)/no_regressions(1)/tests(0): コミットなし・report addなし・証跡ゼロ
 → **実装は動くが証跡完全欠落 → エビデンス再整備が必要**
 
+**事例D — 17/18 approved**: subtask_986（archive昇格+nginx修正）
+- correctness(3): archive昇格ロジック・nginx設定修正が要件通り動作。全機能確認済み
+- code_quality(3): INSERT OR REPLACEによる冪等設計。再実行安全
+- completeness(3): 全要件カバー / no_regressions(3): 既存機能への影響なし
+- tests(2): テスト一部懸念あり（1点減）
+→ **冪等設計・証跡完備 → 高スコア合格の典型例**
+
+**事例E — 13/18 approved（合格下限）**: subtask_952（雑談板+thread_replies追加、148行）
+- correctness(3): 雑談板新規作成・thread_replies動作確認済み
+- code_quality(2): 148行実装。可読性は良好だが軽微な改善余地
+- completeness(2): 一部要件対応漏れあり / no_regressions(3): 既存機能への影響なし
+- tests(1): 実装コードに対しテスト未実装（殿「テストは書け」原則 → 2点未満）
+→ **動作・要件はほぼ充足だが合格下限 → テスト不足が減点主因**
+
+**事例F — 13/18 approved（合格下限）**: subtask_953（DATサーバー新規681行）
+- correctness(3): DAT形式変換・配信機能が要件通り動作。標準ライブラリのみで実装
+- code_quality(3): 681行の大規模実装だが標準ライブラリのみ使用（殿の「シンプル志向」合致）
+- completeness(2): 主要要件カバー済みだが一部対応漏れ / no_regressions(2): 軽微な副作用
+- tests(1): 大規模新規実装に対しテスト未実装
+→ **標準ライブラリ限定は加点評価だがテスト不足が足を引く → 合格下限**
+
+> **※ rejected事例0件注記（2026-03-26時点）**: 現行監査記録において rejected（10点未満）の事例は0件。
+> 全件が approved（合格圏内10点以上）に収まっている。現行基準が甘い可能性がある。
+> 今後のrejected事例蓄積に備え、採点基準の厳格化・再調整を検討されたし。
+
 ### Step 6: 監査レポート出力
 
 ```yaml

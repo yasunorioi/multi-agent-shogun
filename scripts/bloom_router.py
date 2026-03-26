@@ -74,6 +74,37 @@ def route(description: str, bloom_level: int) -> str:
         return bloom_effort
 
 
+def classify(description: str, bloom_level: int | None = None) -> dict:
+    """route()の結果をPreflight Checkフローの判定マップに変換する。
+
+    Args:
+        description: タスクの説明文
+        bloom_level: Bloomタキソノミーレベル (1-6)。Noneまたは未指定時はL2差し止め。
+
+    Returns:
+        dict: {"effort": str, "preflight": str, "gate": str}
+          - effort: "low"|"medium"|"high"|"max"
+          - preflight: "minimal"(P1-P2のみ) | "standard"(P1-P3) | "full"(P1-P4全て)
+          - gate: "proceed"|"hold_l2"(入力不完備で老中に質問)
+    """
+    # 入力不完備検知: L2差し止め
+    if not description or len(description) < 20:
+        return {"effort": "max", "preflight": "full", "gate": "hold_l2"}
+    if bloom_level is None:
+        return {"effort": "max", "preflight": "full", "gate": "hold_l2"}
+
+    effort = route(description, bloom_level)
+
+    if effort == "low":
+        preflight = "minimal"     # P1-P2のみ必須
+    elif effort in ("medium", "high"):
+        preflight = "standard"    # P1-P3
+    else:  # "max"
+        preflight = "full"        # P1-P4全て実行
+
+    return {"effort": effort, "preflight": preflight, "gate": "proceed"}
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(

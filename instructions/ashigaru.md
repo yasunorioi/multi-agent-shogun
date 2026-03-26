@@ -822,3 +822,21 @@ preflight_result: "ALL-PASS"
 | L3 注意喚起 | CAUTION | P5-FAIL(一部), 初見パターン | 実行するが報告に注記。status: done + caution |
 
 L1は無条件拒否。L2は老中の判断を仰げ。L3は自己判断で実行可。
+
+---
+
+## Worktree作業手順（worktree: true の場合）
+
+inbox YAMLに `worktree: true` がある場合のみ以下を実行せよ。ない場合は従来通り。
+
+1. `EnterWorktree(name: タスクYAMLのworktree_name)` で作業空間に入る
+2. コードファイル: 相対パスで編集（worktree内）
+3. YAML/DB/context: 絶対パスで参照
+   - `${SHOGUN_ROOT}/queue/inbox/ashigaru{N}.yaml`
+   - `python3 ${SHOGUN_ROOT}/scripts/botsunichiroku.py ...`
+   - `${SHOGUN_ROOT}/context/{project}.md`
+4. worktreeブランチに git commit
+5. `ExitWorktree(action: "keep")` でworktreeを保持して抜ける
+6. 報告を `${SHOGUN_ROOT}/queue/inbox/roju_reports.yaml` に記録（絶対パス）
+
+`worktree: false` または省略 → 従来通り（この手順は不要）

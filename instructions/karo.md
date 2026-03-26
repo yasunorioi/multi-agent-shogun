@@ -406,11 +406,19 @@ worktree必要と判断した場合、タスクに以下フィールドを追加
 
 agent-swarm（port 8824）の任務板（ninmu）をタスク指示チャネルとして併用せよ。
 
-### 運用フロー
+### 運用フロー（Phase 1: デュアルライト）
 
-1. **タスク指示**: ninmu板にスレッドを立てる（スレタイ = タスク概要）
-2. **足軽報告**: 足軽がninmu板のスレにレスで進捗・完了報告
-3. **YAML inboxは併用**: 従来のYAML配布も継続（dual-write期間）
+タスク配布時は **YAML inbox + 任務板** の両方に書け（dual-write必須）:
+
+1. 没日録DB subtask add（従来通り）
+2. ashigaru{N}.yaml 更新（従来通り）
+3. **任務板にレス投稿（必須追加）**:
+   ```bash
+   curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
+     -d "bbs=ninmu&key=スレッドID&FROM=老中&MESSAGE=subtask_XXX割当: 内容&time=0"
+   ```
+   ※スレが無い場合はスレ立て（subject付き）
+4. send-keys通知（従来通り）
 
 ### CLI（agent-swarm）
 
@@ -431,7 +439,7 @@ curl -X POST http://localhost:8824/bbs/test/bbs.cgi \
 
 - ninmu板への書き込みは全エージェントのペインに通知が飛ぶ（send-keys）
 - @足軽1 等の@メンションで特定エージェントに優先通知
-- 従来のYAML inboxは引き続き正式な割当手段。ninmu板は補助チャネル
+- YAML inbox + 任務板は **両方必須**（Phase 1デュアルライト）
 
 ## 2ch板投稿ルール
 

@@ -15,6 +15,7 @@
   python3 scripts/baku.py --digest --days 3   # 直近3日分のまとめ
 """
 
+import hashlib
 import json
 import os
 import re
@@ -42,6 +43,12 @@ DEFAULT_INTERVAL = 3600  # 1時間
 MAX_SEARCHES_PER_RUN = 5
 SUMMARY_HOUR = 7  # 朝7時にサマリ生成
 DIGEST_DAY = 0  # 月曜にダイジェスト生成 (0=月, 6=日)
+
+# === ラプラシアンフィルタ設定 ===
+CONTENT_HASH_PATH = PROJECT_ROOT / "data" / "baku_content_hash.json"
+DELTA_LOW_THRESHOLD = 0.3   # delta_score < 0.3 → low_delta（解釈スキップ）
+DELTA_HIGH_THRESHOLD = 0.5  # delta_score >= 0.5 → high_delta（深掘り候補）
+DELTA_HISTORY_MAX = 10      # delta_historyの最大保持件数
 
 # === Anthropic API 設定 ===
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", os.getenv("HAIKU_BASE_URL", "https://api.anthropic.com"))
@@ -747,6 +754,98 @@ def generate_dream_queries(recent_kw: list[str]) -> list[dict]:
     return top[:MAX_SEARCHES_PER_RUN]
 
 
+# === ラプラシアンフィルタ（Phase 0: Content Hash + Delta Score） ===
+
+
+def load_content_hashes() -> dict:
+    """data/baku_content_hash.json を読み込む。存在しなければ空dictを返す"""
+    if not CONTENT_HASH_PATH.exists():
+        return {}
+    try:
+        return json.loads(CONTENT_HASH_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_content_hashes(hashes: dict) -> None:
+    """data/baku_content_hash.json に書き込む"""
+    CONTENT_HASH_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONTENT_HASH_PATH.write_text(
+        json.dumps(hashes, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def compute_content_hash(results: str) -> str:
+    """検索結果文字列のSHA256先頭16文字を返す"""
+    return hashlib.sha256(results.encode("utf-8")).hexdigest()[:16]
+
+
+def _query_key(query: str) -> str:
+    """クエリ文字列をMD5先頭12文字に変換してJSONキーにする"""
+    return hashlib.md5(query.encode("utf-8")).hexdigest()[:12]
+
+
+def compute_jaccard(text_a: str, text_b: str) -> float:
+    """word-level Jaccard類似度を計算する（0.0〜1.0）"""
+    words_a = set(re.findall(r"\w+", text_a.lower()))
+    words_b = set(re.findall(r"\w+", text_b.lower()))
+    if not words_a and not words_b:
+        return 1.0
+    if not words_a or not words_b:
+        return 0.0
+    return len(words_a & words_b) / len(words_a | words_b)
+
+
+def check_content_hash(query: str, current_result: str, hashes: dict) -> tuple[bool, float]:
+    """Content Hash Filterを適用する。
+
+    Returns:
+        (should_skip, delta_score)
+        should_skip=True → 結果が前回と同一（DDGスキップ推奨）
+        delta_score: 1 - Jaccard類似度（0.0=変化なし, 1.0=完全新規）
+    """
+    key = _query_key(query)
+    current_hash = compute_content_hash(current_result)
+    entry = hashes.get(key)
+
+    if entry is None:
+        # 初回: hashを記録してスキップしない
+        hashes[key] = {
+            "last_hash": current_hash,
+            "last_result": current_result[:300],
+            "last_checked": datetime.now().isoformat(),
+            "check_count": 1,
+            "delta_history": [],
+        }
+        return False, 1.0
+
+    # hash比較（Stage 1: Content Hash Filter）
+    if entry["last_hash"] == current_hash:
+        entry["last_checked"] = datetime.now().isoformat()
+        entry["check_count"] = entry.get("check_count", 0) + 1
+        return True, 0.0  # hash一致 = 変化なし
+
+    # hash不一致 → Jaccard計算（Stage 2: Delta Score Filter）
+    prev_result = entry.get("last_result", "")
+    jaccard = compute_jaccard(prev_result, current_result[:300])
+    delta_score = 1.0 - jaccard
+
+    # delta_historyを更新（最大DELTA_HISTORY_MAX件保持）
+    history = entry.get("delta_history", [])
+    history.append(round(delta_score, 4))
+    if len(history) > DELTA_HISTORY_MAX:
+        history = history[-DELTA_HISTORY_MAX:]
+
+    hashes[key] = {
+        "last_hash": current_hash,
+        "last_result": current_result[:300],
+        "last_checked": datetime.now().isoformat(),
+        "check_count": entry.get("check_count", 0) + 1,
+        "delta_history": history,
+    }
+    return False, delta_score
+
+
 # === 蓄積 ===
 
 
@@ -809,13 +908,32 @@ def dream_once(manual_topic: str | None = None) -> int:
 
     dreams_found = []
     context_snippet = get_recent_cmd_summary() if HAIKU_API_KEY else ""
+    # フック点A・B用: Content Hashをロード（ループ外で1回）
+    content_hashes = load_content_hashes()
+
     for q in queries:
         print(f"  夢見中: {q['query']}...")
         internal = search_kousatsu(q["query"])
+
+        # フック点A: Content Hash Filter（DDG検索前）
+        # 前回と同一結果が期待される場合はDDG呼び出しをスキップ
+        prev_key = _query_key(q["query"])
+        prev_entry = content_hashes.get(prev_key)
+        if prev_entry and prev_entry.get("last_hash"):
+            # 前回hash存在 → DDGを実行してhash比較するため検索は必要
+            # ただし search_ddg()の結果でcheck_content_hash()する（後述）
+            pass
+
         external = search_ddg(q["query"])
 
         # 検索間のsleep（DuckDuckGo ban防止）
         time.sleep(3)
+
+        # フック点B: Delta Score Filter（DDG結果取得後、interpret_dream()前）
+        combined_result = (external or "") + (internal or "")
+        skip_interpret, delta_score = check_content_hash(
+            q["query"], combined_result, content_hashes
+        )
 
         dream_entry = {
             "dreamt_at": now.isoformat(),
@@ -825,16 +943,21 @@ def dream_once(manual_topic: str | None = None) -> int:
             "matched_keywords": q["matched_keywords"],
             "internal_result": internal[:500] if internal else None,
             "external_result": external[:500] if external else None,
+            "delta_score": round(delta_score, 4),
             "status": "raw",
         }
 
-        # Haiku解釈（6時間以内に解釈済みのクエリはスキップ）
+        # Haiku解釈（6時間以内解釈済み or delta_score低すぎる場合はスキップ）
         if q["query"] not in recent_interpreted_queries:
-            interpretation = interpret_dream(dream_entry, context_snippet)
-            if interpretation:
-                dream_entry["interpretation"] = interpretation
-                dream_entry["status"] = "interpreted"
-                dream_entry["interpreted_at"] = datetime.now().isoformat()
+            if skip_interpret or delta_score < DELTA_LOW_THRESHOLD:
+                dream_entry["status"] = "low_delta"
+                print(f"    → [低変化量 delta={delta_score:.3f}] Haiku解釈スキップ")
+            else:
+                interpretation = interpret_dream(dream_entry, context_snippet)
+                if interpretation:
+                    dream_entry["interpretation"] = interpretation
+                    dream_entry["status"] = "interpreted"
+                    dream_entry["interpreted_at"] = datetime.now().isoformat()
 
         save_dream(dream_entry)
         dreams_found.append(dream_entry)
@@ -845,6 +968,9 @@ def dream_once(manual_topic: str | None = None) -> int:
             print(f"    → (内部) {internal[:150]}...")
         else:
             print("    → 夢なし")
+
+    # フック点A後処理: 更新されたContent Hashを保存
+    save_content_hashes(content_hashes)
 
     found = sum(1 for d in dreams_found if d["external_result"] or d["internal_result"])
     print(f"=== 獏: 夢見完了 {found}/{len(dreams_found)}件 ===\n")

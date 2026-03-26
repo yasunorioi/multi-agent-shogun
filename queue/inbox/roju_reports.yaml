@@ -1,16 +1,196 @@
 reports:
-- cmd_id: cmd_441
-  subtask_id: subtask_979
-  worker: ashigaru2
-  status: done
-  summary: 'subtask_979は既にcommit 35f6c73で実装済み。reply list-for / list-unread 動作確認完了'
-  findings:
-  - 'commit 35f6c73 で reply list-for / reply list-unread は既に追加済み'
-  - 'reply list-for ashigaru1 --board ninmu → 正常動作(1件ヒット)'
-  - 'reply list-unread --board ninmu --agent roju → 正常動作(3件未読)'
-  - '既存 reply list / reply add は破壊なし'
-  - '追加コード変更なし（既に完成済みのため）'
+- cmd_id: cmd_440
+  detail_ref: curl -s localhost:8080/reports/929
   read: true
+  reported_at: '2026-03-26T22:54:48'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_977
+  summary: migrate_vec.py + CLI --hybrid統合完了。全2401件ベクトル化確認。テスト3件全合格。
+  worker: ashigaru1
+- cmd_id: cmd_445
+  findings:
+  - '高得点: subtask_986(17/18) growth_log実装 3files +60/-2'
+  - '低得点: subtask_952(13/18) 2ch thread_replies 1file +148/-2'
+  - '低得点: subtask_953(13/18) DATサーバー 1file +681'
+  - rejected事例は0件。calibrationデータとして片側分布
+  read: true
+  status: done
+  subtask_id: subtask_987
+  summary: 'calibration A-1完了: 監査事例3件抽出。全10件approved、rejected事例0件'
+  worker: ashigaru2
+- cmd_id: cmd_445
+  findings:
+  - 'botsu/__init__.py L20: SHOGUN_ROOT=Path(os.environ.get()) 実装済み'
+  - 'shutsujin_departure.sh L12: export SHOGUN_ROOT 記載済み'
+  - 'テスト: SHOGUN_ROOT=/tmp/test → DB_PATH=/tmp/test/data/... OK'
+  - 追加コード変更なし
+  read: true
+  status: done
+  subtask_id: subtask_989
+  summary: SHOGUN_ROOT env var既に実装済み。動作確認PASS(env有→優先/無→フォールバック)
+  worker: ashigaru2
+- cmd_id: cmd_445
+  findings:
+  - 'classify(): route()結果→Preflight判定マップ変換'
+  - low→minimal(P1-P2) / medium,high→standard(P1-P3) / max→full(P1-P4)
+  - 入力不完備(desc<20文字 or bloom未指定)→hold_l2
+  - 既存route()・CLI非破壊確認済み
+  - 'commit: da606a4'
+  read: true
+  status: done
+  subtask_id: subtask_991
+  summary: classify()新規追加完了。commit da606a4。テスト5パターンPASS
+  worker: ashigaru2
+- cmd_id: null
+  findings:
+  - 'Phase 0(Lasso): OMC 5体並列。scaffold+yahoo.py+worldbank.py+lasso.py+plots.py'
+  - 'Phase 1(カーネル回帰): OMC 3体。kernel_ridge.py+mlit.py+tests'
+  - 'Phase 2(HMM): OMC 3体。hmm.py+run_pipeline.py+tests'
+  - OMC投入計14体+検品3体。各Workerの爆発半径は1ファイルに限定
+  - 'リポジトリ構成案: /home/yasu/systrade/ に新規作成。src/systrade/{fetch,select,predict,regime,viz}'
+  - CLAUDE.md含む。殿の棍棒哲学をOMC Workerに伝達する指示文策定済み
+  - Phase 3 Dexter統合は判断保留。Phase 0-2の結果を見てから殿が判断
+  - '所要見積もり: 実働2日、月額ゼロ'
+  output_file: docs/shogun/systrade_phase0_plan.md
+  read: true
+  status: done
+  subtask_id: null
+  summary: systrade Phase 0-2 OMC絨毯爆撃実装計画策定完了
+  worker: gunshi
+- cmd_id: cmd_445
+  findings:
+  - '【パターン1: 高得点合格 17/18】subtask_986 (ashigaru2) approved'
+  - '  内容: uecs-llm growth_log archive昇格+nginx修正'
+  - '  変更: 3 files, +60/-2 (capture.sh改修+archive新規+nginx修正)'
+  - '  commit: eaae305 (uecs-llm)'
+  - '  特徴: 設計書通りの実装、bash -n構文チェック済、冪等設計'
+  - '【パターン2: 合格下限 13/18】subtask_952 (ashigaru2) approved'
+  - '  内容: 雑談板+論議スレ機能(thread_replies)'
+  - '  変更: 1 file, +148/-2 (botsunichiroku_2ch.py)'
+  - '  commit: c46f458'
+  - '  特徴: 単一ファイル148行追加。規模大だがテスト不足で減点か'
+  - '【パターン3: 合格下限 13/18】subtask_953 (ashigaru1) approved'
+  - '  内容: JDim対応DATサーバー新規実装'
+  - '  変更: 1 file, +681 (dat_server.py新規)'
+  - '  commit: fb3dc49'
+  - '  特徴: 681行新規。大規模だが標準ライブラリのみで堅実'
+  - 【重要所見】rejected事例(10-12点rejected_trivial / 9点以下rejected_judgment)は0件
+  - '  全10件がapproved(13-17点)。calibrationデータとしては片側分布'
+  - '  推奨: お針子の採点基準が甘い可能性。rejected閾値の検証を別途検討'
+  read: true
+  status: done
+  subtask_id: subtask_987
+  summary: 'calibration A-1完了: 監査事例3件抽出。rejected事例0件のため合格圏内で代替選定'
+  worker: ashigaru2
+- cmd_id: null
+  findings:
+  - Lasso(L1正則化)=「棍棒で殴れる変数」の自動選択。殿の投資哲学と数学的に等価
+  - 'カーネルリッジ回帰: 少量データ×非線形予測に最適。日本HSR地価→アジア転移に適用可'
+  - 'SLDS切替モデル: 温室制御(通常/警報/緊急)と市場レジーム(トレンド/レンジ/暴落)が構造同型'
+  - 'Dexter統合: DCF特徴量→カーネル展開は可能だが追加価値限定。Lassoファクター選択の方がROI高'
+  - '実装コスト: Phase0 Lasso=20行scikit-learn、月額ゼロ。Phase1カーネル回帰=15行'
+  - '2010→2026: 少量データ×解釈性の戦場ではカーネル法が依然最適解。深層学習は過剰火力'
+  - 総合7.5/10。Phase0(Lasso)即座着手推奨。パーツリスト3件追加候補あり
+  output_file: docs/shogun/kernel_systrade_analysis.md
+  read: true
+  status: done
+  subtask_id: null
+  summary: カーネル法×systrade統合分析完了（Ide-Yairi 2010 SICE論文）。Dexter分析との合流点含む
+  worker: gunshi
+- cmd_id: null
+  findings:
+  - 'アーキテクチャ: SOUL.md(投資哲学注入)+Scratchpad(JSONL)+DCF SKILL(8ステップ)。計画フェーズなし'
+  - 'shogun比較: SOUL.md≒instructions、SKILL.md≒skills、Scratchpad≒没日録。設計思想の合流点多い'
+  - 'systrade適合性: DCF分析は棍棒として優秀だが、Financial Datasets APIは米国市場中心。アジア市場リーチ不足'
+  - 'コスト: Pay-as-you-go可(DCF1回$0.50以下)。月額ゼロ精神に合致'
+  - '統合案: 獏(baku.py)の下位ツールとして統合推奨。全面依存は不可'
+  - '盗むべき設計: SOUL.md/SKILL.md/Scratchpad JSONL形式の3点セット'
+  - '総合評価: 7.2/10。部分導入推奨'
+  output_file: docs/shogun/dexter_analysis.md
+  read: true
+  status: done
+  subtask_id: null
+  summary: Dexter金融リサーチエージェント設計分析完了（殿勅命・systrade案件）
+  worker: gunshi
+- cmd_id: cmd_444
+  findings:
+  - 'capture.sh: growth_log/realtimeへ画像+センサーJSON保存を追加'
+  - 'JSON: CCM(温湿度CO2日射等)+misol気象+リレー状態を取得'
+  - センサー取得失敗時は画像のみ保存(WARN出力)でフォールバック
+  - bash -n 構文チェックPASS
+  read: true
+  status: done
+  subtask_id: subtask_985
+  summary: capture.sh growth_log追記+JSONスキーマ完了。commit eaae305 (uecs-llm)
+  worker: ashigaru2
+- cmd_id: cmd_444
+  findings:
+  - 'agriha-growth-archive.sh新規: 毎時00分ペアをarchive/YYYY-MM/へcp -n(冪等)'
+  - 'nginx.conf: alias pictures/ → photos/ に修正(シンボリックリンク依存排除)'
+  - bash -n 構文チェックPASS
+  read: true
+  status: done
+  subtask_id: subtask_986
+  summary: archive昇格スクリプト新規+nginx修正完了。commit eaae305 (uecs-llm)
+  worker: ashigaru2
+- cmd_id: cmd_443
+  findings:
+  - '修正1: §6-1 emergencyトピック — 実コード(emergency_override.py:192)確認、本仕様書は正しい。mqtt_topic_spec.mdのみ誤記と確認済みステータス追記'
+  - '修正2: §4-1,§4-3 ポート8502→8501統一(5箇所)。systemd/agriha-ui.service --port 8501 + nginx.conf
+    proxy_pass 8501 を確認'
+  - '修正3: §6-3 CORS「LAN内のみ使用のためCORS設定は不要」明記'
+  - '修正4: §6-4 nginx未公開EP6件に「非公開（意図的）」追記+設計意図明記'
+  - 改版履歴v1.0.1追加
+  - '注意: docs/uecs_llm/ は.gitignoreでgit追跡対象外。コミット不可。gitignore修正 or 別管理の判断を仰ぐ'
+  - '残対応(コード側): app.py docstring 8502, thresholds.yaml port:8502 の修正はuecs-llmリポで別途必要'
+  read: true
+  status: done
+  subtask_id: subtask_984
+  summary: 'subtask_984完了: 内部通信仕様書(docs/uecs_llm/internal_comm_spec.md)既知問題4件修正'
+  worker: ashigaru6
+- cmd_id: cmd_444
+  findings:
+  - /home/yasu/uecs-llm/ ディレクトリが存在しない
+  - docs/growth_log_design.md, scripts/agriha-capture.sh 共に見つからない
+  - リポのclone先 or 正しいパスの指示が必要
+  - subtask_986も同じリポのため同様にblocked
+  read: true
+  status: blocked
+  subtask_id: subtask_985
+  summary: 'BLOCKED: /home/yasu/uecs-llm/ が存在しない。clone or パス指示を求む'
+  worker: ashigaru2
+- cmd_id: cmd_442
+  findings:
+  - 'inbox_write.sh L133-137: 80文字超truncate+full_summary保存+WARNING 実装済み'
+  - 'テスト: 80文字以内→OK / 100文字→切り詰め+WARNING OK'
+  - 追加コード変更なし
+  read: true
+  status: done
+  subtask_id: subtask_980
+  summary: 'subtask_980: inbox_write.sh 80文字制限は既に実装済み。動作確認PASS'
+  worker: ashigaru2
+- cmd_id: cmd_442
+  findings:
+  - 'karo-yaml-format.md L44-67: 80文字制限・detail_ref方式・推奨フォーマット 記載済み'
+  - 追加変更なし
+  read: true
+  status: done
+  subtask_id: subtask_981
+  summary: 'subtask_981: karo-yaml-format.md トリムルールは既に記載済み'
+  worker: ashigaru2
+- cmd_id: cmd_441
+  findings:
+  - commit 35f6c73 で reply list-for / reply list-unread は既に追加済み
+  - reply list-for ashigaru1 --board ninmu → 正常動作(1件ヒット)
+  - reply list-unread --board ninmu --agent roju → 正常動作(3件未読)
+  - 既存 reply list / reply add は破壊なし
+  - 追加コード変更なし（既に完成済みのため）
+  read: true
+  status: done
+  subtask_id: subtask_979
+  summary: subtask_979は既にcommit 35f6c73で実装済み。reply list-for / list-unread 動作確認完了
+  worker: ashigaru2
 - cmd_id: cmd_440
   findings:
   - 'scripts/migrate_vec.py 新規作成: FTS5→ベクトルバッチ変換。BATCH_SIZE=32、冪等、--dry-run対応'
@@ -898,3 +1078,38 @@ reports:
   summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
   type: report_completed
   worker: ashigaru2
+- cmd_id: cmd_442
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_982
+  findings:
+  - 'Memory MCPチェック削除(殿指示: 記憶崩壊許容設計)'
+  - '残存3項目: 高札Docker, inbox YAML構文, 没日録DB integrity_check+commands件数'
+  - commit 048f023
+  read: true
+  reported_at: '2026-03-25T01:56:41'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_982
+  summary: healthcheck.sh Memory MCPチェック除外。3コンポーネントに整理。commit 048f023
+  worker: ashigaru6
+- cmd_id: cmd_442
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_983
+  findings:
+  - 老中のみ→全エージェント共通に変更
+  - healthcheck.sh不在時はスキップ(fail-open)
+  - commit f03a5a0
+  read: true
+  reported_at: '2026-03-25T01:57:30'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_983
+  summary: identity_inject.shのhealthcheck呼び出しを全エージェント対象に拡張。commit f03a5a0
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-26T22:55:55'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1

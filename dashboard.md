@@ -1,5 +1,5 @@
 # 📊 戦況報告
-最終更新: 2026-03-26 07:00
+最終更新: 2026-03-26 07:45
 
 ## 📜 殿の方針
 
@@ -188,17 +188,17 @@ docs/shogun/dexter_analysis.md。総合7.2/10。
 
 ## 🔄 進行中 - 只今、戦闘中でござる
 
-### cmd_445 CCA老中救済 Wave 9 — calibration + worktree + bloom×Preflight 🔄準備完了
-3系統6subtask。明朝足軽投入予定（オフピーク2倍キャンペーン〜3/28活用）。
+### cmd_445 CCA老中救済 Wave 9 — calibration + worktree + bloom×Preflight 🔄再開
+3系統6subtask。stale block解除+足軽2再投入（03-26 22:55）。
 
 | subtask | 担当 | 系統 | 内容 | 状態 |
 |---------|------|------|------|------|
-| 987 | 足軽2 | A | 没日録DBから監査事例3件抽出 | ✅完了(rejected 0件、合格圏内3件で代替) |
-| 988 | 足軽2 | A | SKILL.md few-shot examples追加 | 📋inbox投入済み(block解除) |
-| 989 | 足軽2 | B | SHOGUN_ROOT + PROJECT_ROOT修正 | 📋inbox投入済み |
-| 990 | 足軽2 | B | ashigaru.md worktree手順追記 | 📋inbox投入済み(部屋子→足軽2) |
-| 991 | 足軽2 | C | bloom_router classify()追加 | 📋inbox投入済み |
-| 992 | 足軽2 | C | ashigaru.md bloom連動ルール追記 | ⏳blocked_by 991 |
+| 987 | 足軽2 | A | 没日録DBから監査事例3件抽出 | ✅完了 |
+| 988 | 足軽2 | A | SKILL.md few-shot examples追加 | 🔄再開指示済み(block解除) |
+| 989 | 足軽2 | B | SHOGUN_ROOT + PROJECT_ROOT修正 | ✅完了(既実装確認、監査不要) |
+| 990 | 足軽2 | B | ashigaru.md worktree手順追記 | 🔄再開指示済み |
+| 991 | 足軽2 | C | bloom_router classify()追加 | ✅監査合格(17/18) |
+| 992 | 足軽2 | C | ashigaru.md bloom連動ルール追記 | 🔄再開指示済み(block解除) |
 
 ### cmd_440 ベクトル検索(sqlite-vec + Ruri v3) Phase 0 ✅完了
 全subtask監査合格。vec.py + migrate_vec.py + CLI --hybrid。バッチベクトル化はバックグラウンド完走待ち。

@@ -507,11 +507,209 @@ def run_daily_batch() -> dict:
     archived = save_to_dream_library(results, dreams_by_id)
 
     accept_count = sum(1 for r in results if r.get("verdict") == "accept")
+
+    # Finance深堀り: Sonnet選別後にFinance系ドメインを自動検証
+    try:
+        finance_enriched = finance_deepdive(candidates)
+        if finance_enriched:
+            report = format_finance_report(finance_enriched)
+            if report:
+                # ファイル保存
+                finance_report_path = PROJECT_ROOT / "data" / "finance_deepdive.md"
+                with open(finance_report_path, "w", encoding="utf-8") as f:
+                    f.write(f"# Finance Deep Dive — {datetime.now().strftime('%Y-%m-%d')}\n")
+                    f.write(report)
+                print(f"獏: Finance深堀りレポート → {finance_report_path}")
+                # 相場板に投稿
+                post_finance_report(finance_enriched)
+    except Exception as e:
+        print(f"獏: Finance深堀りエラー（バッチ続行）: {e}", file=sys.stderr)
+
     print(
         f"獏: 日次バッチ完了 — "
         f"候補{len(candidates)}件 → Sonnet選別{len(results)}件 → 蔵書化{archived}件"
     )
     return {"candidates": len(candidates), "selected": accept_count, "archived": archived}
+
+
+# === Finance深堀り ===
+
+
+FINANCE_DOMAINS = {"systrade_research", "asia_realestate", "economics"}
+
+# FRED series for quick macro lookups (no API key needed)
+FINANCE_FRED_SERIES = {
+    "DCOILWTICO": "WTI Crude Oil",
+    "DCOILBRENTEU": "Brent Crude Oil",
+    "PCOPPUSDM": "Copper Price",
+    "PALUMUSDM": "Aluminum",
+    "PIORECRUSDM": "Iron Ore",
+    "VIXCLS": "VIX",
+    "T10Y2Y": "US 10Y-2Y Spread",
+    "BAMLH0A0HYM2": "HY Credit Spread",
+}
+
+
+def _fetch_fred_latest(series_id: str) -> dict | None:
+    """FREDから直近値を取得（APIキー不要、CSV）。"""
+    try:
+        url = (
+            f"https://fred.stlouisfed.org/graph/fredgraph.csv"
+            f"?id={series_id}&cosd={(datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')}"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "baku/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            lines = resp.read().decode().strip().split("\n")
+        if len(lines) < 2:
+            return None
+        # Last non-empty, non-"." value
+        for line in reversed(lines):
+            parts = line.split(",")
+            if len(parts) >= 2 and parts[1].strip() not in ("", "."):
+                return {"date": parts[0], "value": float(parts[1])}
+        return None
+    except Exception:
+        return None
+
+
+def _fetch_wb_indicator(country: str, indicator: str) -> dict | None:
+    """World Bank APIから直近値を取得。"""
+    try:
+        url = (
+            f"https://api.worldbank.org/v2/country/{country}"
+            f"/indicator/{indicator}?date=2020:2026&format=json&per_page=10"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "baku/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        if len(data) < 2 or not data[1]:
+            return None
+        for entry in data[1]:
+            if entry.get("value") is not None:
+                return {"date": entry["date"], "value": entry["value"],
+                        "country": entry["country"]["value"]}
+        return None
+    except Exception:
+        return None
+
+
+def finance_deepdive(dreams: list[dict]) -> list[dict]:
+    """Finance系の夢に対してFRED/World Bankデータで自動検証。
+
+    Returns list of enriched dream dicts with 'deepdive' field added.
+    """
+    finance_dreams = [
+        d for d in dreams
+        if d.get("domain") in FINANCE_DOMAINS
+        and d.get("status") == "interpreted"
+        and d.get("interpretation", {}).get("action") in ("archive", "investigate")
+    ]
+
+    if not finance_dreams:
+        return []
+
+    print(f"獏: Finance深堀り開始 ({len(finance_dreams)}件)...")
+
+    # Grab current market snapshot
+    snapshot = {}
+    for sid, label in FINANCE_FRED_SERIES.items():
+        val = _fetch_fred_latest(sid)
+        if val:
+            snapshot[label] = val
+
+    # Key WB indicators for ASEAN + Nepal
+    wb_data = {}
+    for country in ["THA", "VNM", "PHL", "MYS", "NPL", "JPN"]:
+        for indicator, label in [
+            ("NY.GDP.MKTP.KD.ZG", "GDP Growth"),
+            ("SP.POP.GROW", "Pop Growth"),
+            ("NE.GDI.FTOT.ZS", "GFCF % GDP"),
+        ]:
+            val = _fetch_wb_indicator(country, indicator)
+            if val:
+                wb_data[f"{country}_{label}"] = val
+
+    enriched = []
+    for dream in finance_dreams:
+        query = dream.get("query", "")
+        interpretation = dream.get("interpretation", {})
+        insight = interpretation.get("insight", "")
+
+        # Build context for the dream
+        deepdive = {
+            "market_snapshot": {k: v for k, v in snapshot.items()},
+            "relevant_wb": {},
+            "auto_tags": [],
+            "verified_at": datetime.now().isoformat(),
+        }
+
+        # Tag matching: which market data is relevant to this dream?
+        q_lower = query.lower() + " " + insight.lower()
+        if any(w in q_lower for w in ["oil", "crude", "energy", "原油"]):
+            deepdive["auto_tags"].append("energy")
+        if any(w in q_lower for w in ["copper", "metal", "aluminum", "鉄鋼", "建材", "commodity"]):
+            deepdive["auto_tags"].append("commodities")
+        if any(w in q_lower for w in ["thailand", "タイ", "vietnam", "ベトナム", "asean", "southeast asia", "東南アジア"]):
+            deepdive["auto_tags"].append("asean")
+            for k, v in wb_data.items():
+                if any(c in k for c in ["THA", "VNM", "PHL", "MYS"]):
+                    deepdive["relevant_wb"][k] = v
+        if any(w in q_lower for w in ["nepal", "ネパール"]):
+            deepdive["auto_tags"].append("nepal")
+            for k, v in wb_data.items():
+                if "NPL" in k:
+                    deepdive["relevant_wb"][k] = v
+        if any(w in q_lower for w in ["japan", "日本", "jpn", "nikkei"]):
+            deepdive["auto_tags"].append("japan")
+            for k, v in wb_data.items():
+                if "JPN" in k:
+                    deepdive["relevant_wb"][k] = v
+        if any(w in q_lower for w in ["shipping", "freight", "port", "container", "港湾"]):
+            deepdive["auto_tags"].append("shipping")
+        if any(w in q_lower for w in ["infrastructure", "railway", "road", "インフラ", "鉄道"]):
+            deepdive["auto_tags"].append("infrastructure")
+
+        dream["deepdive"] = deepdive
+        enriched.append(dream)
+
+        tags_str = ", ".join(deepdive["auto_tags"]) if deepdive["auto_tags"] else "general"
+        print(f"  深堀り: [{tags_str}] {query[:60]}")
+
+    print(f"獏: Finance深堀り完了 — {len(enriched)}件にマーケットデータ付与")
+    return enriched
+
+
+def format_finance_report(enriched_dreams: list[dict]) -> str:
+    """深堀り結果を朝のレポート形式にフォーマット。"""
+    if not enriched_dreams:
+        return ""
+
+    lines = ["\n## 📊 Finance Deep Dive (自動検証)\n"]
+
+    # Market snapshot (from first dream's deepdive)
+    snapshot = enriched_dreams[0].get("deepdive", {}).get("market_snapshot", {})
+    if snapshot:
+        lines.append("### Market Snapshot")
+        for label, val in snapshot.items():
+            lines.append(f"- {label}: {val['value']:.2f} ({val['date']})")
+        lines.append("")
+
+    # Per-dream findings
+    for dream in enriched_dreams:
+        dd = dream.get("deepdive", {})
+        tags = dd.get("auto_tags", [])
+        query = dream.get("query", "")
+        insight = dream.get("interpretation", {}).get("insight", "")
+        lines.append(f"### [{', '.join(tags)}] {query[:80]}")
+        if insight:
+            lines.append(f"> {insight[:200]}")
+        wb = dd.get("relevant_wb", {})
+        if wb:
+            for k, v in wb.items():
+                lines.append(f"- {k}: {v['value']:.2f} ({v['date']})")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 # === クエリ生成 ===
@@ -673,17 +871,54 @@ def load_dreams_days(days: int = 7) -> list[dict]:
     return dreams
 
 
-def _post_reply(thread_id: str, body: str) -> bool:
-    """雑談板にレス投稿（botsu.reply.do_reply_add 直接呼び出し）"""
+def _post_reply(thread_id: str, body: str, board: str = "zatsudan") -> bool:
+    """指定板にレス投稿（botsu.reply.do_reply_add 直接呼び出し）"""
     try:
-        sys.path.insert(0, str(SCRIPT_DIR))
+        swarm_server = Path("/home/yasu/agent-swarm/server")
+        if str(swarm_server) not in sys.path:
+            sys.path.insert(0, str(swarm_server))
         from botsu.reply import do_reply_add
-        do_reply_add(thread_id, "zatsudan", "baku", body)
-        print(f"  獏: スレ投稿OK → {thread_id}")
+        do_reply_add(thread_id, board, "baku", body)
+        print(f"  獏: スレ投稿OK → {board}/{thread_id}")
         return True
     except Exception as e:
-        print(f"  WARN: スレ投稿エラー: {e}", file=sys.stderr)
+        print(f"  WARN: スレ投稿エラー({board}/{thread_id}): {e}", file=sys.stderr)
     return False
+
+
+def post_finance_report(enriched_dreams: list[dict]) -> bool:
+    """Finance深堀り結果を相場板に投稿。"""
+    today = datetime.now().strftime("%Y%m%d")
+    thread_id = f"finance_daily_{today}"
+
+    # Market snapshot
+    snapshot = enriched_dreams[0].get("deepdive", {}).get("market_snapshot", {}) if enriched_dreams else {}
+    lines = [f"【相場速報】{datetime.now().strftime('%Y-%m-%d %H:%M')}", ""]
+    if snapshot:
+        lines.append("■ Market Snapshot")
+        for label, val in snapshot.items():
+            lines.append(f"  {label}: {val['value']:.2f} ({val['date']})")
+        lines.append("")
+
+    lines.append(f"■ Finance深堀り ({len(enriched_dreams)}件)")
+    for dream in enriched_dreams:
+        dd = dream.get("deepdive", {})
+        tags = dd.get("auto_tags", [])
+        query = dream.get("query", "")
+        insight = dream.get("interpretation", {}).get("insight", "")
+        lines.append(f"  [{', '.join(tags)}] {query[:60]}")
+        if insight:
+            lines.append(f"    → {insight[:150]}")
+
+    body = "\n".join(lines)
+    return _post_reply(thread_id, body, board="finance")
+
+
+def post_risk_alert(risk_text: str) -> bool:
+    """daily_risk.pyの結果を相場板に速報投稿。"""
+    today = datetime.now().strftime("%Y%m%d")
+    thread_id = f"risk_alert_{today}"
+    return _post_reply(thread_id, risk_text, board="finance")
 
 
 def generate_digest(days: int = 7) -> int:
@@ -963,9 +1198,27 @@ if __name__ == "__main__":
                         help="まとめスレ生成（2ch雑談板に投稿）")
     parser.add_argument("--days", type=int, default=7,
                         help="ダイジェスト対象日数（デフォルト=7）")
+    parser.add_argument("--finance-dive", action="store_true",
+                        help="Finance系の夢を自動深堀り（FRED/World Bank検証）")
     args = parser.parse_args()
 
-    if args.digest:
+    if args.finance_dive:
+        hours = args.days * 24
+        all_dreams = load_recent_dreams(hours=hours)
+        enriched = finance_deepdive(all_dreams)
+        if enriched:
+            report = format_finance_report(enriched)
+            print(report)
+            report_path = PROJECT_ROOT / "data" / "finance_deepdive.md"
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(f"# Finance Deep Dive — {datetime.now().strftime('%Y-%m-%d')}\n")
+                f.write(report)
+            print(f"\nレポート保存: {report_path}")
+            # 相場板に投稿
+            post_finance_report(enriched)
+        else:
+            print("獏: Finance系の深堀り対象なし")
+    elif args.digest:
         posted = generate_digest(days=args.days)
         print(f"ダイジェスト結果: {posted}レス投稿")
     elif args.summary:

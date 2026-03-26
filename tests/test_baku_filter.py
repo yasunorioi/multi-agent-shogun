@@ -172,6 +172,7 @@ def test_dream_once_low_delta_on_hash_match(tmp_path, monkeypatch):
 
     queries = [{"domain": "test", "query": "test query stable", "relevance_score": 50, "matched_keywords": []}]
     monkeypatch.setattr(baku, "generate_dream_queries", lambda kw: queries)
+    monkeypatch.setattr(baku, "search_rss_sources", lambda: [])  # RSS巡回なし
 
     import time as time_mod
     monkeypatch.setattr(time_mod, "sleep", lambda s: None)
@@ -179,10 +180,12 @@ def test_dream_once_low_delta_on_hash_match(tmp_path, monkeypatch):
     # 1回目: 初回 → interpreted（hash記録）
     baku.dream_once()
     dreams1 = [json.loads(l) for l in (tmp_path / "dreams.jsonl").read_text().strip().splitlines()]
-    assert dreams1[-1]["status"] == "interpreted"
+    ddg_entries1 = [d for d in dreams1 if not d.get("source", "").startswith("rss_")]
+    assert ddg_entries1[-1]["status"] == "interpreted"
 
     # 2回目: 同一結果 → hash一致 → low_delta
     baku.dream_once()
     dreams2 = [json.loads(l) for l in (tmp_path / "dreams.jsonl").read_text().strip().splitlines()]
-    assert dreams2[-1]["status"] == "low_delta"
-    assert dreams2[-1]["delta_score"] == 0.0
+    ddg_entries2 = [d for d in dreams2 if not d.get("source", "").startswith("rss_")]
+    assert ddg_entries2[-1]["status"] == "low_delta"
+    assert ddg_entries2[-1]["delta_score"] == 0.0

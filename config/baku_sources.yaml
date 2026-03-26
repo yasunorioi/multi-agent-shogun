@@ -1,0 +1,14 @@
+# 獏(baku.py)仕入れ先設定
+# type: sitemap = Google Newsサイトマップ形式(xml.etree.ElementTree)
+#        rss     = 標準RSS/Atom形式(feedparser)
+# check_youtube: 記事内YouTube URLを検出して字幕要約するか
+
+sources:
+  - name: toushiru
+    display_name: "トウシル（楽天証券）"
+    url: "https://media.rakuten-sec.net/list/feed/rss4googlenews"
+    type: sitemap
+    category: market
+    enabled: true
+    check_youtube: true
+    max_items: 5

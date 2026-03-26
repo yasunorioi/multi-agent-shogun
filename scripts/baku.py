@@ -26,9 +26,22 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+
+try:
+    import feedparser as _feedparser  # noqa: F401（将来の標準RSS対応用）
+    _HAS_FEEDPARSER = True
+except ImportError:
+    _HAS_FEEDPARSER = False
+
+try:
+    import yaml as _yaml
+    _HAS_YAML = True
+except ImportError:
+    _HAS_YAML = False
 
 # === 設定 ===
 
@@ -43,6 +56,11 @@ DEFAULT_INTERVAL = 3600  # 1時間
 MAX_SEARCHES_PER_RUN = 5
 SUMMARY_HOUR = 7  # 朝7時にサマリ生成
 DIGEST_DAY = 0  # 月曜にダイジェスト生成 (0=月, 6=日)
+
+# === RSS仕入れ先設定 ===
+RSS_SOURCES_PATH = PROJECT_ROOT / "config" / "baku_sources.yaml"
+RSS_MAX_ITEMS_DEFAULT = 5
+YOUTUBE_URL_RE = re.compile(r"https?://(?:www\.)?(?:youtube\.com/watch\?[^\s\"<>]*v=|youtu\.be/)[\w-]+")
 
 # === ラプラシアンフィルタ設定 ===
 CONTENT_HASH_PATH = PROJECT_ROOT / "data" / "baku_content_hash.json"
@@ -286,6 +304,148 @@ def search_kousatsu(query: str) -> str | None:
     except subprocess.TimeoutExpired:
         pass
     return None
+
+
+# === RSS仕入れ（Phase 2: トウシル等外部情報ソース） ===
+
+
+def _load_rss_sources() -> list[dict]:
+    """config/baku_sources.yaml からRSS仕入れ先を読み込む。
+
+    yaml未インストール or ファイル不存在時は空リストを返す。
+    """
+    if not RSS_SOURCES_PATH.exists():
+        return []
+    if not _HAS_YAML:
+        # yaml未インストール: 手動で最小パース（key: valueのみ対応）
+        # 本番では pip install pyyaml 推奨
+        return []
+    with open(RSS_SOURCES_PATH, encoding="utf-8") as f:
+        config = _yaml.safe_load(f)
+    return config.get("sources", []) if config else []
+
+
+def _parse_sitemap_xml(xml_text: str, max_items: int = RSS_MAX_ITEMS_DEFAULT) -> list[dict]:
+    """Google Newsサイトマップ形式XMLをパースして記事リストを返す。
+
+    Args:
+        xml_text: サイトマップXML全文
+        max_items: 最大取得件数
+
+    Returns:
+        [{"title": "...", "url": "...", "published": "...", "summary": ""}]
+    """
+    NS = {
+        "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+        "news": "http://www.google.com/schemas/sitemap-news/0.9",
+    }
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    items = []
+    for url_elem in root.findall("sm:url", NS)[:max_items]:
+        loc = url_elem.findtext("sm:loc", default="", namespaces=NS)
+        news_elem = url_elem.find("news:news", NS)
+        if news_elem is None:
+            continue
+        title = news_elem.findtext("news:title", default="", namespaces=NS)
+        pub_date = news_elem.findtext("news:publication_date", default="", namespaces=NS)
+        keywords = news_elem.findtext("news:keywords", default="", namespaces=NS)
+        items.append({
+            "title": title,
+            "url": loc,
+            "published": pub_date,
+            "summary": keywords,  # サイトマップにはsummaryがないのでkeywordsで代替
+        })
+    return items
+
+
+def _fetch_rss_source(source: dict) -> list[dict]:
+    """単一RSS仕入れ先から記事を取得する。
+
+    source["type"]に応じてsitemap/RSS形式を自動判別する。
+
+    Args:
+        source: config/baku_sources.yaml の1エントリ
+
+    Returns:
+        記事リスト。取得失敗時は空リスト。
+    """
+    url = source.get("url", "")
+    max_items = source.get("max_items", RSS_MAX_ITEMS_DEFAULT)
+    src_type = source.get("type", "rss")
+
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"  WARN: RSS取得失敗 {url}: {e}", file=sys.stderr)
+        return []
+
+    if src_type == "sitemap":
+        return _parse_sitemap_xml(raw, max_items)
+
+    # type=rss: feedparserで処理
+    if not _HAS_FEEDPARSER:
+        return []
+    import feedparser  # noqa: PLC0415
+    d = feedparser.parse(raw)
+    items = []
+    for entry in d.entries[:max_items]:
+        items.append({
+            "title": entry.get("title", ""),
+            "url": entry.get("link", ""),
+            "published": entry.get("published", ""),
+            "summary": entry.get("summary", "")[:300],
+        })
+    return items
+
+
+def search_rss_sources(max_items: int = RSS_MAX_ITEMS_DEFAULT) -> list[dict]:
+    """全RSS仕入れ先を巡回して記事リストを返す。
+
+    baku_sources.yaml に enabled: true のソースのみ対象。
+    check_youtube: true のソースはYouTube URLを検出して字幕要約フィールドを追加。
+
+    Returns:
+        [{"title", "url", "published", "summary", "source_name",
+          "video_summary"(あれば)}, ...]
+    """
+    sources = _load_rss_sources()
+    results = []
+
+    for source in sources:
+        if not source.get("enabled", True):
+            continue
+        name = source.get("name", "unknown")
+        print(f"  [RSS] {name} 仕入れ中...")
+        articles = _fetch_rss_source(source)
+
+        for article in articles:
+            article["source_name"] = name
+
+            # YouTube URL検出 → 字幕要約
+            if source.get("check_youtube", False):
+                combined_text = article.get("title", "") + " " + article.get("url", "")
+                yt_match = YOUTUBE_URL_RE.search(combined_text)
+                if yt_match:
+                    yt_url = yt_match.group(0)
+                    try:
+                        sys.path.insert(0, str(SCRIPT_DIR))
+                        from youtube_summarizer import summarize_video  # noqa: PLC0415
+                        yt_result = summarize_video(yt_url)
+                        article["video_summary"] = yt_result.get("summary", "")
+                    except Exception as e:
+                        print(f"  WARN: YouTube要約失敗: {e}", file=sys.stderr)
+                        article["video_summary"] = ""
+
+            results.append(article)
+
+        time.sleep(1)  # ソース間のrate limit対策
+
+    return results
 
 
 # === 夢解釈 ===
@@ -1066,17 +1226,17 @@ def dream_once(manual_topic: str | None = None) -> int:
     queries = [q for q in queries if q["query"] not in recent_queries]
 
     if not queries:
-        print("直近6時間と同じ夢は見ない。スキップ。")
-        return 0
-
-    print(f"今回の夢 ({len(queries)}件):")
-    for i, q in enumerate(queries, 1):
-        print(f"  {i}. [{q['domain']}] {q['query']} (relevance: {q['relevance_score']})")
+        print("直近6時間と同じ夢は見ない。DDG検索スキップ。RSS巡回は続行。")
 
     dreams_found = []
     context_snippet = get_recent_cmd_summary() if HAIKU_API_KEY else ""
     # フック点A・B用: Content Hashをロード（ループ外で1回）
     content_hashes = load_content_hashes()
+
+    if queries:
+        print(f"今回の夢 ({len(queries)}件):")
+        for i, q in enumerate(queries, 1):
+            print(f"  {i}. [{q['domain']}] {q['query']} (relevance: {q['relevance_score']})")
 
     for q in queries:
         print(f"  夢見中: {q['query']}...")
@@ -1144,6 +1304,38 @@ def dream_once(manual_topic: str | None = None) -> int:
             print("    → 夢なし")
 
     # フック点A後処理: 更新されたContent Hashを保存
+    save_content_hashes(content_hashes)
+
+    # RSS仕入れ: baku_sources.yaml のソースを巡回
+    rss_articles = search_rss_sources()
+    for article in rss_articles:
+        article_url = article.get("url", "")
+        # Content Hash Filter: 同一URLは重複スキップ
+        combined = article.get("title", "") + article.get("summary", "")
+        skip_rss, rss_delta = check_content_hash(
+            f"rss:{article_url}", combined, content_hashes
+        )
+        rss_entry = {
+            "dreamt_at": now.isoformat(),
+            "domain": "market",
+            "query": article.get("title", ""),
+            "relevance_score": 0,
+            "matched_keywords": [],
+            "internal_result": None,
+            "external_result": article.get("summary", "")[:500] or None,
+            "delta_score": round(rss_delta, 4),
+            "status": "low_delta" if (skip_rss or rss_delta < DELTA_LOW_THRESHOLD) else "raw",
+            "source": f"rss_{article.get('source_name', 'unknown')}",
+            "source_url": article_url,
+            "source_title": article.get("title", ""),
+            "source_published": article.get("published", ""),
+        }
+        if article.get("video_summary"):
+            rss_entry["video_summary"] = article["video_summary"]
+        save_dream(rss_entry)
+        dreams_found.append(rss_entry)
+
+    # content_hashes更新（RSSのhashも含む）
     save_content_hashes(content_hashes)
 
     found = sum(1 for d in dreams_found if d["external_result"] or d["internal_result"])

@@ -792,7 +792,75 @@ class DatHandler(BaseHTTPRequestHandler):
             self.send_cp932(content)
             return
 
+        # /docs/ 静的ファイル配信
+        if parts and parts[0] == "docs":
+            self._serve_docs(parts[1:])
+            return
+
         self.send_cp932("404 Not Found\n", status=404)
+
+    def _serve_docs(self, sub_parts: list[str]) -> None:
+        """PROJECT_ROOT/docs/ 配下の静的ファイルを配信。"""
+        # パストラバーサル防止: ".." を含む部分は拒否
+        if any(p == ".." or p == "." for p in sub_parts):
+            self._send_utf8("403 Forbidden\n", "text/plain; charset=utf-8", 403)
+            return
+
+        docs_root = PROJECT_ROOT / "docs"
+        target = docs_root.joinpath(*sub_parts) if sub_parts else docs_root
+
+        # パストラバーサル防止: resolvedパスがdocs_root外なら拒否
+        try:
+            target.resolve().relative_to(docs_root.resolve())
+        except ValueError:
+            self._send_utf8("403 Forbidden\n", "text/plain; charset=utf-8", 403)
+            return
+
+        if not target.exists():
+            self._send_utf8("404 Not Found\n", "text/plain; charset=utf-8", 404)
+            return
+
+        if target.is_dir():
+            # ディレクトリ: ファイル一覧HTML
+            rel = target.relative_to(docs_root)
+            rel_str = str(rel) if str(rel) != "." else ""
+            prefix = f"/docs/{rel_str}/" if rel_str else "/docs/"
+            items = sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name))
+            lines = [
+                "<html><head><meta charset='utf-8'></head><body>",
+                f"<h2>docs/{rel_str}</h2><ul>",
+            ]
+            if rel_str:
+                parent = "/".join(prefix.rstrip("/").split("/")[:-1]) + "/"
+                lines.append(f"<li><a href='{parent}'>..</a></li>")
+            for item in items:
+                link = prefix + item.name + ("/" if item.is_dir() else "")
+                lines.append(f"<li><a href='{link}'>{item.name}{'/' if item.is_dir() else ''}</a></li>")
+            lines += ["</ul></body></html>"]
+            self._send_utf8("\n".join(lines), "text/html; charset=utf-8")
+            return
+
+        # ファイル配信
+        suffix = target.suffix.lower()
+        if suffix in (".html", ".htm"):
+            content_type = "text/html; charset=utf-8"
+        else:
+            content_type = "text/plain; charset=utf-8"
+
+        try:
+            text = target.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            self._send_utf8(f"500 Error: {e}\n", "text/plain; charset=utf-8", 500)
+            return
+        self._send_utf8(text, content_type)
+
+    def _send_utf8(self, text: str, content_type: str = "text/plain; charset=utf-8", status: int = 200) -> None:
+        data = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
 
 # ---------------------------------------------------------------------------
@@ -809,6 +877,7 @@ def main() -> None:
     print(f"DATサーバー起動: http://localhost:{args.port}{BASE_PATH}/")
     print(f"JDim外部板URL:   http://localhost:{args.port}{BASE_PATH}/")
     print(f"bbsmenu:         http://localhost:{args.port}{BASE_PATH}/bbsmenu.html")
+    print(f"docsルート:      http://localhost:{args.port}/docs/  ({PROJECT_ROOT / 'docs'})")
     print("Ctrl+C で停止")
     try:
         server.serve_forever()

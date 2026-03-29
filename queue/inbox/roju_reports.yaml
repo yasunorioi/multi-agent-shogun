@@ -1,4 +1,582 @@
 reports:
+- subtask_id: subtask_1027
+  cmd_id: cmd_463
+  worker: ashigaru1
+  status: completed
+  completed_at: '2026-03-28T17:00:00'
+  commit: 5570989
+  read: true
+  summary: |
+    Phase 3完了。packaging/(deb/rpm/opkg)+.github/workflows/(ci.yml+release.yml)+Makefile。
+    タグpush→4アーキ静的バイナリ+deb/rpm/ipkがGitHub Releasesに並ぶ設計。
+    make package-deb/opkgローカル動作確認済み(amd64 684KB、mipsel_24kc 858KB)。
+    zig build test 79/79 PASS。push済み(5570989)。
+- audit_triggered: true
+  cmd_id: cmd_463
+  detail_ref: python3 scripts/botsunichiroku.py search report#958
+  needs_audit: true
+  notes: BKGクレジット全ファイル記載確認済み。packaging/+.github/は未変更（衝突なし）。
+  read: true
+  reported_at: '2026-03-28T14:56:03'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1028
+  summary: 'ntripcaster Phase 4: 5ファイル完成 (README+LICENSE+CHANGELOG+legacy/README+docs/ARCHITECTURE)
+    push済み (90d789c)'
+  worker: ashigaru2
+- cmd_id: cmd_463
+  commit: ffababe
+  completed_at: '2026-03-28T16:30:00'
+  read: true
+  status: completed
+  subtask_id: subtask_1026
+  summary: 'Phase 2d完了。use-after-free修正(client_count atomic)、相互運用テスト11/11 PASS、
+
+    クロスコンパイル確認(aarch64-linux-musl/x86_64-linux-musl)、legacy/README.md、
+
+    ntripcaster.service(Zig版)追加。zig build test 79/79 PASS。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_463
+  committed: dda5b3d
+  read: true
+  status: completed
+  subtask_id: subtask_1025
+  summary: 'Phase 2c完了。server.zig/source.zig/client.zig/main.zig実装。
+
+    zig build test: 79/79 PASS (unit 71 + integration 8)
+
+    zig build test-integration: 8/8 PASS
+
+    ./zig-out/bin/ntripcaster -c conf/ntripcaster.conf → port 2101 listen確認
+
+    核心バグ修正: Linux close-while-blocking問題 → shutdown()前にposix.shutdown(.both)追加
+
+    client.zig: getSource()をauth前に移動 → 未知マウント404/認証失敗401を正確に分離
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_463
+  read: true
+  result: "Phase 2b 完了。commit 408c2ec, git push済み。\n新規4ファイル作成:\n  src/ntrip/protocol.zig\
+    \  — NtripRequest union, parseRequest(), isNtripAgent()\n  src/ntrip/sourcetable.zig\
+    \ — SOURCETABLE 200 OK生成, readFile()\n  src/relay/engine.zig    — RingBuffer (CHUNK_SIZE=4096,\
+    \ NUM_CHUNKS=64, Mutex)\n  src/log.zig             — Logger (file+stderr, info/warn/err,\
+    \ timestamp)\nテスト: Phase 2a 31 + Phase 2b 38 = 計69テスト全PASS\nzig build test EXIT:0\
+    \ 確認済み\n"
+  status: completed
+  subtask_id: subtask_1024
+  worker: ashigaru1
+- cmd_id: cmd_463
+  detail_ref: python3 scripts/botsunichiroku.py search report#957
+  findings:
+  - 'build.zig: standardTargetOptions/Optimize, exe(src/main.zig,no libc), テストモジュール(src/lib.zig経由),
+    zig build -Dtarget=aarch64-linux-muslでクロスコンパイル可能'
+  - 'src/config/parser.zig: ntripcaster.conf 100%後方互換パーサー。Config/MountAuth/User型。ArenaAllocator対応。未知キー無視(前方互換)。原典conf.dist実パース確認'
+  - 'src/auth/basic.zig: decodeBase64(std.base64.standard.Decoder), Credentials名前付き型,
+    extractCredentials, authenticateClient/Source。外部依存ゼロ'
+  - 'src/main.zig: -c/-h CLIオプション, 設定読み込み+バナー表示。サーバー起動はPhase 2c'
+  - 'tests/: 31テスト全PASS。test_config(12): defaults/mounts/comments/conf.dist実パース。test_auth(19):
+    base64/parseCredentials/extractCredentials/authenticateClient(open/closed/unknown)/authenticateSource'
+  - 'zig build test: EXIT:0。zig build + ./zig-out/bin/ntripcaster -c conf/ntripcaster.conf:
+    正常動作確認'
+  - 'git push origin master: 2f2d468..d730d7c 成功'
+  - 'Zig 0.14.0モジュールパス制約: src/lib.zig経由モジュール公開で解決'
+  - ⚠️ 本番VPS(153.127.46.167)に接続せず
+  read: true
+  reported_at: '2026-03-28T14:30:00'
+  status: completed
+  subtask_id: subtask_1023
+  summary: ntripcaster Zigリライト Phase 2a完了。build.zig+config/parser.zig+auth/basic.zig+main.zig
+    stub。31テスト全PASS。git push済み(d730d7c)。
+  worker: ashigaru1
+- cmd_id: cmd_463
+  detail_ref: docs/shogun/ntripcaster_zig_design.md
+  read: true
+  reported_at: '2026-03-28T12:30:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1022
+  summary: 'ntripcaster Zigリライト Phase 1 完了。設計書: docs/shogun/ntripcaster_zig_design.md（§1-§9）。
+
+    【原典読解】14ファイル/10,464行の全機能をリスト化（Icecast 1.3.12ベース、1接続1スレッド、
+
+    リングバッファ64スロット、select()多重化、6重mutex、AVLツリー全コンテナ）。
+
+    【プロトコル】NTRIP v1(ICY)の完全仕様+v2(HTTP/1.1 chunked)との差分整理。
+
+    BKG実装の4つの差異指摘（RTCM3フレーム同期がMP3同期のまま等）。
+
+    【Zig設計】9モジュール構成（推定2,000-2,500行、C比25%）。std.net+ThreadPool、
+
+    外部依存ゼロ、クロスコンパイル5ターゲット。build.zig設計済み。
+
+    【分解】Phase 2を4 subtask(1022a-d)に分解。wave 1-5のシリアル設計。
+
+    PDCA必要（RTKLIB str2sr相互運用テストで互換性検証ループ）。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_461
+  detail_ref: python3 scripts/botsunichiroku.py search report#956
+  findings:
+  - 'Commit 1 (service+conf): ntripcaster.service改修(After=network-online.target, User=ntripcaster,
+    EnvironmentFile, NoNewPrivileges, Restart=on-failure)。conf/ntripcaster.conf.example新規作成(コメント付き全設定項目説明、オープンRTK方針反映)'
+  - 'Commit 2 (install): configure.in --with-systemdunitdir追加。Makefile.am install-data-local:
+    logs/service/conf全インストール。conf/Makefile.am: 既存ファイル上書き防止(idempotent install)'
+  - 'Commit 3 (README): 全面改訂。autoreconf手順・configure options・make install出力マップ・systemd手順(useradd/chown/daemon-reload/enable/start/journalctl)・Alpine
+    muslビルド手順'
+  - 'git push origin master: ee4ea9c..2f2d468 → 成功'
+  - ⚠️ 本番VPS(153.127.46.167)に接続せず。ローカル作業のみ
+  read: true
+  reported_at: '2026-03-28T01:55:00'
+  status: completed
+  subtask_id: subtask_1021
+  summary: ntripcaster systemd service化+パッケージ整備完了。3 commit + git push済み。
+  worker: ashigaru1
+- cmd_id: cmd_459
+  detail_ref: git -C ~/ntripcaster log --oneline -3
+  findings:
+  - 'Commit 1 (build): autoreconf -fi対応。AM_CONFIG_HEADER→AC_CONFIG_HEADERS、obsolete
+    macro除去(AC_AIX/ISC_POSIX/MINIX/TYPE_SIGNAL/RETSIGTYPE/FUNC_STRFTIME)、NTRIPCASTER_ETCDIR/LOGDIRのAC_DEFINE
+    description追加、src/Makefile.am INCLUDES→AM_CPPFLAGS'
+  - 'Commit 2 (config-path): ntripcaster.h DEFAULT_ETC_DIR/LOG_DIRを''.''から''NTRIPCASTER_ETCDIR/LOGDIR''(=''conf''/''logs'')に変更。client.c
+    fopen(''../conf/sourcetable.dat'')→info.etcdir経由パスに変更'
+  - 'Commit 3 (musl): main.c ''extern int errno;''削除(musl errno=thread-local macro)。definitions.h
+    __USE_GNU/__USE_MISC/__USE_BSD削除(_GNU_SOURCEのみ残存)。source.c ''int true''変数→''int
+    found''リネーム(stdbool.h衝突回避)'
+  - 'Alpine Docker musl build: エラーなし。依存: libc.musl-x86_64.so.1のみ。起動テスト: ''No configfile
+    found, using defaults.''→正常動作'
+  - push未実施（GitHub認証必要）。殿フォーク https://github.com/yasunorioi/ntripcaster master branch
+  - ⚠️ 本番VPS(153.127.46.167)には一切接続せず。ローカル作業のみ
+  read: true
+  reported_at: '2026-03-28T01:22:00'
+  status: completed
+  subtask_id: subtask_1020
+  summary: ntripcasterフォーク修正完了。ビルド+configパス+musl互換の3点を3 commitで実装。Alpine Docker muslビルド+起動確認済み。
+  worker: ashigaru1
+- cmd_id: cmd_457
+  detail_ref: python3 scripts/botsunichiroku.py search report#955
+  findings:
+  - WATCH_COMPANIES 15社・CLUB_INDICATORS 9種・IndicatorResult/DrillResult NamedTuple
+  - _api_request()・fetch_financials()（日次キャッシュ data/edinetdb_cache/）
+  - classify_flag()±20%閾値・_check_red_signal()複合赤信号（CF CRASH+在庫SPIKE+IBD SPIKE）
+  - drill_companies()API上限30回管理+急変>6社で±30%自動緩和
+  - format_report()・post_to_finance_board()（finance板投稿）
+  - pytest 44テスト全合格（全テストmock）
+  - git commit 2e0e010 (systrade main)
+  read: true
+  reported_at: '2026-03-27T09:10:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1018
+  summary: edinetdb_drill.py新規作成完了。棍棒指標9種・監視15社・日次キャッシュ・複合赤信号・finance板投稿。44テスト全合格。
+  worker: ashigaru1
+- cmd_id: cmd_458
+  detail_ref: python3 scripts/botsunichiroku.py search report#954
+  notes: docs/shogun/はgitignore対象。殿がMBPに直接コピー適用。
+  read: true
+  reported_at: '2026-03-27T08:44:54'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1019
+  summary: rotation-planner-ios iMessage通知基盤4ファイル生成→docs/shogun/imessage_notification/
+  worker: ashigaru2
+- cmd_id: cmd_457
+  detail_ref: python3 scripts/botsunichiroku.py search report#953
+  notes: '3ファイルともgitignore対象でコミット不可（ローカル設定・内部文書ポリシー）。
+
+    殿アクション: source ~/.bashrc → Claude Code再起動 でMCP有効化。
+
+    '
+  read: true
+  reported_at: '2026-03-27T08:42:20'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1017
+  summary: EDINET DB MCP設定+APIキー取得手順書作成（3成果物）
+  worker: ashigaru2
+- cmd_id: cmd_457
+  detail_ref: python3 scripts/botsunichiroku.py search report#952
+  findings:
+  - '6ステップ: ラベル確認→監視15社→棍棒9種API取得→YoY±20%急変フラグ→大株主5%超→finance板投稿'
+  - '棍棒9種APIマッピング: cf_operating,capex,fcf算出,inventories,ppe,ibd合算,de_ratio算出,equity_ratio_official,roe_official'
+  - 'API仕様実機確認済: financials(84フィールド最大6年),shareholders(2021年3月〜5%超),Free枠100回/日→本スキル30回消費'
+  - 'risk-alertカスケード: マクロCAUTION/DANGER→ミクロ深掘り発火'
+  - commit 7481c2b。push不可(systradeリポremote未設定)
+  read: true
+  reported_at: '2026-03-27T08:22:43'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1016
+  summary: skills/edinetdb_drill/SKILL.md新規作成(276行)。棍棒指標9種APIマッピング+監視15社+急変±20%+大株主検出。commit
+    7481c2b
+  worker: ashigaru6
+- cmd_id: cmd_457
+  detail_ref: docs/shogun/edinetdb_survey.md
+  read: true
+  reported_at: '2026-03-27T02:45:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1015
+  summary: 'EDINET DB技術調査+systrade統合設計完了。分析書: docs/shogun/edinetdb_survey.md（§1-§7）。
+
+    【主要所見】
+
+    ・EDINET DB = 3,847社×84フィールド×6年分。Free枠100回/日で月額¥0維持可能。
+
+    ・MCP 22ツール（get_financials/screen_companies/get_shareholders等）。
+
+    ・統合設計: daily_risk.py(マクロ)→edinetdb_drill.py(ミクロ)の二段リスク判定。
+
+    ・「棍棒で殴れる」指標Tier分類: CF/設備投資/棚卸資産がTier 1。
+
+    ・大株主データ→スマートマネーシグナル（殿のInversion原則に直結）。
+
+    ・decompose: 3件(MCP設定/drill.py実装/SKILL.md)をgunshi_analysis.yamlに出力済み。
+
+    【注意】subtask_1015aは殿のAPIキー取得操作が前提。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_456
+  detail_ref: curl -s localhost:8080/reports/951
+  findings:
+  - トウシルRSSは/feedではなく/list/feed/rss4googlenews（Google Newsサイトマップ形式）
+  - feedparserはsitemap XMLをentries=0で返す（非対応）。xml.etree.ElementTreeで対処
+  - queriesが空でもRSSは巡回できるようdream_once()早期returnを修正
+  read: true
+  reported_at: '2026-03-27T02:45:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1014
+  summary: トウシルRSS仕入れ+baku.py統合完了。feedparser導入+Google Newsサイトマップ対応。config/baku_sources.yaml仕入れ先config化。tests
+    47件全合格。commit db62e61, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_456
+  detail_ref: curl -s localhost:8080/reports/950
+  read: true
+  reported_at: '2026-03-27T02:10:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1013
+  summary: YouTube字幕要約汎用モジュール新規作成完了。get_subtitles()+_parse_vtt()+summarize_transcript()+summarize_video()+CLI。tests
+    23件全合格。commit f710147, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_455
+  detail_ref: curl -s localhost:8080/reports/949
+  read: true
+  reported_at: '2026-03-27T01:22:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1012
+  summary: 獏Phase 1噛み砕きループ実装完了。should_chew()+chew_loop()+_haiku_chew_judge()。dream_once()フック点C挿入。tests
+    31件全合格。commit 3709574, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_455
+  detail_ref: curl -s localhost:8080/reports/948
+  read: true
+  reported_at: '2026-03-27T01:18:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1011
+  summary: 獏Phase 0ラプラシアンフィルタ実装完了。Content Hash Filter(Stage1)+Delta Score Filter(Stage2)二段フィルタ。tests/test_baku_filter.py
+    17テスト全合格。baku --once動作確認済み。commit 78dbb00, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_455
+  detail_ref: docs/shogun/baku_laplacian_design.md
+  read: true
+  reported_at: '2026-03-27T01:30:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1010
+  summary: '獏(baku.py)改修設計完了。分析書: docs/shogun/baku_laplacian_design.md（§1-§8）。
+
+    ラプラシアンフィルタ二段設計（Content Hash + Delta Score）、
+
+    噛み砕きループ（Dexter自己検証パターン適用、max_iter=3、収束判定3条件）、
+
+    出力設計（dreams.jsonlにchew_result追記、案A推奨）、
+
+    systrade共通パターン（共通モジュール化は非推奨、設計哲学のみ共有）。
+
+    Phase 0→1→2の段階ロードマップ付き。subtask分解2件をgunshi_analysis.yamlに出力済み。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_450
+  detail_ref: curl -s localhost:8080/reports/947
+  read: true
+  reported_at: '2026-03-27T00:53:09'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1009
+  summary: ashigaru.md feature-dev軽量モード（P2必須）セクション追記（worktreeモード直後に配置）
+  worker: ashigaru2
+- cmd_id: cmd_453
+  detail_ref: curl -s localhost:8080/reports/946
+  read: true
+  reported_at: '2026-03-27T00:38:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1007
+  summary: dat_server.py /docs/静的配信エンドポイント追加完了。パストラバーサル2段階防止+ディレクトリリスティング+UTF-8ファイル配信実装。curl全テスト合格。commit
+    7af5f17, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_453
+  detail_ref: curl -s localhost:8080/reports/945
+  read: true
+  reported_at: '2026-03-27T00:33:58'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1008
+  summary: karo/ashigaru/gunshi.md に長文投稿規約セクション追記（3ファイル各10行）
+  worker: ashigaru2
+- cmd_id: cmd_452
+  deliverables:
+  - docs/shogun/docker_design_survey.md（調査書§0-§8）
+  read: true
+  reported_at: '2026-03-27T00:17:56'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1006
+  summary: 'Docker化設計調査完了（殿の3拠点方針addendum反映済み）。
+
+    §1: 3構成案比較→案B(セッション単位)を現実解、案C(HTTP完全分離)を将来解と判定。
+
+    §2: 技術障壁4分野を洗い出し。Memory MCP捨て可、tmux依存はswarm Phase 2で解消。
+
+    §3: 3段階移行ロードマップ。Phase 0(Dockerfile試作)は即着手可能。
+
+    §4: RPi/VPS展開設計。RPiはClaude Code不要→Pythonコンテナが適切。
+
+    §8(addendum): MBP=壁打ち/RPi=HW制御/VPS=放置運用の3拠点Docker化設計。
+
+    VPSの自己回復(restart+healthcheck)はswarm Phase 2を待たず実現可能と判断変更。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_451
+  detail_ref: curl -s localhost:8080/reports/944
+  findings:
+  - '追記: ## 殿の投資原則(SOUL) — Core Drivers 5項目/Inversion/Circle of Competence'
+  - 既存セクション(哲学/鉄則)変更なし
+  - commit e42c727 in /home/yasu/systrade/
+  - push不可(remote未設定)は既知
+  read: true
+  reported_at: '2026-03-27T00:18:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1005
+  summary: systrade CLAUDE.md SOULセクション追記完了。commit e42c727。既存セクション変更なし。
+  worker: ashigaru1
+- cmd_id: cmd_451
+  detail_ref: python3 scripts/botsunichiroku.py search report#943
+  findings:
+  - '作成: /home/yasu/systrade/skills/risk_alert/SKILL.md (184行)'
+  - '8ステップ: FRED日次7→Shipping3→月次マクロ4→素材コスト4→シグナル→集計→ラベル→finance板投稿'
+  - 'Validation: 3大暴落2/3事前検出+誤報Precision。Assumptions: SCORE_WEIGHTS全8種+z-scoreパラメータ転記済'
+  - '注記: タスク指示の閾値とコード実装に差異あり(指示DANGER>=0.4 vs コードDANGER>=0.6)。コード準拠で記載'
+  - commit a75f984。push不可—systradeリポにgit remote未設定
+  read: true
+  reported_at: '2026-03-27T00:07:56'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1004
+  summary: skills/risk_alert/SKILL.md新規作成(184行)。8ステップ+Validation+Assumptions。commit
+    a75f984。push不可(リモート未設定)
+  worker: ashigaru6
+- cmd_id: cmd_448
+  detail_ref: curl -s localhost:8080/reports/942
+  findings:
+  - 'settings.json: 11パターン追加(date*/echo*/source*/cat*/head*/tail*/grep*/find*/unset*/.venv/bin/pytest*/git
+    -C*)。計47件'
+  - 'settings.local.json: allow=[]リセット。MCP設定維持'
+  - '動作確認: date/git -C 両コマンドOK'
+  - commit不要(設定ファイルgit管理外)
+  read: true
+  reported_at: '2026-03-27T00:10:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1002
+  summary: allowlist提案A実行完了。settings.json +11件(47件)、settings.local.json空配列リセット。動作確認OK。
+  worker: ashigaru1
+- cmd_id: cmd_451
+  detail_ref: curl -s localhost:8080/reports/941
+  notes: systradeリモート未設定のためpush不可。git remote add が必要。
+  read: true
+  reported_at: '2026-03-27T00:06:16'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1003
+  summary: Scratchpad JSONLモジュール新規作成（5テスト全PASS）+ daily_risk.pyにlog_entry追加
+  worker: ashigaru2
+- cmd_id: cmd_451
+  deliverables:
+  - docs/shogun/dexter_pattern_analysis.md（分析書§1-§8）
+  - queue/inbox/gunshi_analysis.yaml（分解案+predicted_outcome）
+  read: true
+  reported_at: '2026-03-27T00:02:29'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1001
+  summary: 'Dexterパターン分析+subtask分解完了。5案のトレードオフ比較を実施。
+
+    推奨: A(Scratchpad JSONL) + B(SKILL.md化) + D(SOUL.md強化)の3点を即座実装。
+
+    Phase 3(Dexter本体統合)は不要と判断。パターンだけ盗め、本体は要らない。
+
+    subtask 3件(1001a/b/c)をWave 1並列で投入可能。全ファイル衝突なし。
+
+    '
+  worker: gunshi
+- cmd_id: cmd_450
+  detail_ref: curl -s localhost:8080/reports/940
+  findings:
+  - 'P1 Discovery: pluginファイル発見、手動実行。確認待ちゼロ'
+  - 'P2 Exploration: BOARDS/SUBJECT_FUNCS/DAT_FUNCSパターン把握'
+  - 'P3 Questions: 全問自己解決。停止0回'
+  - 'P4 Architecture: minimumプロキシ採用'
+  - 'P5 Implementation: subject_ninmu/dat_ninmu/_fetch_ninmu追加。動作確認OK'
+  - 'P6 Quality Review: CRITICAL(SSRF)+HIGH(例外捕捉)修正済み'
+  - '停止箇所: 0回(全フェーズ自走)'
+  - '自走可能性: 高'
+  - 'feature-dev Skillツール未登録: 別途対応要'
+  - 'commit: 9c8e86d + 4d177f1'
+  read: true
+  reported_at: '2026-03-26T23:55:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_999
+  summary: feature-dev P1-P7完走。ninmu板エンドポイント追加+P6指摘CRITICAL/HIGH修正。commit 9c8e86d+4d177f1。
+  worker: ashigaru1
+- cmd_id: cmd_450
+  detail_ref: python3 scripts/botsunichiroku.py search report#939
+  findings:
+  - 'フェーズ対応: P1=家老YAML代替済,P2(探索)=Agent並列が有用,P3=家老事前解消,P4=軍師L4-L6重複,P5=現行step4そのもの,P6=お針子監査重複,P7=報告フロー代替済'
+  - '確認フェーズ回避策: P1/P3スキップ(家老description完結),P4自動(L5以上のみ発動),P5自動承認(Preflight PASS時),P6スキップ(お針子委譲)'
+  - '適用基準: Bloom L5-L6 かつ target_path 3ファイル以上。タスクYAMLにuse_feature_dev:trueフラグで家老が明示指定'
+  - 'ashigaru.md改修案: (1)step4にfeature-dev分岐追加 (2)Preflight後に「feature-devモード」セクション新設~20行
+    (3)スキップフェーズ:P1/P3/P6、実行:P2探索+P5実装'
+  - 'worktree整合: P2 Agent探索はworktree CWDで動作OK。SHOGUN_ROOT絶対パスルール適用。二重worktree化禁止(CWD混乱リスク)'
+  - 'リスク: コンテキスト消費(P2で3-5Kトークン)、todoWrite二重管理、フェーズ硬直化。適用基準厳守が鍵'
+  read: true
+  reported_at: '2026-03-26T23:41:27'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1000
+  summary: feature-dev P2+P5のみ足軽有用。P1/P3/P4/P6はshogun既存機構と重複。ashigaru.md改修案6項目策定
+  worker: ashigaru6
+- cmd_id: cmd_449
+  detail_ref: curl -s localhost:8080/reports/938
+  findings:
+  - 'bbs.cgi稼働: OK'
+  - 'スレ立て: OK (スレID=4495)'
+  - 'レス投稿: OK'
+  - 'dat確認: OK'
+  - 'dat_server(8080): スキップ (8080は没日録API専用、ninmuエンドポイント未実装)'
+  - '問題点: なし'
+  read: true
+  reported_at: '2026-03-26T23:40:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_998
+  summary: デュアルライト運用テスト全5ステップ完了。bbs.cgi/スレ立て(ID=4495)/レス投稿/dat確認 全OK。8080スキップ。
+  worker: ashigaru1
+- cmd_id: cmd_449
+  detail_ref: curl -s localhost:8080/reports/937
+  read: true
+  reported_at: '2026-03-26T23:35:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_996
+  summary: karo.md 2ch任務板運用フローにPhase 1デュアルライト手順追記。commit 87531be, push済み。
+  worker: ashigaru1
+- cmd_id: cmd_449
+  detail_ref: curl -s localhost:8080/reports/936
+  read: true
+  reported_at: '2026-03-26T23:30:45'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_997
+  summary: ashigaru.md 2ch任務板セクションをPhase 1デュアルライト報告フロー（3ステップ）に改修
+  worker: ashigaru2
+- cmd_id: cmd_448
+  detail_ref: python3 scripts/botsunichiroku.py search report#935
+  findings:
+  - 'git系: add/commit/push/diff/log/status/checkout-b/merge/worktree (77件hit。commit+pushが最頻出)'
+  - 'python3系: botsunichiroku.py(report/search/diary/reply/stats/enrich)・2ch.py・migrate_fts5.py・baku.py・pip
+    install (94件hit。botsu CLI最頻出)'
+  - 'tmux系: send-keys(2回分割)・display-message(agent_id)・capture-pane(idle判定) (全完了時使用)'
+  - 'ファイル系: ls-la(Preflight P1)・mkdir-p・chmod・cp/mv'
+  - 'MCP系: memory read_graph(開始必須)・add_observations(稀)。Notion/Playwright/GitHub MCPは足軽では稀'
+  - 'その他: date(報告必須)・curl(swarm/DAT,50件)・pip install(構築,24件)・identity_inject.sh(復帰必須)'
+  read: true
+  reported_at: '2026-03-26T23:05:26'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_995
+  summary: 足軽頻用コマンド6分類パターン洗い出し完了。git系9種・python3系6種・tmux系3種・ファイル系4種・MCP系2種・その他5種
+  worker: ashigaru6
+- cmd_id: cmd_448
+  detail_ref: curl -s localhost:8080/reports/934
+  findings:
+  - 'global(~/.claude/settings.json): model=opus[1m], skipDangerousModePermissionPrompt=true,
+    CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1'
+  - 'project(.claude/settings.json) allow: python3/pip/git/tmux/curl/wget/npm/bun/bash/sh/ls/wc/mkdir/cp/mv/chmod/dpkg/sudo/ssh/scp/docker/cd
+    + mcp__memory__*9種。deny=空'
+  - 'project local(.claude/settings.local.json): enableAllProjectMcpServers=true,
+    enabledMcpjsonServers=[memory], 追加allow59件'
+  - 'ashigaru1/2/6: 個別settings.local.jsonなし。全員同一project設定共有'
+  - 'MCP permissions: mcp__memory__*9種がproject settings.jsonのallowlist済み'
+  read: true
+  reported_at: '2026-03-26T23:10:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_994
+  summary: settings.json調査完了。足軽全員共通設定。global/project/local 3ファイル確認。
+  worker: ashigaru1
+- cmd_id: cmd_446
+  detail_ref: curl -s localhost:8080/reports/933
+  read: true
+  reported_at: '2026-03-26T23:05:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_993
+  summary: 未コミット変更3分割コミット+push完了。baku.py(7c71b26) + dat_server.py(b3f43ab)。dashboard.md等は他エージェント既コミット済み。
+  worker: ashigaru1
+- cmd_id: cmd_445
+  detail_ref: curl -s localhost:8080/reports/930
+  read: true
+  reported_at: '2026-03-26T23:00:15'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_988
+  summary: audit SKILL.md Step 5にfew-shot examples 3件追加（subtask_986/952/953）+ rejected事例0件注記
+  worker: ashigaru2
+- cmd_id: cmd_445
+  detail_ref: curl -s localhost:8080/reports/931
+  read: true
+  reported_at: '2026-03-26T23:00:15'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_990
+  summary: ashigaru.md Preflight Check後にWorktree作業手順セクション追記（約18行）
+  worker: ashigaru2
+- cmd_id: cmd_445
+  detail_ref: curl -s localhost:8080/reports/932
+  read: true
+  reported_at: '2026-03-26T23:00:15'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_992
+  summary: ashigaru.md Preflight CheckにP0 bloom_router連動ルール追加（5ルール）
+  worker: ashigaru2
 - cmd_id: cmd_440
   detail_ref: curl -s localhost:8080/reports/929
   read: true
@@ -1113,3 +1691,80 @@ reports:
   summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
   type: report_completed
   worker: ashigaru1
+- read: true
+  reported_at: '2026-03-26T23:31:12'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-26T23:42:43'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-27T00:03:15'
+  status: notification
+  subtask_id: stophook_notification
+  summary: gunshi、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: gunshi
+- read: true
+  reported_at: '2026-03-27T00:06:45'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-27T00:08:58'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-27T00:18:35'
+  status: notification
+  subtask_id: stophook_notification
+  summary: gunshi、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: gunshi
+- read: true
+  reported_at: '2026-03-27T00:34:24'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-27T00:53:34'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-27T08:23:32'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru6、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru6
+- read: true
+  reported_at: '2026-03-27T08:42:53'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-03-27T08:45:36'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2

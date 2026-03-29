@@ -1,4 +1,301 @@
 reports:
+- subtask_id: subtask_1022
+  cmd_id: cmd_463
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-28T12:30:00'
+  project: shogun
+  bloom_level: L5
+  assigned_at: '2026-03-28T11:00:00'
+  description: |
+    ■ ntripcaster Zigリライト Phase 1: 原典読解+設計
+
+    【背景】
+    BKG製ntripcaster(2004年C実装)をZigでフルリライトする大計画のPhase 1。
+    cmd_459(ビルド修正)+cmd_461(systemd化)完了済み。
+    リポジトリ: /home/yasu/ntripcaster/ntripcaster0.1.5/
+
+    【Phase 1 成果物】
+
+    1. 原典Cソース全機能リスト (docs/shogun/ntripcaster_zig_design.md §1)
+       ntripcaster0.1.5/src/ の全.c/.hを精読し、機能を網羅的にリスト化:
+       - NTRIP Server受信(source.c): ソースからのRTCM3データ受信フロー
+       - NTRIP Client配信(client.c): クライアントへのRTCM3リレーフロー
+       - Sourcetable管理: マウントポイント登録・応答
+       - 認証(Basic認証): パスワード検証フロー
+       - 設定ファイル解析(main.c/utility.c): ntripcaster.conf パース
+       - ログ出力: 接続ログ、エラーログ
+       - ソケット管理(sock.c): listen/accept/select多重化
+       - スレッド管理(threads.c): POSIX threads利用箇所
+       ※各機能について「何をやっているか」「なぜそうなっているか」を記述
+
+    2. NTRIPプロトコル仕様整理 (§2)
+       - NTRIP v1: ICYプロトコル(SHOUTcast互換)のリクエスト/レスポンス
+       - NTRIP v2: HTTP/1.1 chunked transfer encodingの違い
+       - Sourcetable応答形式(STR/CAS/NETレコード)
+       - RTCM3バイナリリレーの仕組み(パース不要、透過転送)
+       - 認証: Basic認証ヘッダーの処理
+       ※BKG公式仕様書+実装の差異があれば指摘
+
+    3. Zig実装設計書 (§3-§5)
+       §3 モジュール構成:
+         - src/main.zig, server.zig, client.zig, source.zig,
+           config.zig, sourcetable.zig, auth.zig, log.zig
+         - 各モジュールの責務と依存関係図
+       §4 I/Oモデル:
+         - Zig std.io.poll vs io_uring vs epoll選択の根拠
+         - 接続管理: 最大同時接続数、タイムアウト設計
+         - バッファ管理: RTCM3フレーム境界の扱い
+       §5 設計判断:
+         - 設定ファイル: 現行形式互換 vs TOML → トレードオフ分析
+         - 外部依存ゼロ方針の実現可能性確認
+         - クロスコンパイル対応(x86_64/aarch64/arm/mips)の build.zig設計
+         - cmd_461のsystemdサービスファイル流用可否
+
+    4. 分解案 (gunshi_analysis.yaml)
+       Phase 2以降のsubtask分解。Zigリライト→テスト→パッケージング→CI/CD。
+       wave設計+RACE-001チェック付き。
+
+    【技術方針（殿の指示）】
+    - NTRIP互換性最優先（既存クライアント/サーバーとの相互運用）
+    - Zig stable(0.14系)、外部依存ゼロ(std libのみ)
+    - 設定ファイルは現行形式との後方互換維持
+    - 認証強化不要（RTK補正データはオープン）
+    - 原典Cソースは/legacy/に保存（削除しない）
+
+    【参照ファイル】
+    - /home/yasu/ntripcaster/ntripcaster0.1.5/src/*.c *.h (原典)
+    - /home/yasu/ntripcaster/ntripcaster0.1.5/conf/ (設定ファイル)
+    - /home/yasu/ntripcaster/ntripcaster0.1.5/ntripcaster.service (cmd_461成果)
+  report_to: roju_reports.yaml
+  target_path: /home/yasu/ntripcaster
+- subtask_id: subtask_1015
+  cmd_id: cmd_457
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-27T02:45:00'
+  project: systrade
+  bloom_level: L5
+  decompose: true
+  assigned_at: '2026-03-27T02:15:00'
+  description: |
+    ■ EDINET DB 技術調査 + systrade統合設計
+
+    【高優先度。殿の指示: 「速攻で穴が埋まっていく」】
+
+    【分析4軸】
+
+    §1. EDINET DB技術調査
+    - GitHubリポを確認（@edinetdb で検索、またはWeb検索）
+    - API仕様: エンドポイント、レートリミット、認証方式
+    - MCP 17ツールの全容（各ツールの機能、入力パラメータ、出力形式）
+    - データカバレッジ: 84指標の内訳、更新頻度、期間、企業数
+    - 大量保有報告書データの構造（7万件の中身）
+    - 利用規約・商用利用可否
+    - 処理ロジックの公開状況（殿情報: 全公開）
+
+    §2. systrade Phase 0設計への統合案
+    - cmd_451のDexterパターン（Scratchpad/SKILL.md/SOUL.md）との組み合わせ
+    - EDINET DBの財務指標をLasso Phase 0のファクターとして使う設計
+      - 84指標のうち「棍棒で殴れる」指標を選定
+      - daily_risk.pyの既存SCORE_WEIGHTSとの統合方法
+    - 殿の投資仮説（アジアインフラ×GIS×オルタナティブデータ）との接続点
+    - 大株主データの活用方法（機関投資家の動向→シグナル）
+    - systradeリポ: /home/yasu/systrade/
+
+    §3. MCP統合の実現性
+    - shogunシステムからEDINET DB MCPを直接叩けるか（.mcp.jsonへの追加）
+    - 獏の仕入れ先としての活用（企業財務の変化検出→ラプラシアンフィルタcmd_455連携）
+    - ラズパイ/VPS放置運用でのAPI呼び出し設計（バッチ vs リアルタイム）
+    - 月額コスト: 無料だがAPI呼び出し頻度の設計
+
+    §4. リスク・見落とし分析
+    - データ品質（EDINET元データの遅延・欠損リスク）
+    - API廃止リスク（個人プロジェクトの継続性）
+    - 競合データソース比較（J-Quants API等との比較）
+
+    【参照ファイル】
+    - /home/yasu/systrade/scripts/daily_risk.py（既存シグナル検出）
+    - /home/yasu/systrade/src/systrade/scratchpad.py（cmd_451追加済み）
+    - /home/yasu/systrade/CLAUDE.md（投資原則SOUL）
+    - queue/inbox/gunshi_analysis.yaml（cmd_451分析結果参照）
+    - docs/shogun/baku_laplacian_design.md（ラプラシアンフィルタ設計参照）
+
+    【出力形式】
+    - docs/shogun/edinetdb_survey.md（§1-§4 + トレードオフ比較 + 推奨アクション）
+    - decompose: true → subtask分解案を gunshi_analysis.yaml に出力
+    - Web検索でGitHubリポとAPI仕様を調査すること
+  report_to: roju_reports.yaml
+- subtask_id: subtask_1010
+  cmd_id: cmd_455
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-27T01:30:00'
+  project: shogun
+  bloom_level: L5
+  decompose: true
+  assigned_at: '2026-03-27T00:56:00'
+  description: |
+    ■ 獏（baku.py）改修設計 — ラプラシアンフィルタ+深掘りループ+systrade共通パターン
+
+    【分析目的】
+    現在の獏は「仕入れ（Web収集）」と「廃棄（陳腐化検出）」はあるが、
+    「噛み砕いて栄養にする（深掘り・知見統合）」がない。
+    殿の方針: ラプラシアンフィルタ的な「方向性強化」が必要。
+
+    【分析4軸】
+
+    §1. ラプラシアンフィルタの獏への適用設計
+    - 微分検出: 前回収集との差分で「変化量」を計算する仕組み
+    - 閾値フィルタ: 変化量が大きいネタだけ深掘りキューに投入
+    - 平坦な情報（みんな知ってる、変化がない）を自動で捨てる
+    - 既存baku.pyのどこにフック点があるか（コードリーディング必須）
+
+    §2. 深掘りループ（Dexterパターン適用）
+    - cmd_451で分析済みのDexterパターンを参照せよ:
+      docs/shogun/dexter_pattern_analysis.md（存在すれば）
+      gunshi_analysis.yaml の cmd_451分析結果
+    - エッジ検出されたネタに対して自律リサーチ深掘り
+    - 殿の既存知見との接続点探索（Memory MCP: tono-preferences参照）
+    - 「十分に噛み砕けた」判定基準（convergence criterion）の設計
+
+    §3. 出力設計
+    - 深掘り結果の格納先: 没日録DB「library entry」として昇華済み知見を格納？
+    - dreams.jsonlとの棲み分け（生の夢 vs 昇華済み知見）
+    - docs/への長文保全（cmd_453で追加された/docs/静的配信と連携可能）
+
+    §4. systradeとの共通パターン抽出
+    - systrade daily_risk.pyのシグナル検出（SCORE_WEIGHTS、z-score閾値判定）
+    - 獏のエッジ検出（変化量フィルタ）
+    - 両者の「ラプラシアンフィルタ」が共通基盤になりうるか
+    - 共通モジュール化の可能性と費用対効果
+    - systradeリポ: /home/yasu/systrade/
+
+    【参照ファイル】
+    - scripts/baku.py（現行獏: 821行相当。TONO_INTERESTS, 検索ループ, dreams.jsonl）
+    - /home/yasu/systrade/scripts/daily_risk.py（シグナル検出）
+    - /home/yasu/systrade/src/systrade/scratchpad.py（cmd_451で追加済み）
+    - queue/inbox/gunshi_analysis.yaml（cmd_451 Dexterパターン分析結果）
+
+    【制約】
+    - ラズパイ/VPS放置運用前提（Haiku APIコスト月$1以内に収まる設計）
+    - 既存baku.pyを壊さない段階的改修パス
+    - 分析結果は docs/shogun/baku_laplacian_design.md に出力
+
+    【出力形式】
+    - docs/shogun/baku_laplacian_design.md（§1-§4 + トレードオフ比較 + 推奨アクション）
+    - decompose: true → subtask分解案を gunshi_analysis.yaml に出力
+    - quality_criteria, predicted_outcome も含めよ
+  report_to: roju_reports.yaml
+- subtask_id: subtask_1006
+  cmd_id: cmd_452
+  assigned_by: roju
+  status: done
+  project: shogun
+  bloom_level: L5
+  decompose: false
+  assigned_at: '2026-03-27T00:20:00'
+  addendum:
+    added_at: '2026-03-27T00:22:00'
+    source: "殿の追加指示（老中経由）"
+    content: |
+      ■ 基本方針: 「考える場所と作業する場所の分離」
+
+      【3拠点構成】
+      - MBP = 将軍の壁打ち専用（思考・判断・対話）
+      - RPi = HW制御エージェント直接稼働（農業IoT現場）
+      - VPS = 放置運用（systrade等の自律パイプライン）
+
+      【根本目的】
+      パーミッション制限による無駄なトークン浪費の根絶。
+      → コンテナ内全権であれば、許可プロンプトで止まることがなくなる。
+      → 足軽のパーミッション問題(cmd_448)はallowlistで対症療法したが、
+         Docker化が根治策。
+
+      この方針を分析の前提に据えよ。特に:
+      - MBPの将軍コンテナは軽量（壁打ち+dashboard閲覧のみ）
+      - RPiコンテナはARM+リソース制約下で稼働する前提
+      - VPSコンテナは無人放置で回り続ける前提（自己回復必須）
+  description: |
+    ■ 戦略分析: shogunシステムDocker化 設計調査
+
+    優先度中。急ぎではない。じっくり分析せよ。
+
+    【分析1: コンテナ構成案】
+    - 将軍/老中/足軽/軍師/お針子をどう分割するか
+      （1コンテナ1エージェント？ グループ化？ セッション単位？）
+    - 没日録DB(SQLite WAL)・swarm DB(SQLite)のボリューム設計
+    - git リポジトリの共有方法（bind mount? git clone per container?）
+    - agent-swarm(bbs.cgi)のコンテナ配置
+
+    【分析2: 技術的障壁】
+    - Claude Code CLIのコンテナ内動作（APIキー注入、認証フロー）
+    - MCP接続のコンテナ跨ぎ（Memory MCP、Notion MCP等はlocalhost前提）
+    - tmux依存の洗い出し（send-keys/display-message/capture-pane）
+      → swarm Phase 2(YAML廃止+2ch HTTP通信)でどこまで解消されるか
+    - hooks(identity_inject.sh, stop_hook_inbox.sh等)のコンテナ内動作
+
+    【分析3: 移行ロードマップ案】
+    - 現行システムを壊さない段階的移行パス
+    - swarm Phase 2完了を前提条件とするか否か
+    - Docker Compose構成案（サービス定義の骨格）
+
+    【分析4: ラズパイ/VPS展開との共通基盤】
+    - systrade放置運用のコンテナ設計との統合可能性
+    - ARM対応（ラズパイ4/5）の制約
+    - マルチアーキテクチャビルド(linux/amd64 + linux/arm64)の実現性
+
+    【参照】
+    - memory/project_docker_sandbox.md（既存のDocker化構想メモ）
+    - docs/shogun/2ch_workflow_design.md（swarm設計書、Phase 2がDocker化の前提）
+    - instructions/*.md（各エージェントのtmux依存箇所）
+
+    【出力】
+    1. docs/shogun/docker_design_survey.md に調査書出力
+    2. roju_reports.yaml にサマリ報告
+    ※ gunshi_analysis.yaml は不要（decompose=false、調査のみ）
+  report_to: roju_reports.yaml
+- subtask_id: subtask_1001
+  cmd_id: cmd_451
+  assigned_by: roju
+  status: done
+  project: systrade
+  bloom_level: L5-L6
+  decompose: true
+  assigned_at: '2026-03-26T23:57:00'
+  description: |
+    ■ 戦略分析+分解: Dexter金融AIエージェント パターン分析 → systrade設計反映
+
+    github.com/virattt/dexter (MIT) のリポジトリを読み、以下を分析せよ。
+
+    【分析1: Dexterアーキテクチャ】
+    - タスク自動分解の仕組み（複雑クエリの分解パターン）
+    - 自己検証ループの実装（「十分」判定基準）
+    - 暴走防止セーフガードの具体的実装
+    - scratchpad（JSONL記録）の構造と用途
+
+    【分析2: systrade Phase 0-2への反映提案】
+    - Phase 0 Lasso: 変数選択の反復検証にDexterパターン適用案
+    - 放置運用（ラズパイ/VPS）前提の自律パイプライン設計
+    - リソース制約下の実現可能性（Ollama等ローカルLLM活用）
+    - 既存の軍師分析書(docs/shogun/systrade_phase0_plan.md)との整合
+
+    【分析3: 盗む/捨てるの仕分け】
+    殿の方針: forkではなくパターンだけ盗んでPython再実装。
+    - 盗む候補: タスク分解、自己検証ループ、scratchpad、セーフガード
+    - 捨てる候補: Financial Datasets API、TypeScript/Bun、WhatsApp
+    - 殿の投資仮説（アジアインフラ×GIS×オルタナティブデータ）との整合
+
+    【出力】
+    1. docs/shogun/dexter_pattern_analysis.md に分析書出力
+    2. gunshi_analysis.yaml に分解案（subtask候補+推奨モデル+QC方針）
+    3. roju_reports.yaml にサマリ報告
+
+    【参照】
+    - 殿の投資仮説: memory/systrade_asia_thesis.md
+    - systrade計画: docs/shogun/systrade_phase0_plan.md
+    - Dexter既存分析: docs/shogun/dexter_analysis.md（dashboard記載7.2/10）
+  report_to: roju_reports.yaml
 - assigned_by: shogun
   cmd_id: null
   subtask_id: null

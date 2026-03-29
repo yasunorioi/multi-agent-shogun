@@ -1,145 +1,328 @@
 # queue/inbox/gunshi_analysis.yaml
 # 軍師（gunshi）の分析出力。家老が読む一方向通信。
 # ─────────────────────────────────────────────────────────────
-# ベクトル検索（sqlite-vec + Ruri v3）導入設計
+# ntripcaster Zigリライト Phase 2以降 分解案 (cmd_463 / subtask_1022)
 # ─────────────────────────────────────────────────────────────
-task_id: null
-cmd_id: null
-timestamp: "2026-03-24T01:44:40"
+task_id: subtask_1022
+cmd_id: cmd_463
+timestamp: "2026-03-28T12:30:00"
 
 analysis:
 
-  # ─── Bloom ルーティング ───────────────────────────────────
-  bloom_level: 5
+  # ─── Bloom ルーティング（必須） ─────────────────────────────
+  bloom_level: 6
   bloom_reasoning: |
-    「既存FTS5にsqlite-vecベクトル検索を追加するハイブリッド検索の設計。
-    sui-memoryの設計パターンを没日録に適用し、モデル選定・RRF統合・
-    時間減衰・VPS制約を評価」
-    = Bloom L5（評価）。既存技術の適用評価、4モデルの比較、
-    コスト・パフォーマンストレードオフ分析が中心。
-    L6ではない理由: sui-memoryの確立された設計パターンの適用であり、
-    ゼロからのアーキテクチャ創造ではない。
+    BKG原典Cソース(10,464行)の全機能読解+NTRIPプロトコル仕様整理+Zig設計書作成。
+    20年前のCコードを別言語でフルリライトする設計は、新規アーキテクチャ創造に該当。
+    L5ではない理由: 既存パターンの評価ではなく、新言語での再設計。
+    L4ではない理由: 複数設計案の比較+アーキテクチャ策定が核。
   recommended_model: claude-sonnet-4-6
-  confidence: 0.90
+  confidence: 0.85
 
-  # ─── 品質基準 ───────────────────────────────────────────
+  # ─── 品質基準（お針子がrubricsに使う） ─────────────────────
   quality_criteria:
-    - "sqlite-vec + vec_index仮想テーブルが没日録DBに追加されること"
-    - "既存FTS5検索（search_index）が壊れていないこと"
-    - "migrate_vec.pyで既存2,345件のバッチベクトル化が完了すること"
-    - "search --hybrid でRRF統合結果が返ること"
-    - "--hybrid なしでは従来のFTS5検索が動作すること（後方互換）"
-    - "sqlite-vec未インストール環境でもCLIがエラーなく動作すること"
-    - "検索レイテンシが200ms以下であること"
-    - "モデル遅延ロード: 非検索コマンド実行時にモデルがロードされないこと"
+    - "設計書(docs/shogun/ntripcaster_zig_design.md)が§1-§9の全セクションを含むこと"
+    - "14ソースファイルの全機能がリスト化され、各機能に「何を」「なぜ」が記述されていること"
+    - "NTRIP v1/v2のリクエスト/レスポンス形式が完全に記載されていること"
+    - "BKG仕様書と実装の差異が指摘されていること"
+    - "Zigモジュール構成とCソースの対応表があること"
+    - "build.zigのクロスコンパイルターゲット一覧があること"
+    - "トレードオフ比較表にスコアリングが含まれること"
+    - "North Star Alignment が記載されていること"
+    - "Phase 2以降の分解案がgunshi_analysis.yamlに出力されていること"
+    - "各subtask実装後、RTKLIB str2strとの相互運用テストが可能なこと"
   qc_method: ohariko
 
-  # ─── PDCA判定 ───────────────────────────────────────────
-  pdca_needed: false
-  pdca_reasoning: |
-    sui-memoryで確立された設計パターンの適用。
-    Phase 0の実装自体はリスク低（既存を壊さない追加のみ）。
-    ただしPhase 2の時間減衰パラメータ調整はベンチマーク結果に依存するため、
-    Phase 2着手時にPDCA再評価を推奨。
+  # ─── PDCA 判定 ───────────────────────────────────────────
+  pdca_needed: true
+  pdca_reason: |
+    Phase 2(Zig実装)は段階的統合テストが必要。
+    各モジュール実装後にRTKLIBとの相互運用テストを実施し、
+    互換性問題があればPhase 2内で修正サイクルを回す。
 
-  # ─── North Star整合 ─────────────────────────────────────
+  # ─── North Star 整合 ─────────────────────────────────────
   north_star_alignment:
     status: aligned
     reason: |
-      「意味検索で没日録の知見を掘り起こせ。FTS5を壊すな、拡張せよ」に直結。
-      FTS5はキーワード一致のみ。ベクトル検索で意味的に近い知見を発掘。
-      マクガイバー精神: SQLite + Python、外部依存2つのみ、月額ゼロ。
-      sui-memoryの実績（7,059チャンク、100ms、1,759行Python）が有効性を実証。
+      殿の方針に完全合致:
+      - 外部依存ゼロ（Zig std libのみ）
+      - クロスコンパイル一発（RPi/VPS/MBP全対応）
+      - NTRIP互換性最優先（RTKLIB動作保証）
+      - 設定ファイル後方互換（既存confそのまま使用）
+      - 原典Cソースは/legacy/に保存（削除しない）
     risks_to_north_star:
-      - "VPSメモリ不足（457MB記録 vs 4GB記載）でagent-swarm展開困難"
-      - "遅延ロードの初回10秒待ちがUXを損なう可能性"
-      - "MeCab分かち書きテキスト vs rawテキストのベクトル化精度問題"
-      - "モデルバージョン更新時の全ベクトル再計算コスト"
+      - "RTKLIB互換性の破壊（NTRIP v1の非標準動作に依存する機器が存在する可能性）"
+      - "RTCM3フレーム同期修正による既存クライアントへの影響"
+      - "Phase 2-5が長期化しC版の保守と二重管理になるリスク"
 
-  # ─── 予測成果物（Foreman方式） ─────────────────────────
+  # ─── predicted_outcome（Foreman方式） ────────────────────
   predicted_outcome:
     expected_files:
-      - path: "docs/shogun/vector_search_design.md"
+      - path: "docs/shogun/ntripcaster_zig_design.md"
         change_type: "new"
-        description: "ベクトル検索導入設計書（7章+付録3本）"
-      - path: "scripts/botsu/vec.py"
+        description: "Zigリライト設計書（§1-§9、原典全機能リスト、プロトコル仕様、モジュール構成）"
+      - path: "/home/yasu/ntripcaster/src/main.zig"
         change_type: "new"
-        description: "共通ベクトル検索モジュール（VecSearchクラス）"
-      - path: "scripts/migrate_vec.py"
+        description: "エントリポイント（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/src/server.zig"
         change_type: "new"
-        description: "既存FTS5データのバッチベクトル化スクリプト"
-      - path: "scripts/botsunichiroku.py"
-        change_type: "modify"
-        description: "search --hybrid オプション追加"
-      - path: "scripts/botsu/__init__.py"
-        change_type: "modify"
-        description: "vec_upsert関数追加（インクリメンタル更新）"
-    expected_tests: |
-      - search --hybrid でRRF結果が返る
-      - search（hybridなし）でFTS5のみ結果が返る（後方互換）
-      - sqlite-vec未インストールでCLIエラーなし
-      - バッチベクトル化: 2,345件が4分以内に完了
-      - 検索レイテンシ: 200ms以下
+        description: "TCPリスナー+接続振り分け（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/src/ntrip/protocol.zig"
+        change_type: "new"
+        description: "NTRIPプロトコルパーサー（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/src/ntrip/source.zig"
+        change_type: "new"
+        description: "ソースハンドラ（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/src/ntrip/client.zig"
+        change_type: "new"
+        description: "クライアントハンドラ（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/src/relay/engine.zig"
+        change_type: "new"
+        description: "RTCMリレーエンジン（Phase 2で実装）"
+      - path: "/home/yasu/ntripcaster/build.zig"
+        change_type: "new"
+        description: "ビルド定義（Phase 2で実装）"
+    expected_tests:
+      pass_count: 0
+      note: "Phase 1は設計書のみ。テストはPhase 2で新規作成"
+      key_assertions:
+        - "Sourcetableリクエストに正しくSourcetable応答を返すこと"
+        - "SOURCE接続でRTCMデータを受信しリングバッファに格納すること"
+        - "GET /mount でクライアントにICY 200 OK + RTCMデータを配信すること"
+        - "Basic認証が正しく動作すること"
+        - "confファイルのパースが現行形式と後方互換であること"
+        - "RTKLIB str2strとの相互運用テストがPASSすること"
     expected_behavior: |
-      Phase 0完了時:
-      - `search "農家が困っていること" --hybrid` で意味検索が動作
-      - キーワード不一致でも意味的に近い知見がヒット
-      - 既存FTS5検索は従来通り動作
-      - モデルは検索コマンド実行時のみロード（他コマンドに影響なし）
+      Phase 2完了時:
+      1. zig build でシングルバイナリが生成される
+      2. ./ntripcaster -c conf/ntripcaster.conf でサーバー起動
+      3. str2str -in ntrip://:pass@localhost:2101/MOUNT でRTCMストリーム受信可能
+      4. 複数クライアント同時接続でRTCMリレーが正常動作
+      5. クロスコンパイルでaarch64-linux(RPi)バイナリが生成される
     verification_method: |
-      1. migrate_vec.py実行 → vec_indexに2,345件登録確認
-      2. search --hybrid "テストクエリ" → 結果件数・関連性確認
-      3. search "テストクエリ"（hybridなし）→ 従来結果と同一
-      4. pip uninstall sqlite-vec → CLIが正常動作
+      1. zig build test → 全テストPASS
+      2. str2str接続テスト → RTCMデータ受信確認
+      3. zig build -Dtarget=aarch64-linux → クロスコンパイル成功
+      4. systemctl start ntripcaster → サービス起動確認（RPi実機）
 
-  # ─── 戦略分析 ────────────────────────────────────────────
-  strategy_analysis:
-    alternatives:
-      - name: "案A: sqlite-vec + Ruri v3-310m（ローカル推論）【推奨】"
-        pros:
-          - "月額ゼロ（ローカル推論のみ）"
-          - "日本語特化モデルで没日録に最適"
-          - "SQLite 1ファイル原則を維持"
-          - "sui-memoryで実績あり"
-          - "外部依存2つのみ"
-        cons:
-          - "初回モデルロード~10秒"
-          - "VPS展開時のメモリ制約"
-          - "PyTorch依存（ディスク~2GB）"
-        score: 9
-      - name: "案B: OpenAI Embeddings API"
-        pros:
-          - "ローカルモデル不要。メモリ節約"
-          - "高品質ベクトル"
-        cons:
-          - "月額課金（殿の忌避事項）"
-          - "オフライン動作不可"
-          - "プライバシーリスク（データ外部送信）"
-        score: 2
-      - name: "案C: FTS5のみ（ベクトル検索なし）"
-        pros:
-          - "追加依存ゼロ"
-          - "実装コストゼロ"
-        cons:
-          - "意味検索不可"
-          - "キーワード不一致の知見を掘り起こせない"
-          - "North Starに到達しない"
-        score: 4
-      - name: "案D: ChromaDB / Qdrant等の専用ベクトルDB"
-        pros:
-          - "HNSW等の高速ANN"
-          - "豊富なフィルタリング機能"
-        cons:
-          - "別プロセス・別ファイル（SQLite 1本原則に違反）"
-          - "Dockerまたはサーバー運用が必要"
-          - "sui-memoryの前身(claude-mem)がChromaDBで失敗した教訓"
-        score: 3
-    recommendation: "案A: sqlite-vec + Ruri v3-310m（ローカル推論）"
-    recommendation_reason: |
-      殿の制約（月額忌避・SQLite・マクガイバー精神）に完全一致。
-      sui-memoryが同じ構成で7,059チャンク・100ms検索を達成しており、
-      没日録の2,345件では余裕で動作する。
-      ChromaDB(案D)はsui-memoryの前身(claude-mem)が3日で失敗した教訓がある。
-      SQLite 1ファイルに全てを収める設計が最もロバスト。
+# ─── decomposition（Phase 2以降） ─────────────────────────────
+decomposition:
+  five_questions:
+    purpose: |
+      BKG ntripcaster 0.1.5のCソースをZig 0.14でフルリライトし、
+      RPi/VPSでのシングルバイナリデプロイを実現する。
+    breakdown: |
+      Phase 2(v1最小実装)は4モジュールグループに分解可能:
+      (A)プロトコル+設定、(B)リレーエンジン、(C)サーバー統合、(D)相互運用テスト。
+      A→B→Cはシリアル依存、Dは並列可能。
+    headcount: |
+      1-2足軽。Phase 2全体は1人で3-5日相当。
+      モジュール分割が明確なため2人並列も可能（A+BとCを分担）。
+    perspective: |
+      Bloom L4-L5（分析+評価）。既存プロトコル仕様の忠実な再実装。
+      ただしI/Oモデル選択やリングバッファ設計はL5の判断が必要。
+    risk: |
+      中リスク。RTKLIB互換性が最大のリスク。
+      Phase 2完了条件にstr2str相互運用テストを含めることで管理。
+      C版との並行稼働期間を設けて段階的に移行。
+
+  subtasks:
+    - id_hint: subtask_1022a
+      title: "build.zig + config/parser.zig + auth/basic.zig"
+      description: |
+        Phase 2の基盤モジュール群を実装:
+
+        1. build.zig:
+           - Zigプロジェクト初期化
+           - クロスコンパイルターゲット（x86_64/aarch64-linux, aarch64-macos）
+           - テストステップ定義
+
+        2. config/parser.zig:
+           - ntripcaster.conf パーサー（現行形式100%後方互換）
+           - port, max_clients, max_sources, encoder_password, server_name, logdir, logfile
+           - マウント認証行（/<MOUNT>:user:pass,...）のパース
+           - Config構造体定義
+
+        3. auth/basic.zig:
+           - Base64デコード（std.base64使用）
+           - Authorization ヘッダーからuser:pass抽出
+           - マウント別認証判定
+
+        テスト:
+        - 既存ntripcaster.confのパーステスト
+        - Base64デコードテスト
+        - 認証判定テスト（許可/拒否/マウント不一致）
+      bloom_level: 3
+      recommended_model: claude-sonnet-4-6
+      estimated_effort: "2h"
+      blocked_by: []
+      worktree: false
+      worker_hint: "executor (sonnet)"
+      files_touched:
+        - "/home/yasu/ntripcaster/build.zig (new)"
+        - "/home/yasu/ntripcaster/src/config/parser.zig (new)"
+        - "/home/yasu/ntripcaster/src/auth/basic.zig (new)"
+        - "/home/yasu/ntripcaster/tests/test_config.zig (new)"
+        - "/home/yasu/ntripcaster/tests/test_auth.zig (new)"
+
+    - id_hint: subtask_1022b
+      title: "ntrip/protocol.zig + ntrip/sourcetable.zig + relay/engine.zig"
+      description: |
+        プロトコル層+リレーエンジンを実装:
+
+        1. ntrip/protocol.zig:
+           - NtripRequest union型（source_login / client_get / sourcetable_get / invalid）
+           - HTTPヘッダーパーサー（\r\n\r\n終端検出）
+           - User-Agent NTRIP検証
+           - v1/v2判定（Ntrip-Versionヘッダー有無）
+
+        2. ntrip/sourcetable.zig:
+           - sourcetable.datファイル読み込み
+           - "SOURCETABLE 200 OK" レスポンス生成
+           - "ENDSOURCETABLE" フッター
+
+        3. relay/engine.zig:
+           - RingBuffer構造体（CHUNK_SIZE=4096, NUM_CHUNKS=64）
+           - writeChunk(): ソースからのデータ格納
+           - readChunk(): クライアント別読み取り位置管理
+           - RTCM3フレーム同期（0xD3プリアンブル検出）※Phase 2では0xFF 0xF0を維持
+           - ログ出力: log.zig
+
+        テスト:
+        - プロトコルパーステスト（v1 GET, SOURCE, invalid）
+        - Sourcetable応答形式テスト
+        - リングバッファ読み書きテスト
+        - バッファオーバーラン時の挙動テスト
+      bloom_level: 4
+      recommended_model: claude-sonnet-4-6
+      estimated_effort: "3h"
+      blocked_by: ["subtask_1022a"]
+      worktree: false
+      worker_hint: "executor (sonnet)"
+      files_touched:
+        - "/home/yasu/ntripcaster/src/ntrip/protocol.zig (new)"
+        - "/home/yasu/ntripcaster/src/ntrip/sourcetable.zig (new)"
+        - "/home/yasu/ntripcaster/src/relay/engine.zig (new)"
+        - "/home/yasu/ntripcaster/src/log.zig (new)"
+        - "/home/yasu/ntripcaster/tests/test_protocol.zig (new)"
+        - "/home/yasu/ntripcaster/tests/test_relay.zig (new)"
+
+    - id_hint: subtask_1022c
+      title: "server.zig + ntrip/source.zig + ntrip/client.zig + main.zig"
+      description: |
+        サーバー本体を実装し全モジュールを統合:
+
+        1. server.zig:
+           - std.net.Address.listen()でTCPリスナー起動
+           - accept()ループ + スレッドプールで接続処理
+           - handle_connection(): ヘッダー読み取り→protocol.parseRequest()で振り分け
+
+        2. ntrip/source.zig:
+           - source_login(): パスワード検証→マウント登録→Source構造体作成
+           - source_loop(): recv()ループ→relay/engine.writeChunk()
+           - タイムアウト処理（client_timeout秒待機）
+
+        3. ntrip/client.zig:
+           - client_login(): 認証→マウント探索→"ICY 200 OK"送信
+           - データ配信: relay/engine.readChunk()→send()
+           - クライアント遅延検出+キック
+
+        4. main.zig:
+           - CLIオプション（-c configfile）
+           - config読み込み→ServerState初期化→server.listen()
+           - SIGHUP対応（設定リロード）
+           - clean_shutdown()
+
+        テスト:
+        - 統合テスト: ソース接続→クライアント接続→RTCMリレー
+        - 複数クライアント同時接続テスト
+        - ソース切断時のクライアント切断テスト
+        - confリロードテスト
+      bloom_level: 4
+      recommended_model: claude-sonnet-4-6
+      estimated_effort: "4h"
+      blocked_by: ["subtask_1022b"]
+      worktree: false
+      worker_hint: "executor (sonnet, model=opus for complex integration)"
+      files_touched:
+        - "/home/yasu/ntripcaster/src/server.zig (new)"
+        - "/home/yasu/ntripcaster/src/ntrip/source.zig (new)"
+        - "/home/yasu/ntripcaster/src/ntrip/client.zig (new)"
+        - "/home/yasu/ntripcaster/src/main.zig (new)"
+        - "/home/yasu/ntripcaster/tests/test_integration.zig (new)"
+
+    - id_hint: subtask_1022d
+      title: "RTKLIB str2str 相互運用テスト + systemd統合"
+      description: |
+        Phase 2の完了検証:
+
+        1. RTKLIB str2strとの相互運用テスト:
+           - Zig版ntripcaster起動
+           - str2str -in ntrip://:pass@localhost:2101/MOUNT で接続
+           - RTCMストリーム受信確認（バイナリデータが正しくリレーされること）
+           - 複数str2strクライアント同時接続テスト
+           - ソース切断→再接続テスト
+
+        2. systemd統合:
+           - cmd_461のntripcaster.serviceファイルのExecStartパスを変更
+           - systemctl start/stop/restart テスト
+           - journalctlでログ出力確認
+
+        3. クロスコンパイル検証:
+           - zig build -Dtarget=aarch64-linux でRPiバイナリ生成
+           - RPi実機でのバイナリ実行テスト（可能であれば）
+
+        4. C版との並行比較:
+           - 同一confファイルでC版/Zig版を別ポートで起動
+           - 同一ソースに対する同一クライアントの応答比較
+      bloom_level: 3
+      recommended_model: claude-sonnet-4-6
+      estimated_effort: "2h"
+      blocked_by: ["subtask_1022c"]
+      worktree: false
+      worker_hint: "qa-tester or executor"
+      files_touched:
+        - "/home/yasu/ntripcaster/ntripcaster.service (modify: ExecStart)"
+        - "/home/yasu/ntripcaster/tests/test_interop.sh (new)"
+
+  wave_design:
+    wave_1:
+      description: "基盤モジュール（build.zig + config + auth）"
+      subtasks: ["subtask_1022a"]
+      rationale: |
+        全モジュールの前提となるビルドシステムと設定パーサー。
+        これがないと他のモジュールがコンパイルできない。
+    wave_2:
+      description: "プロトコル層 + リレーエンジン"
+      subtasks: ["subtask_1022b"]
+      rationale: |
+        Wave 1の型定義（Config等）に依存。
+        サーバー統合（Wave 3）の前にプロトコルパーサーとリレーエンジンを単体テスト。
+    wave_3:
+      description: "サーバー統合"
+      subtasks: ["subtask_1022c"]
+      rationale: |
+        Wave 1+2の全モジュールを統合して動作するサーバーを構築。
+        最も複雑なsubtask。必要に応じてOpusモデルを使用。
+    wave_4:
+      description: "相互運用テスト + systemd統合"
+      subtasks: ["subtask_1022d"]
+      rationale: |
+        Wave 3完了後、実環境での検証。
+        RTKLIB str2strとの互換性がPhase 2の最終合否判定。
+    wave_5:
+      description: "お針子検品"
+      subtasks: ["audit"]
+      rationale: |
+        全Wave完了後、お針子が以下を検品:
+        - zig build test → 全テストPASS
+        - str2str相互運用テストPASS
+        - クロスコンパイル成功（aarch64-linux）
+        - 設定ファイル後方互換確認
+        - PDCA: 互換性問題があればPhase 2内で修正サイクル
+
+  race_001_check: |
+    RACE-001違反なし。4 subtaskは全てシリアル依存（wave_design準拠）。
+    同一ファイルへの二重割当なし。各waveは前waveの成果物に依存。
 
 skill_candidate: null

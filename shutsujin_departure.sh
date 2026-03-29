@@ -704,7 +704,7 @@ if [ "$SETUP_ONLY" = false ]; then
     log_war "👑 全軍に Claude Code を召喚中..."
 
     # 将軍
-    tmux send-keys -t shogun:main "MAX_THINKING_TOKENS=0 claude --model opus --dangerously-skip-permissions"
+    tmux send-keys -t shogun:main "MAX_THINKING_TOKENS=0 claude --model opus --effort max --dangerously-skip-permissions"
     tmux send-keys -t shogun:main Enter
     log_info "  └─ 将軍、召喚完了"
 
@@ -715,7 +715,7 @@ if [ "$SETUP_ONLY" = false ]; then
     # ═══════════════════════════════════════════════════════════════════════════
     # 老中（pane 0）: Opus Thinking（--idle時も起動）
     p=$((PANE_BASE + 0))
-    tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --dangerously-skip-permissions"
+    tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --effort max --dangerously-skip-permissions"
     tmux send-keys -t "multiagent:agents.${p}" Enter
     log_info "  └─ 老中（Opus Thinking）、召喚完了"
 
@@ -731,22 +731,22 @@ if [ "$SETUP_ONLY" = false ]; then
         if [ "$KESSEN_MODE" = true ]; then
             for pi in 1 2 3; do
                 p=$((PANE_BASE + pi))
-                tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --dangerously-skip-permissions"
+                tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --effort max --dangerously-skip-permissions"
                 tmux send-keys -t "multiagent:agents.${p}" Enter
             done
             log_info "  └─ 足軽1・足軽2・部屋子1（Opus Thinking）、召喚完了"
         else
             # 平時: 足軽1=Sonnet, 足軽2=Sonnet, 部屋子1=Opus
             p=$((PANE_BASE + 1))
-            tmux send-keys -t "multiagent:agents.${p}" "claude --model sonnet --dangerously-skip-permissions"
+            tmux send-keys -t "multiagent:agents.${p}" "claude --model sonnet --effort max --dangerously-skip-permissions"
             tmux send-keys -t "multiagent:agents.${p}" Enter
             log_info "  └─ 足軽1（Sonnet Thinking）、召喚完了"
             p=$((PANE_BASE + 2))
-            tmux send-keys -t "multiagent:agents.${p}" "claude --model sonnet --dangerously-skip-permissions"
+            tmux send-keys -t "multiagent:agents.${p}" "claude --model sonnet --effort max --dangerously-skip-permissions"
             tmux send-keys -t "multiagent:agents.${p}" Enter
             log_info "  └─ 足軽2（Sonnet Thinking）、召喚完了"
             p=$((PANE_BASE + 3))
-            tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --dangerously-skip-permissions"
+            tmux send-keys -t "multiagent:agents.${p}" "claude --model opus --effort max --dangerously-skip-permissions"
             tmux send-keys -t "multiagent:agents.${p}" Enter
             log_info "  └─ 部屋子1（Opus Thinking）、召喚完了"
         fi
@@ -756,18 +756,18 @@ if [ "$SETUP_ONLY" = false ]; then
         # ═══════════════════════════════════════════════════════════════════════════
         # 軍師 (pane 0): Opus Thinking
         p=${PANE_BASE}
-        tmux send-keys -t "ooku:agents.${p}" "claude --model opus --dangerously-skip-permissions"
+        tmux send-keys -t "ooku:agents.${p}" "claude --model opus --effort max --dangerously-skip-permissions"
         tmux send-keys -t "ooku:agents.${p}" Enter
         log_info "  └─ 軍師（Opus Thinking）、召喚完了"
 
         # お針子 (pane 1)
         p=$((PANE_BASE + 1))
         if [ "$KESSEN_MODE" = true ]; then
-            tmux send-keys -t "ooku:agents.${p}" "claude --model opus --dangerously-skip-permissions"
+            tmux send-keys -t "ooku:agents.${p}" "claude --model opus --effort max --dangerously-skip-permissions"
             tmux send-keys -t "ooku:agents.${p}" Enter
             log_info "  └─ お針子（Opus Thinking）、召喚完了"
         else
-            tmux send-keys -t "ooku:agents.${p}" "claude --model sonnet --dangerously-skip-permissions"
+            tmux send-keys -t "ooku:agents.${p}" "claude --model sonnet --effort max --dangerously-skip-permissions"
             tmux send-keys -t "ooku:agents.${p}" Enter
             log_info "  └─ お針子（Sonnet Thinking）、召喚完了"
         fi

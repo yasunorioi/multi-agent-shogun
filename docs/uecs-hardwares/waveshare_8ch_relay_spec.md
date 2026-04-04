@@ -1,9 +1,10 @@
 # Waveshare Industrial 8ch Relay Module 仕様書 + FW設計案
 
-> **Product**: ESP32-S3-ETH-8DI-8RO
-> **Author**: ashigaru6 (subtask_1071 / cmd_489)
+> **Product**: RP2350-ETH-8DI-8RO (RP2350B版)
+> **Author**: ashigaru6 (subtask_1073 / cmd_489)
 > **Date**: 2026-04-05
-> **Status**: デバイス未購入。公式ドキュメント+コミュニティ情報に基づく先行設計
+> **Status**: デバイス未購入。公式デモコード+ボード定義ヘッダから全ピンマップ確定済み
+> **情報源**: Waveshare公式Wiki + デモコードZIP (DEV_Config.h, waveshare_rp2350_eth_8di_8ro.h)
 
 ---
 
@@ -11,54 +12,58 @@
 
 | 項目 | 値 |
 |------|-----|
-| 正式名称 | ESP32-S3-ETH-8DI-8RO |
-| MCU | ESP32-S3-WROOM-1U-N16R8 (16MB Flash / 8MB PSRAM Octal SPI) |
-| リレー | 8ch (1NO+1NC / ch) |
-| デジタル入力 | 8ch (フォトカプラ絶縁) |
+| 正式名称 | RP2350-ETH-8DI-8RO / RP2350-POE-ETH-8DI-8RO (PoE版) |
+| MCU | **RP2350B** (dual ARM Cortex-M33 + dual RISC-V Hazard3, 150MHz) |
+| Flash | 16MB (W25Q080互換) |
+| SRAM | 520KB |
+| リレー | 8ch (1NO+1NC / ch), **GPIO直接制御** |
+| デジタル入力 | 8ch (フォトカプラ絶縁, プルアップ, アクティブLOW) |
+| Ethernet | W5500 SPI接続, 10/100Mbps RJ45 |
 | 電源 | DC 7~36V (スクリュー端子) / USB-C 5V |
 | 寸法 | 175 x 90 x 40 mm |
 | 取付 | DINレール |
-| 価格 | ~$44.99 (標準版) / ~$49.99 (PoE版) |
+
+### ESP32-S3版からの変更点
+
+| 項目 | ESP32-S3版 | RP2350版 (採用) |
+|------|-----------|----------------|
+| リレー制御 | TCA9554 I2Cエキスパンダ | **GPIO直接制御** (単純) |
+| 通信 | WiFi + Ethernet + BLE | **Ethernet only** |
+| MCU | ESP32-S3 (240MHz, 16MB Flash) | RP2350B (150MHz, 16MB Flash) |
+| フレームワーク | arduino-esp32 | **arduino-pico** (Earle Philhower) |
+| WDT | esp_task_wdt API | **hardware/watchdog.h** (solar_node.ino同等) |
 
 ### 公式リソース
 
 | リソース | URL |
 |---------|-----|
-| Wiki | https://www.waveshare.com/wiki/ESP32-S3-ETH-8DI-8RO |
-| 製品ページ | https://www.waveshare.com/esp32-s3-eth-8di-8ro.htm |
-| ESPHome | https://devices.esphome.io/devices/waveshare-esp32-s3-eth-8di-8ro/ |
-
-### 製品バリエーション
-
-| モデル | Ethernet | 絶縁通信 |
-|-------|----------|---------|
-| ESP32-S3-ETH-8DI-8RO | 標準RJ45 | RS485 |
-| ESP32-S3-POE-ETH-8DI-8RO | PoE (802.3af) | RS485 |
-| ESP32-S3-ETH-8DI-8RO-C | 標準RJ45 | CAN |
+| Wiki (非PoE) | https://www.waveshare.com/wiki/RP2350-ETH-8DI-8RO |
+| Wiki (PoE) | https://www.waveshare.com/wiki/RP2350-POE-ETH-8DI-8RO (未公開) |
+| デモコードZIP | https://files.waveshare.com/wiki/RP2350-ETH-8DI-8RO/RP2350-ETH-8DI-8RO.zip |
+| RGB LEDデモ | https://files.waveshare.com/wiki/RP2350-ETH-8DI-8RO/RP2350-ETH-8DI-8RO-RGB.zip |
+| 拡張デモ(Modbus) | https://files.waveshare.com/wiki/RP2350-ETH-8DI-8RO/RP2350-ETH-8DI-8RO-Expand.zip |
+| arduino-pico | https://github.com/earlephilhower/arduino-pico |
+| Board Manager URL | https://github.com/earlephilhower/arduino-pico/releases/download/4.5.2/package_rp2040_index.json |
 
 ---
 
-## 2. リレー制御方式
+## 2. リレー制御方式: GPIO直接制御
 
-### **I2C GPIO エキスパンダ (TCA9554PWR)** — GPIO直接制御ではない
+ESP32-S3版のTCA9554 I2Cエキスパンダと異なり、RP2350版は**GPIOで直接リレーを制御**する。
 
-リレーはESP32-S3のGPIOに直結されていない。TCA9554PWR I2Cエキスパンダ経由で制御する。
+```cpp
+// DEV_Config.h より（公式デモコード）
+#define RELAY1_PIN 17
+#define RELAY2_PIN 18
+#define RELAY3_PIN 19
+#define RELAY4_PIN 20
+#define RELAY5_PIN 21
+#define RELAY6_PIN 22
+#define RELAY7_PIN 23
+#define RELAY8_PIN 24
+```
 
-- **I2Cバス**: SDA=GPIO42, SCL=GPIO41
-- **TCA9554 アドレス**: 0x20
-
-### GPIO → リレーチャンネル対応表
-
-| リレーCH | TCA9554ピン | I2Cビット | 制御方法 |
-|:--------:|:-----------:|:---------:|---------|
-| Relay 1 | EXIO1 | Bit 0 | Wire.write(0x20, bit0) |
-| Relay 2 | EXIO2 | Bit 1 | Wire.write(0x20, bit1) |
-| Relay 3 | EXIO3 | Bit 2 | Wire.write(0x20, bit2) |
-| Relay 4 | EXIO4 | Bit 3 | Wire.write(0x20, bit3) |
-| Relay 5 | EXIO5 | Bit 4 | Wire.write(0x20, bit4) |
-| Relay 6 | EXIO6 | Bit 5 | Wire.write(0x20, bit5) |
-| Relay 7 | EXIO7 | Bit 6 | Wire.write(0x20, bit6) |
-| Relay 8 | EXIO8 | Bit 7 | Wire.write(0x20, bit7) |
+制御: `gpio_put(RELAY1_PIN, 1)` でON、`gpio_put(RELAY1_PIN, 0)` でOFF。
 
 ### リレースペック
 
@@ -72,65 +77,105 @@
 
 ---
 
-## 3. 全GPIOマップ
+## 3. 全GPIOマップ（公式デモコード + ボード定義から確定）
 
-### デジタル入力 (8ch, フォトカプラ絶縁, アクティブLOW)
+### UART0 (デフォルト/USB Serial)
 
-| 入力CH | ESP32-S3 GPIO | 入力電圧範囲 |
-|:------:|:------------:|:----------:|
-| DI1 | GPIO4 | 5~36V |
-| DI2 | GPIO5 | 5~36V |
-| DI3 | GPIO6 | 5~36V |
-| DI4 | GPIO7 | 5~36V |
-| DI5 | GPIO8 | 5~36V |
-| DI6 | GPIO9 | 5~36V |
-| DI7 | GPIO10 | 5~36V |
-| DI8 | GPIO11 | 5~36V |
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| TX | GPIO0 | waveshare_rp2350_eth_8di_8ro.h |
+| RX | GPIO1 | waveshare_rp2350_eth_8di_8ro.h |
 
-### I2C (TCA9554 + RTC)
+### WS2812 RGB LED
 
-| 機能 | GPIO |
-|------|:----:|
-| SDA | GPIO42 |
-| SCL | GPIO41 |
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| WS2812 DIN | GPIO2 | waveshare_rp2350_eth_8di_8ro.h / RP2350_WS2812B_Test.c |
 
-### Ethernet W5500 (SPI)
+### ブザー (PWM)
 
-| 機能 | GPIO |
-|------|:----:|
-| CS | GPIO16 |
-| INT | GPIO12 |
-| SCLK | GPIO15 |
-| MISO | GPIO14 |
-| MOSI | GPIO13 |
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| BEEP | GPIO3 | DEV_Config.h |
 
-### RS485 (絶縁, TVS保護)
+### RS485 (UART1)
 
-| 機能 | GPIO |
-|------|:----:|
-| TX | GPIO17 |
-| RX | GPIO18 |
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| TX | GPIO4 | Serial.h (UART1_TX_PIN) |
+| RX | GPIO5 | Serial.h (UART1_RX_PIN) |
 
-### TF/SDカード
+### I2C0 (RTC用)
 
-| 機能 | GPIO |
-|------|:----:|
-| MISO | GPIO45 |
-| MOSI | GPIO47 |
-| SCLK | GPIO48 |
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| SDA | GPIO6 | waveshare_rp2350_eth_8di_8ro.h |
+| SCL | GPIO7 | waveshare_rp2350_eth_8di_8ro.h |
 
-### その他ペリフェラル
+### GPIO8 — 未割当
 
-| 機能 | GPIO |
-|------|:----:|
-| WS2812 RGB LED | GPIO38 |
-| ブザー | GPIO46 |
-| BOOTボタン | GPIO0 |
+GPIO8は公式デモコードに定義なし。W5500 INT または予約の可能性あり。
 
-### オンボードRTC
+### デジタル入力 (8ch, プルアップ, アクティブLOW)
 
-- **PCF85063ATL** (I2C, GPIO41/42共有)
-- バッテリーヘッダ付き（タイマー/スケジュール制御用）
+| 入力CH | GPIO | 出典 |
+|:------:|:----:|------|
+| DI1 | GPIO9 | DEV_Config.h (IN1_PIN) |
+| DI2 | GPIO10 | DEV_Config.h (IN2_PIN) |
+| DI3 | GPIO11 | DEV_Config.h (IN3_PIN) |
+| DI4 | GPIO12 | DEV_Config.h (IN4_PIN) |
+| DI5 | GPIO13 | DEV_Config.h (IN5_PIN) |
+| DI6 | GPIO14 | DEV_Config.h (IN6_PIN) |
+| DI7 | GPIO15 | DEV_Config.h (IN7_PIN) |
+| DI8 | GPIO16 | DEV_Config.h (IN8_PIN) |
+
+DI入力はIRQ対応。公式デモではGPIO_IRQ_EDGE_RISE/EDGE_FALLでリレーを連動制御。
+
+### リレー出力 (8ch, GPIO直接)
+
+| リレーCH | GPIO | 出典 |
+|:--------:|:----:|------|
+| Relay 1 | GPIO17 | DEV_Config.h (RELAY1_PIN) |
+| Relay 2 | GPIO18 | DEV_Config.h (RELAY2_PIN) |
+| Relay 3 | GPIO19 | DEV_Config.h (RELAY3_PIN) |
+| Relay 4 | GPIO20 | DEV_Config.h (RELAY4_PIN) |
+| Relay 5 | GPIO21 | DEV_Config.h (RELAY5_PIN) |
+| Relay 6 | GPIO22 | DEV_Config.h (RELAY6_PIN) |
+| Relay 7 | GPIO23 | DEV_Config.h (RELAY7_PIN) |
+| Relay 8 | GPIO24 | DEV_Config.h (RELAY8_PIN) |
+
+### W5500 Ethernet (SPI0)
+
+| 機能 | GPIO | 出典 |
+|------|:----:|------|
+| RST | GPIO25 | ethchip_spi.h (PIN_RST) |
+| CS | GPIO33 | ethchip_spi.h (PIN_CS) |
+| SCK | GPIO34 | ethchip_spi.h (PIN_SCK) |
+| MOSI | GPIO35 | ethchip_spi.h (PIN_MOSI) |
+| MISO | GPIO36 | ethchip_spi.h (PIN_MISO) |
+
+### GPIOサマリ表
+
+| GPIO | 機能 | 方向 |
+|:----:|------|:----:|
+| 0 | UART0 TX | OUT |
+| 1 | UART0 RX | IN |
+| 2 | WS2812 RGB LED | OUT |
+| 3 | ブザー (PWM) | OUT |
+| 4 | RS485 TX (UART1) | OUT |
+| 5 | RS485 RX (UART1) | IN |
+| 6 | I2C0 SDA (RTC) | I/O |
+| 7 | I2C0 SCL (RTC) | OUT |
+| 8 | (未割当) | — |
+| 9-16 | DI1-DI8 | IN |
+| 17-24 | Relay 1-8 | OUT |
+| 25 | W5500 RST | OUT |
+| 26-32 | (未使用) | — |
+| 33 | W5500 CS | OUT |
+| 34 | W5500 SCK | OUT |
+| 35 | W5500 MOSI | OUT |
+| 36 | W5500 MISO | IN |
+| 37-47 | (未使用 / TFカード等) | — |
 
 ---
 
@@ -138,12 +183,10 @@
 
 | I/F | 詳細 |
 |-----|------|
-| USB Type-C | 電源供給 + ファームウェア書込み + シリアル通信 |
-| WiFi | 2.4GHz 802.11 b/g/n (ESP32-S3内蔵) |
-| Bluetooth | Bluetooth 5, BLE (ESP32-S3内蔵) |
+| USB Type-C | 電源供給 + ファームウェア書込み (UF2 drag-and-drop) + シリアル通信 |
 | Ethernet | W5500 SPI接続, 10/100Mbps RJ45 |
-| RS485 | 絶縁, TVS+サージ/ESD保護, 120Ω終端(ジャンパ切替) |
-| Modbus RTU | RS485経由 (デフォルト38400 8E1) |
+| RS485 | 絶縁, TVS+サージ保護, 120Ω終端(ジャンパ切替), UART1 (GPIO4/5) |
+| Modbus RTU | RS485経由 (デフォルト9600bps) |
 
 ### LED インジケータ
 
@@ -152,67 +195,53 @@
 | PWR | 赤 | 電源 |
 | TXD | 緑 | RS485送信 |
 | RXD | 青 | RS485受信 |
-| RGB | WS2812 | プログラマブル (GPIO38) |
+| RGB | WS2812 | プログラマブル (GPIO2) |
 
 ---
 
-## 5. ESP32-S3 Arduino対応状況
+## 5. Arduino (arduino-pico) 対応
 
-### ボード設定 (Arduino IDE)
+### ボード設定
 
 ```
-Board Manager URL: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-Board: "ESP32S3 Dev Module"
-USB CDC On Boot: "Enabled"
-Flash Size: "16MB (128Mb)"
-PSRAM: "OPI PSRAM"
-Upload Speed: "921600"
+Board Manager URL: https://github.com/earlephilhower/arduino-pico/releases/download/4.5.2/package_rp2040_index.json
+Board: "Waveshare RP2350-ETH-8DI-8RO" (ボード定義あり)
+  → 未登録の場合: "Generic RP2350" で代用可
+Flash Size: "16MB"
+Upload: USB (UF2) or Picoprobe
 ```
 
-### GPIO特殊制約 (strapping pins)
+### RP2350B GPIO特殊制約
+
+RP2350B は48本のGPIOを持つ（RP2350Aは30本）。本ボードは高番号GPIO (33-36) をW5500に使用。
 
 | GPIO | 制約 | 本ボードでの用途 |
 |------|------|---------------|
-| GPIO0 | BOOTモード選択 | BOOTボタン (問題なし) |
-| GPIO45 | VDD_SPI電圧選択 | SDカードMISO (起動後は使用可) |
-| GPIO46 | ROM出力制御 | ブザー (起動後は使用可) |
-| GPIO48 | — | SDカードSCLK |
+| GPIO0-1 | UART0デフォルト | USB Serial |
+| GPIO25 | — | W5500 RST |
 
-**注意**: GPIO45/46はstrapping pinだが、起動後は通常のGPIOとして使用可能。ブート中にSDカードやブザーが接続されていても、内部プルダウンにより正常起動する（Waveshare設計で考慮済み）。
+strapping pin制約なし（RP2350はESP32系と異なりstrapping pinがない）。
 
 ### 必要ライブラリ
 
 | ライブラリ | 用途 | 備考 |
 |-----------|------|------|
-| Wire | I2C (TCA9554制御) | arduino-esp32標準 |
+| Ethernet (W5500) | Ethernet通信 | arduino-pico対応版 or WIZnet ioLibrary |
 | PubSubClient | MQTT | 2.8+ |
-| ArduinoJson | JSONシリアライズ | 7.x |
-| LittleFS | 設定ファイル保存 | ESP32対応版 |
+| ArduinoJson | JSONシリアライズ | **v7.x** (arduino-picoはv7推奨) |
+| LittleFS | 設定ファイル保存 | arduino-pico標準搭載 |
+| Wire | I2C (RTC) | arduino-pico標準搭載 |
 
-### WiFi + MQTT動作実績
+### Watchdog (RP2350 = Pico SDK)
 
-- ESP32-S3のWiFi+PubSubClientは多数の実績あり
-- solar_node.ino (Pico 2 W) のコードパターンをほぼそのまま移植可能
-- ESP32-S3固有: `WiFi.mode(WIFI_STA)` → `WiFi.begin()` で同一
-
-### Watchdog (ESP32-S3)
-
-Pico 2 Wの `hardware/watchdog.h` は使用不可。ESP32-S3では以下のAPIを使用:
+solar_node.ino の sw_watchdog.h と **同一API** を使用可能:
 
 ```cpp
-#include <esp_task_wdt.h>
+#include <hardware/watchdog.h>
+#include <pico/time.h>
 
-// HW WDT初期化 (ESP-IDF API)
-esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 30000,  // 30秒
-    .idle_core_mask = 0,
-    .trigger_panic = true
-};
-esp_task_wdt_init(&wdt_config);
-esp_task_wdt_add(NULL);  // 現タスクを監視対象に追加
-
-// メインループ内でフィード
-esp_task_wdt_reset();
+// HW WDT: watchdog_reboot(0, 0, timeout_ms)
+// SW WDT: repeating_timer + swWdtFeed() パターン (sw_watchdog.h そのまま流用可)
 ```
 
 ---
@@ -226,15 +255,15 @@ esp_task_wdt_reset();
 │ waveshare_relay_node.ino                │
 │                                         │
 │  ┌─────────┐  ┌──────────┐  ┌────────┐ │
-│  │ WiFi    │  │ MQTT     │  │ HA     │ │
-│  │ Manager │  │ Client   │  │ Disc.  │ │
+│  │ W5500   │  │ MQTT     │  │ HA     │ │
+│  │ Ethernet│  │ Client   │  │ Disc.  │ │
 │  └────┬────┘  └────┬─────┘  └───┬────┘ │
 │       │            │             │      │
 │       └────────────┼─────────────┘      │
 │                    │                    │
 │  ┌─────────────────┴──────────────────┐ │
-│  │ TCA9554 Relay Controller (I2C)     │ │
-│  │ addr=0x20, SDA=42, SCL=41         │ │
+│  │ GPIO Direct Relay Control          │ │
+│  │ GPIO17-24 = Relay 1-8              │ │
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌──────────┐  ┌──────────┐  ┌───────┐ │
@@ -246,7 +275,7 @@ esp_task_wdt_reset();
 
 ### 6.2 MQTTトピック設計
 
-mqtt_relay_bridge.py のトピック構造に準拠:
+mqtt_relay_bridge.py のトピック構造に完全準拠（変更なし）:
 
 #### Subscribe (QoS=1)
 
@@ -258,10 +287,6 @@ agriha/{house_id}/relay/{ch}/set
 ```json
 {"value": 1, "duration_sec": 180, "reason": "irrigation_zone_1"}
 ```
-
-- `value`: 0=OFF, 1=ON
-- `duration_sec`: >0で自動OFF (mqtt_relay_bridge.py互換)
-- `reason`: 操作理由 (ログ用)
 
 #### Publish (QoS=1, retain=true)
 
@@ -280,231 +305,100 @@ agriha/{house_id}/relay/state
 }
 ```
 
-#### デジタル入力状態 (追加トピック)
+#### デジタル入力状態
 
 ```
 agriha/{house_id}/di/state
-```
-
-ペイロード:
-```json
-{
-  "di1": 0, "di2": 1, "di3": 0, "di4": 0,
-  "di5": 0, "di6": 0, "di7": 0, "di8": 0,
-  "ts": 1740000000
-}
-```
-
-#### ファームウェアバージョン (retained)
-
-```
-agriha/{node_id}/version
 ```
 
 ### 6.3 HA MQTT Auto Discovery
 
 solar_node.ino の `publishHADiscovery()` パターンを踏襲。
 
-#### リレーエンティティ (8ch)
-
-HAの `switch` ドメインで登録:
-
-```json
-{
-  "name": "Relay CH1",
-  "stat_t": "agriha/h2/relay/state",
-  "cmd_t": "agriha/h2/relay/1/set",
-  "val_tpl": "{{ value_json.ch1 }}",
-  "pl_on": "{\"value\":1}",
-  "pl_off": "{\"value\":0}",
-  "stat_on": 1,
-  "stat_off": 0,
-  "uniq_id": "waveshare_relay_01_ch1",
-  "dev": {
-    "identifiers": ["waveshare_relay_01"],
-    "name": "Waveshare Relay H2",
-    "model": "ESP32-S3-ETH-8DI-8RO",
-    "manufacturer": "Waveshare",
-    "sw_version": "1.0.0"
-  }
-}
-```
-
-Discovery topic: `homeassistant/switch/waveshare_relay_01_ch1/config`
-
-#### デジタル入力エンティティ (8ch)
-
-HAの `binary_sensor` ドメインで登録:
-
-```json
-{
-  "name": "DI1",
-  "stat_t": "agriha/h2/di/state",
-  "val_tpl": "{{ value_json.di1 }}",
-  "pl_on": 1,
-  "pl_off": 0,
-  "uniq_id": "waveshare_relay_01_di1",
-  "dev_cla": "power",
-  "dev": { ... }
-}
-```
-
-Discovery topic: `homeassistant/binary_sensor/waveshare_relay_01_di1/config`
+- リレー: `homeassistant/switch/waveshare_relay_01_ch{N}/config` (8ch)
+- DI: `homeassistant/binary_sensor/waveshare_relay_01_di{N}/config` (8ch)
 
 ### 6.4 Watchdog 3段構え
 
-| Tier | 方式 | タイムアウト | トリガー条件 |
-|------|------|:----------:|------------|
-| Tier 1 | HW WDT (esp_task_wdt) | 30秒 | loop()がフリーズ |
-| Tier 2 | SW WDT (自前実装) | 15秒×3miss=45秒 | メインロジック停止 |
-| Tier 3 | 定期リブート | 10分 | 長期安定性 (solar_node.ino踏襲) |
+| Tier | 方式 | タイムアウト | 実装 |
+|------|------|:----------:|------|
+| Tier 1 | HW WDT | 8秒 | `watchdog_enable(8000, true)` + `watchdog_update()` |
+| Tier 2 | SW WDT | 5秒×3miss=15秒 | **sw_watchdog.h そのまま流用** |
+| Tier 3 | 定期リブート | 10分 | `millis() >= REBOOT_INTERVAL` (solar_node.ino踏襲) |
 
-#### Tier 1: HW WDT (ESP32-S3)
-
-```cpp
-#include <esp_task_wdt.h>
-
-void setupHwWdt() {
-    esp_task_wdt_config_t config = {
-        .timeout_ms = 30000,
-        .idle_core_mask = 0,
-        .trigger_panic = true
-    };
-    esp_task_wdt_init(&config);
-    esp_task_wdt_add(NULL);
-}
-
-// loop()内: esp_task_wdt_reset();
-```
-
-#### Tier 2: SW WDT (sw_watchdog.h 移植)
-
-sw_watchdog.h の概念を ESP32-S3 に移植。Pico の `repeating_timer` → ESP32 の `Ticker` に置換:
-
-```cpp
-#include <Ticker.h>
-Ticker swWdtTicker;
-
-volatile bool swWdtFlag = false;
-volatile int swWdtMissCount = 0;
-const int SWD_CHECK_MS = 5000;
-const int SWD_MISS_THRESHOLD = 3;
-
-void swWdtCallback() {
-    if (swWdtFlag) {
-        swWdtFlag = false;
-        swWdtMissCount = 0;
-    } else {
-        swWdtMissCount++;
-        if (swWdtMissCount >= SWD_MISS_THRESHOLD) {
-            ESP.restart();
-        }
-    }
-}
-
-void swWdtStart() { swWdtTicker.attach_ms(SWD_CHECK_MS, swWdtCallback); }
-void swWdtFeed()  { swWdtFlag = true; }
-```
-
-#### Tier 3: 定期リブート
-
-```cpp
-const unsigned long REBOOT_INTERVAL = 600000; // 10分 (solar_node.ino踏襲)
-
-// loop()内:
-if (millis() >= REBOOT_INTERVAL) {
-    rebootWithReason("periodic_10min_reboot");
-}
-```
+sw_watchdog.h はPico SDK の `repeating_timer` + `watchdog_reboot()` を使用しており、RP2350でもそのまま動作する。
 
 ### 6.5 LittleFS config.json
 
 ```json
 {
-  "wifi_ssid": "aterm-03e34d-a",
-  "wifi_password": "xxxxxxxx",
   "mqtt_broker": "192.168.15.14",
   "mqtt_port": 1883,
   "house_id": "h2",
   "node_id": "waveshare_relay_01",
+  "ip": "192.168.15.xx",
+  "subnet": "255.255.255.0",
+  "gateway": "192.168.15.1",
+  "dns": "8.8.8.8",
   "sensor_interval": 10
 }
 ```
 
-- solar_node.ino の `loadConfig()` / `saveConfig()` パターンを流用
-- `house_id`: 2棟目ハウスなので `h2`
-- `sensor_interval`: DI状態のポーリング間隔(秒)
+WiFiなし→Ethernet固定IP設定が必要。DHCP対応は将来検討。
 
 ### 6.6 安全設計
 
 | 項目 | 方針 | 実装 |
 |------|------|------|
-| 起動時 | **全リレーOFF** | setup()でTCA9554の出力レジスタを0x00に初期化 |
-| 通信断 | **フェイルセーフ** | MQTT接続失敗3回連続でリブート (solar_node.ino踏襲) |
-| duration超過 | 自動OFF | タイマーで指定秒後にリレーOFF (mqtt_relay_bridge.py互換) |
-| I2C障害 | リブート | TCA9554応答なし→リブート |
+| 起動時 | **全リレーOFF** | setup()でGPIO17-24を全てLOW |
+| 通信断 | **フェイルセーフ** | MQTT接続失敗3回連続でリブート |
+| duration超過 | 自動OFF | タイマーで指定秒後にリレーOFF |
 | 電源断→復帰 | 全OFF | setup()で必ず全OFFから開始 |
 
-#### 起動時全OFF (重要)
+#### 起動時全OFF
 
 ```cpp
 void initRelaysOff() {
-    Wire.beginTransmission(0x20);  // TCA9554
-    Wire.write(0x01);              // Output register
-    Wire.write(0x00);              // All OFF
-    Wire.endTransmission();
-
-    Wire.beginTransmission(0x20);
-    Wire.write(0x03);              // Configuration register
-    Wire.write(0x00);              // All pins as output
-    Wire.endTransmission();
+    for (int i = 0; i < 8; i++) {
+        gpio_init(RELAY1_PIN + i);
+        gpio_set_dir(RELAY1_PIN + i, GPIO_OUT);
+        gpio_put(RELAY1_PIN + i, 0);  // OFF
+    }
 }
 ```
 
-### 6.7 TCA9554 リレー制御関数
+### 6.7 リレー制御関数
 
 ```cpp
-const uint8_t TCA9554_ADDR = 0x20;
-const uint8_t TCA9554_OUTPUT_REG = 0x01;
-const uint8_t TCA9554_CONFIG_REG = 0x03;
-
-uint8_t relayState = 0x00;  // 現在のリレー状態
+const int RELAY_PINS[8] = {17, 18, 19, 20, 21, 22, 23, 24};
+uint8_t relayState = 0x00;
 
 void setRelay(uint8_t ch, bool on) {
     if (ch < 1 || ch > 8) return;
-    uint8_t bit = ch - 1;
-
-    if (on) {
-        relayState |= (1 << bit);
-    } else {
-        relayState &= ~(1 << bit);
-    }
-
-    Wire.beginTransmission(TCA9554_ADDR);
-    Wire.write(TCA9554_OUTPUT_REG);
-    Wire.write(relayState);
-    Wire.endTransmission();
-}
-
-uint8_t getRelayState() {
-    return relayState;
+    uint8_t idx = ch - 1;
+    gpio_put(RELAY_PINS[idx], on ? 1 : 0);
+    if (on) relayState |= (1 << idx);
+    else    relayState &= ~(1 << idx);
 }
 ```
+
+ESP32-S3版のI2C書込みと比べ、直接GPIO制御のため遅延なし・障害点なし。
 
 ---
 
 ## 7. 既存システムとの対応関係
 
-| 項目 | 1棟目 (UniPi) | 2棟目 (Waveshare) |
-|------|-------------|------------------|
-| HW | UniPi Neuron + MCP23008 | ESP32-S3 + TCA9554 |
-| 制御I/F | I2C (MCP23008) | I2C (TCA9554) |
+| 項目 | 1棟目 (UniPi) | 2棟目 (Waveshare RP2350) |
+|------|-------------|--------------------------|
+| HW | UniPi Neuron + MCP23008 | RP2350B + GPIO直接 |
+| 制御I/F | I2C (MCP23008) | **GPIO直接** (最も単純) |
 | MQTT Bridge | mqtt_relay_bridge.py (Python) | waveshare_relay_node.ino (Arduino) |
 | Subscribe | agriha/{hid}/relay/{ch}/set | 同一 |
 | Publish | agriha/{hid}/relay/state | 同一 |
 | ペイロード | {"ch1":0,...,"ts":N} | 同一 + node_id, uptime |
 | house_id | h1 (h01) | h2 |
 | HA Discovery | なし (Python側) | あり (FW内蔵) |
+| WDT | — | sw_watchdog.h流用 (solar_node.inoと同パターン) |
 
 **互換性**: MQTTトピック・ペイロード構造が同一のため、上位のLLM制御層 (uecs-llm) は house_id の切替のみで両棟を制御可能。
 
@@ -512,8 +406,28 @@ uint8_t getRelayState() {
 
 ## 8. 実装時の注意事項
 
-1. **I2Cアドレス競合**: TCA9554(0x20)とRTC PCF85063(0x51)は別アドレスなので共存可能
-2. **W5500 SPI**: 本FWではEthernet未使用(WiFi接続)。将来的にEthernet対応する場合はSPIバス共有に注意
-3. **PSRAM**: 8MB搭載だがリレー制御FWでは不要。JSONバッファは通常RAMで十分
-4. **OTA**: arduino-esp32のOTA機能は利用可能だが、Pico 2 W同様に初期実装では見送り推奨
-5. **RS485/Modbus**: 将来のUECS CCM連携で使用する可能性あり。GPIO17/18を予約
+1. **W5500 SPI**: spi0使用。arduino-picoでは `SPI.begin()` ではなくピン番号指定の初期化が必要（GPIO33-36は高番号）
+2. **Ethernet Library選定**: WIZnet ioLibrary (公式デモ使用) か、arduino-pico対応の Ethernet ライブラリか要検証
+3. **LittleFS**: arduino-picoではビルド時にFS領域を指定（メニューから選択可能）
+4. **OTA**: UF2ドラッグ&ドロップが標準。MQTT経由のOTAは将来検討
+5. **RS485/Modbus**: UART1 (GPIO4/5)。将来のUECS CCM連携で使用する可能性あり
+6. **RTC**: PCF85063相当のRTCがI2C0 (GPIO6/7) に接続。NTP不要時のタイムスタンプに使用可
+7. **GPIO8**: 未割当。W5500 INTの可能性があるが公式コードに定義なし。実機到着後に確認
+
+---
+
+## 付録A: ESP32-S3版 参考情報（旧 subtask_1071）
+
+ESP32-S3版 (ESP32-S3-ETH-8DI-8RO) の情報は殿の方針変更 (subtask_1073) により不採用だが、
+比較参考として主要差分を記録する。
+
+| 項目 | ESP32-S3版 | RP2350版 |
+|------|-----------|---------|
+| リレー制御 | TCA9554 I2C (0x20) | GPIO直接 (GPIO17-24) |
+| I2Cバス | SDA=GPIO42, SCL=GPIO41 | SDA=GPIO6, SCL=GPIO7 |
+| W5500 SPI | CS=16,INT=12,SCK=15,MISO=14,MOSI=13 | CS=33,RST=25,SCK=34,MOSI=35,MISO=36 |
+| RS485 | TX=GPIO17, RX=GPIO18 | TX=GPIO4, RX=GPIO5 |
+| DI | GPIO4-11 | GPIO9-16 |
+| RGB LED | GPIO38 | GPIO2 |
+| ブザー | GPIO46 | GPIO3 |
+| Flash/PSRAM | 16MB / 8MB OPI PSRAM | 16MB / SRAM 520KB |

@@ -382,6 +382,148 @@ tmux capture-pane -t multiagent:agents.0 -p | tail -5
 # ❯のまま → 1回だけ再送
 ```
 
+## Bloom別分析テンプレート（L4/L5/L6）
+
+高難易度タスク（L4-L6）の分析品質を構造化する型。
+テンプレートに従うことで、分析の抜け漏れを防ぎ、足軽が実装しやすい出力を保証する。
+
+> **根拠**: オペレータ語彙の品質が探索アルゴリズムと同等に重要（arXiv:2603.22386）。
+> 分析の「型」が弱いと、足軽への入力品質が下がり、全体の成果が落ちる。
+
+### L4テンプレート: 原因分析（Analysis）
+
+バグ調査・設計ギャップ分析・依存関係解析に使え。
+
+```yaml
+l4_analysis:
+  problem_statement: "何が起きているか（観測された症状）"
+  evidence:
+    - "観測事実1（ログ・エラーメッセージ・再現手順）"
+    - "観測事実2"
+    - "観測事実3"
+  hypotheses:
+    - id: H1
+      description: "仮説A"
+      supporting: "この仮説を支持する証拠"
+      contradicting: "この仮説に反する証拠（あれば）"
+    - id: H2
+      description: "仮説B"
+      supporting: "..."
+      contradicting: "..."
+  test_plan:
+    - hypothesis: H1
+      method: "どう検証するか"
+      expected_if_true: "正しい場合の予測結果"
+      expected_if_false: "誤りの場合の予測結果"
+  conclusion:
+    most_likely: "H1"
+    confidence: 0.85
+    reasoning: "H1を支持する根拠の要約"
+    remaining_uncertainty: "まだ確定できない要素"
+```
+
+**必須**: `remaining_uncertainty` を省略するな（「見落としの可能性」セクション）。
+
+### L5テンプレート: 比較評価（Evaluation）
+
+設計判断・アプローチ比較・トレードオフ判定に使え。
+
+```yaml
+l5_evaluation:
+  decision_context: "何を決める必要があるか"
+  options:
+    - id: A
+      name: "案A"
+      description: "概要"
+    - id: B
+      name: "案B"
+      description: "概要"
+    - id: C
+      name: "案C（冒険的案・必須）"
+      description: "概要"
+  criteria:
+    - name: "north_star整合"
+      weight: 3  # 1-3（3が最重要）
+    - name: "実装コスト"
+      weight: 2
+    - name: "保守性"
+      weight: 2
+    - name: "リスク"
+      weight: 1
+  scoring_matrix:
+    # 各案×各基準: 0-3点
+    A: { north_star: 3, cost: 1, maintainability: 2, risk: 2 }
+    B: { north_star: 2, cost: 3, maintainability: 3, risk: 3 }
+    C: { north_star: 3, cost: 1, maintainability: 1, risk: 1 }
+  weighted_totals:
+    A: 18  # 加重合計
+    B: 22
+    C: 14
+  recommendation:
+    choice: "B"
+    reasoning: "north_star貢献度は案Aと同等だが、実装・保守コストで大幅に優位"
+  dissent:
+    biggest_risk: "案Bの最大リスクは何か"
+    mitigation: "そのリスクをどう軽減するか"
+    when_to_reconsider: "どの条件が変われば案Bを撤回すべきか"
+```
+
+**必須**:
+- `options` に冒険的案を最低1つ含めよ（キャラ設定: 冒険心◎）
+- `dissent` を省略するな（推奨案の最大リスクを必ず明示）
+- `weight` はnorth_star整合を最重とせよ（技術的優美さではない）
+
+### L6テンプレート: 創造設計（Creation）
+
+新規アーキテクチャ・ゼロからの戦略・PDCAループ設計に使え。
+
+```yaml
+l6_creation:
+  vision: "何を実現するか（1-2文）"
+  constraints:
+    hard: ["動かせない制約（予算・HW・既存システム）"]
+    soft: ["できれば守りたい制約（納期・互換性）"]
+  architecture:
+    components:
+      - name: "コンポーネント名"
+        responsibility: "このコンポーネントが担う責務"
+        interface: "入出力の定義"
+    data_flow: "コンポーネント間のデータの流れ（図または箇条書き）"
+    key_decisions:
+      - decision: "設計判断1"
+        rationale: "なぜこの判断をしたか"
+        alternatives_rejected: "却下した代替案と理由"
+  unknown_unknowns:
+    - "見落としている可能性のある領域1"
+    - "見落としている可能性のある領域2"
+    - "このアーキテクチャが破綻する条件"
+  pilot_plan:
+    scope: "最小検証で確認すべきこと"
+    success_criteria: "パイロットの合格条件"
+    estimated_effort: "パイロット実装の見積もり"
+    rollback_plan: "パイロット失敗時の退路"
+```
+
+**必須**:
+- `unknown_unknowns` を最低2項目書け（キャラ設定: 慎重さ△の補完）
+- `pilot_plan` を省略するな（PDCA発動判定に直結）
+- `rollback_plan` を書け（退路なき設計は殿に却下される）
+
+### テンプレート使用ルール
+
+| 条件 | 使用テンプレート |
+|------|----------------|
+| bloom_level == 4 | L4テンプレート（原因分析） |
+| bloom_level == 5 | L5テンプレート（比較評価） |
+| bloom_level == 6 | L6テンプレート（創造設計） |
+| bloom_level == 4 かつ比較要素あり | L4 + L5併用可 |
+| bloom_level == 6 かつ既存システム分析必要 | L6 + L4併用可 |
+
+テンプレートは **gunshi_analysis.yaml** の `analysis` セクション内に出力せよ。
+従来の `bloom_level`, `bloom_reasoning`, `recommended_model`, `confidence` と併存する。
+
+---
+
 ## 分析の深度ガイドライン
 
 ### 広く読んでから結論せよ

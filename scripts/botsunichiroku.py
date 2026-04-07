@@ -61,7 +61,7 @@ from botsu.subtask import subtask_list, subtask_add, subtask_update, subtask_sho
 from botsu.report import report_add, report_list
 from botsu.agent import agent_list, agent_update
 from botsu.counter import counter_next, counter_show
-from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show
+from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show, audit_add, audit_show
 from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
@@ -203,8 +203,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = audit_sub.add_parser("list", help="List audit items (default: pending only)")
     p.add_argument("--all", action="store_true", help="Show all audit items (not just pending)")
+    p.add_argument("--subtask", help="Filter by subtask ID")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=audit_list)
+
+    p = audit_sub.add_parser("add", help="Add a v4.0 合議結果 to audit_records")
+    p.add_argument("subtask_id", help="Subtask ID (e.g. subtask_XXX)")
+    p.add_argument("--verdict", required=True, choices=["PASS", "FAIL", "CONDITIONAL"], help="Verdict")
+    p.add_argument("--cmd", help="Command ID (e.g. cmd_YYY)")
+    p.add_argument("--kenshu-thread", dest="kenshu_thread", help="検収スレID")
+    p.add_argument("--reviewers", help="Reviewer list (comma-separated)")
+    p.add_argument("--summary", required=True, help="One-line summary of the verdict")
+    p.set_defaults(func=audit_add)
+
+    p = audit_sub.add_parser("show", help="Show audit_record(s) by ID or subtask")
+    p.add_argument("audit_id", nargs="?", type=int, help="audit_record ID (positional, optional)")
+    p.add_argument("--subtask", help="Filter by subtask ID")
+    p.set_defaults(func=audit_show)
 
     p = audit_sub.add_parser("record", help="Record a retry-loop audit result to audit_history")
     p.add_argument("subtask_id", help="Subtask ID (e.g. subtask_XXX)")

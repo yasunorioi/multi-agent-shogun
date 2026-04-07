@@ -7,15 +7,17 @@ from . import get_connection, print_table, print_json, row_to_dict
 
 def audit_list(args) -> None:
     conn = get_connection()
+    subtask_filter = getattr(args, "subtask", None)
+    params = []
     if args.all:
-        query = """SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description
-                   FROM subtasks WHERE needs_audit = 1
-                   ORDER BY parent_cmd DESC, id"""
+        base = "SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description FROM subtasks WHERE needs_audit = 1"
     else:
-        query = """SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description
-                   FROM subtasks WHERE needs_audit = 1 AND (audit_status IS NULL OR audit_status = 'pending')
-                   ORDER BY parent_cmd DESC, id"""
-    rows = conn.execute(query).fetchall()
+        base = "SELECT id, parent_cmd, worker_id, status, audit_status, needs_audit, description FROM subtasks WHERE needs_audit = 1 AND (audit_status IS NULL OR audit_status = 'pending')"
+    if subtask_filter:
+        base += " AND id = ?"
+        params.append(subtask_filter)
+    query = base + " ORDER BY parent_cmd DESC, id"
+    rows = conn.execute(query, params).fetchall()
     conn.close()
 
     if args.json:
@@ -165,6 +167,99 @@ def audit_history_stats(args) -> None:
     ]
     print_table(headers, table_rows, [14, 4, 6, 20, 16, 16])
     print("═══════════════════════════════════════")
+
+
+def _ensure_audit_records(conn) -> None:
+    """audit_records テーブルが存在しない場合は作成（マイグレーション）。"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_records (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            subtask_id  TEXT    NOT NULL,
+            cmd_id      TEXT,
+            verdict     TEXT    NOT NULL CHECK(verdict IN ('PASS','FAIL','CONDITIONAL')),
+            kenshu_thread TEXT,
+            reviewers   TEXT,
+            summary     TEXT    NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+
+def _print_audit_record(r) -> None:
+    print("─────────────────────────────────────────")
+    print(f"  audit_record #{r['id']}")
+    print(f"  subtask : {r['subtask_id']}")
+    print(f"  cmd     : {r['cmd_id'] or '-'}")
+    print(f"  verdict : {r['verdict']}")
+    print(f"  thread  : {r['kenshu_thread'] or '-'}")
+    print(f"  reviewers: {r['reviewers'] or '-'}")
+    print(f"  summary : {r['summary']}")
+    print(f"  created : {r['created_at']}")
+    print("─────────────────────────────────────────")
+
+
+def audit_add(args) -> None:
+    """audit_records テーブルに v4.0 合議結果を追加する。"""
+    conn = get_connection()
+    _ensure_audit_records(conn)
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    conn.execute(
+        """INSERT INTO audit_records
+           (subtask_id, cmd_id, verdict, kenshu_thread, reviewers, summary, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            args.subtask_id,
+            args.cmd,
+            args.verdict,
+            args.kenshu_thread,
+            args.reviewers,
+            args.summary,
+            ts,
+        ),
+    )
+    conn.commit()
+    row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    print(f"Created: audit_record #{row_id} (subtask={args.subtask_id}, verdict={args.verdict})")
+
+
+def audit_show(args) -> None:
+    """audit_records の1件または subtask別に表示する。"""
+    conn = get_connection()
+
+    exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_records'"
+    ).fetchone()
+    if not exists:
+        print("audit_records テーブルが存在しません。audit add を先に実行してください。")
+        conn.close()
+        return
+
+    if args.subtask:
+        rows = conn.execute(
+            "SELECT * FROM audit_records WHERE subtask_id = ? ORDER BY id DESC",
+            (args.subtask,),
+        ).fetchall()
+        conn.close()
+        if not rows:
+            print(f"No audit_records for subtask={args.subtask}")
+            return
+        for r in rows:
+            _print_audit_record(r)
+    elif args.audit_id is not None:
+        row = conn.execute(
+            "SELECT * FROM audit_records WHERE id = ?",
+            (args.audit_id,),
+        ).fetchone()
+        conn.close()
+        if not row:
+            print(f"audit_record #{args.audit_id} not found")
+            return
+        _print_audit_record(row)
+    else:
+        conn.close()
+        print("audit_id (positional) または --subtask SUBTASK_ID を指定してください")
 
 
 def stats_show(args) -> None:

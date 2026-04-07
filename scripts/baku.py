@@ -32,6 +32,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass
+
+try:
     import feedparser as _feedparser  # noqa: F401（将来の標準RSS対応用）
     _HAS_FEEDPARSER = True
 except ImportError:

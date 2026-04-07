@@ -61,7 +61,7 @@ from botsu.subtask import subtask_list, subtask_add, subtask_update, subtask_sho
 from botsu.report import report_add, report_list
 from botsu.agent import agent_list, agent_update
 from botsu.counter import counter_next, counter_show
-from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show, audit_add, audit_show, audit_records_list
+from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show, audit_add, audit_show, audit_records_list, audit_dashboard
 from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
@@ -242,6 +242,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = audit_sub.add_parser("stats", help="Show failure_category stats (retry-loop recurrence tracking)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=audit_history_stats)
+
+    p = audit_sub.add_parser("dashboard", help="検収PASS率ダッシュボード表示")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.add_argument("--recent", type=int, default=10, help="直近N件の集計対象 (default: 10)")
+    p.add_argument("--update-dashboard", dest="update_dashboard", action="store_true", help="dashboard.mdに検収PASS率セクションを自動更新")
+    p.set_defaults(func=audit_dashboard)
 
     # === stats ===
     p = top_sub.add_parser("stats", help="Show database statistics")

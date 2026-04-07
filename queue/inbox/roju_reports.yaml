@@ -1,163 +1,683 @@
 reports:
-- cmd_id: cmd_480
-  subtask_id: subtask_1080
-  worker: gunshi
-  status: done
-  reported_at: "2026-04-07T10:50:00"
-  summary: |
-    v4.0三階建てアーキテクチャ設計書ダブルチェック完了。
-    総合判定: 条件付き承認（WARNING 4件、修正推奨3件）。
-    構造の根幹は健全。2F→1F逆通知経路の明確化、bloom別検収ファストトラック、
-    合議のタイブレーカー設計が未決。詳細は下記findings参照。
-  findings:
-    # ─── 観点1: 構造的欠陥 → WARNING ───
-    - category: structural
-      verdict: WARNING
-      detail: |
-        ■ 2F→1F逆通知の経路不明確
-        1F→2F（納品POST）は明記されているが、2F→1F（差し戻し通知）の具体的メカニズムが未記載。
-        FAILの場合、足軽はどう知るのか？ BBS通知(notify_exec)? send-keys? 定期読み取り？
-        → 修正案: §3.1に「kenshu_gate FAIL → 任務板にリジェクト通知POST → 1Fにsend-keys/notify_exec」を追記
-
-        ■ 没日録DBへの2F合議結果の書き戻し
-        2Fエージェントは没日録DB書き込み権限がない（権限マトリクス）。
-        合議結果（PASS/FAIL+理由）は老中が手動で没日録に転記する必要がある。
-        この手動転記が抜けると没日録とBBSが乖離し「正データは没日録」原則が崩れる。
-        → 修正案: 老中がkenshu_gateを読んだ時点で自動的にbotsunichiroku audit recordに記録するスクリプト/フックを設計
-
-        ■ 合議のタイブレーカー
-        お針子PASS+軍師FAILの場合（またはその逆）、誰がkenshu_gateに最終判定を書くか不明。
-        → 修正案: §4.3に「合議不一致時は老中裁定。老中判断困難な場合は殿にエスカレーション」を追記
-
-    # ─── 観点2: ハーネス4要素 → PASS (条件付き) ───
-    - category: harness
-      verdict: PASS_WITH_CONDITIONS
-      detail: |
-        4要素とも概ねカバーされている。2点の穴:
-
-        ■ 合議の最低品質保証（アーキテクチャ制約の穴）
-        >>50強制判定は上限だが、下限がない。レス1件で「PASS」と書いて終わることが可能。
-        → 修正推奨: kenshu_gateへの投稿にminimum_reviews: 2を設け、
-        最低2名の実質的レビュー（「LGTM」だけでなく具体的コメント）を必須化
-
-        ■ 成功からの学習（改善サイクルの穴）
-        §5.4のミスパターン→ルール昇格はFAIL起点のみ。
-        PASSから「なぜうまくいったか」を学ぶ仕組みがない。
-        → 軽微。Phase 4以降で検討すれば十分。今は不要
-
-    # ─── 観点3: POSIX対応表 → PASS (軽微指摘) ───
-    - category: posix
-      verdict: PASS
-      detail: |
-        対応表は概ね妥当。殿の洞察が正しく反映されている。軽微な指摘3点:
-
-        ■ pipe→BBSの対応がやや強引
-        POSIX pipeはpoint-to-point(producer-consumer)。BBSはpub/sub(1:N)。
-        より正確な対応: BBS板 ≒ message queue (POSIX mq_open), スレッド ≒ named pipe。
-        実害はないが、設計議論時に混乱の元になりうる。
-
-        ■ exit code未対応
-        POSIXプロセスは必ずexit codeを返す。足軽の「完了通知」に相当するが、
-        納品IFのtest_result(PASS/FAIL)がこれに該当する。明示的に対応表に追加すると良い。
-
-        ■ fork()未対応
-        支店の動的起動（worker_ctl.sh等）はfork()に相当。対応表に追加推奨。
-
-    # ─── 観点4: 移行計画 → WARNING ───
-    - category: migration
-      verdict: WARNING
-      detail: |
-        ■ Phase 2→3の飛躍が大きい
-        Phase 2で「足軽が直接POST」、Phase 3で「YAML inbox廃止」。
-        YAML inboxは現在のタスク割当の唯一の正データ。
-        BBS移行が不安定な段階でYAMLを廃止すると、タスク割当が失われるリスク。
-        → 修正推奨: Phase 2.5「デュアルモード（YAML+BBS並行運用）」を挿入。
-        BBS経由のタスク割当が90%成功するまでYAMLは残す。
-
-        ■ Phase 1の「手動実行」から Phase 2の「直接POST」への橋渡し
-        足軽にBBS POST能力を付与する（スキル化 or instructions改修）手順が未記載。
-        → Phase 1.5: 足軽instructionsに「納品POST手順」を追記、練習用subtaskで1回試行
-
-    # ─── 観点5: 既存知見との整合 → PASS ───
-    - category: consistency
-      verdict: PASS
-      detail: |
-        ■ temperature理論との整合: 良好
-        kenshu_gate(PASS/FAIL/CONDITIONAL)はt=0の判定ゲート。
-        2F合議(自由議論)はt>0。3F老中のマージ判断はt≈0。
-        「下層が上層を黙らせる」原則が三階建てでも維持されている。
-        ただし§6 Phase 4まで温度理論の適用が先送りされている。
-        → 推奨: §2.1に温度理論との対応を明記（実装はPhase 4でよいが、設計思想として記載）
-
-        ■ Y-Combinator型付け: §3.2で明示的に参照。完全に整合。
-        ■ bloom_routing: §5.3のワークフローに含まれている。
-        ただし三階建てでbloom_routingがどの階で発動するか不明確。
-        → 推奨: bloom_routingは3F(老中)で実行、L4-L6は2F(軍師板)経由、と明記
-        ■ Preflight Check: §5.3に含まれている。整合。
-
-    # ─── 観点6: スケーラビリティ → WARNING ───
-    - category: scalability
-      verdict: WARNING
-      detail: |
-        ■ 2F合議が支店数に比例してボトルネック化するリスク
-        5支店が同時稼働 → 5並行検収スレ → お針子+軍師が5件同時レビュー。
-        現実的に破綻する。
-        → 修正推奨: bloom別の検収ファストトラック設計
-          L1-L3: 老中スポットチェック(kenshu_gate直書き可) — 2F合議スキップ
-          L4-L5: お針子+軍師の2名合議
-          L6: フル合議(外部レビュア含む)
-        これで2Fの負荷が L4-L6 のみに限定される。
-
-        ■ kenshu_gateのwriter制限
-        現状 writers: [お針子, 軍師] のみ。どちらかがbusy → gateがブロック。
-        → 推奨: L1-L3ファストトラック用に老中もwriter追加
-
-  total_verdict: conditional_approved
-  conditions:
-    - "§3.1に2F→1F逆通知経路を明記"
-    - "§4.3に合議タイブレーカールールを追記"
-    - "§6にPhase 2.5（デュアルモード）を挿入"
-  recommendations:
-    - "§2.1にtemperature理論との対応を注記"
-    - "検収ファストトラック（bloom別分流）の設計"
-    - "bloom_routingの発動階を明記"
-    - "POSIX対応表にexit code, fork()を追加"
-  skill_candidate: null
+- subtask_id: subtask_1101
+  cmd_id: cmd_500
+  commit: 6f6ddd2
+  kenshu_thread: '1101'
   read: true
-  karo_review: "cmd_480 v4.0設計レビュー確認。条件付き承認(WARNING4+推奨4)。殿直接指示案件につきdashboard.mdに転記。2ch上で軍師・お針子・足軽が修正条件を議論中。"
-- cmd_id: cmd_490
-  subtask_id: subtask_1080
-  worker: gunshi
-  status: done
-  reported_at: "2026-04-06T18:35:00"
-  summary: |
-    agent-swarmまとめwikiアーキテクチャ設計完了。Karpathy LLM Wikiパターンを
-    SQLite+DAT rendering方式で実装する設計。wiki_pages/wiki_links/wiki_sources/wiki_log
-    の4テーブル。まとめ板でJDim閲覧可能。Phase 0-3の段階的実装計画付き。
-    成果物: context/agent-swarm-wiki-architecture.md + gunshi_analysis.yaml
-  skill_candidate: null
-  read: true
-  karo_review: "設計書確認済み。Karpathy LLM Wiki→SQLite+DAT+matome板。Phase 0-3段階計画。2ch上で軍師・お針子・足軽が完了定義議論中。殿裁定待ち。"
-- cmd_id: cmd_489
-  subtask_id: subtask_1075
+  reported_at: '2026-04-07T21:35:00'
+  status: completed
+  summary: "勘定吟味役モデル最適化ベンチマーク設計メモ完成。qwen2.5比較/4軸ベンチ/Crucix同居設計/移行判断基準。BBS POSTしました(thread:1101)"
   worker: ashigaru1
-  status: done
-  reported_at: '2026-04-05T09:30:00'
+- subtask_id: subtask_1099
+  cmd_id: cmd_500
+  commit: a265eeb
+  kenshu_thread: '1099'
   read: true
-  commit: 996336f
-  karo_review: "git diff確認済。家老L3 QC合格。お針子監査依頼済み。"
+  reported_at: '2026-04-07T21:25:00'
+  status: completed
+  summary: "temperature理論実運用適用設計メモ完成。各階t値/勘定吟味役ollama設定/instructions組込方法/同型アーキテクチャ表。BBS POSTしました(thread:1099)"
+  worker: ashigaru1
+- subtask_id: subtask_1100
+  cmd_id: cmd_500
+  worker: ashigaru2
+  status: completed
+  reported_at: '2026-04-07T21:56:14'
+  read: true
+  summary: "BBS POSTしました(thread:1100)"
+- cmd_id: cmd_499
+  subtask_id: subtask_1096
+  worker: gunshi
+  status: done
+  read: true
+  reported_at: "2026-04-08T01:35:00"
   summary: |
-    subtask_1075 WebUI実装完了。subtask_1077 チャンネル割当+DIパルスカウント完了。
-    同一コミット(996336f)に両タスクをまとめて実装。
-    - HTTP WebUI port 80: GET /api/state + POST /api/relay/{ch} + HTML5ダッシュボード
-    - RO_NAMES/RO_KEYS/DI_NAMES alias定義 (§8.1-8.2)
-    - HA Discovery: relay nameにalias反映、DI3-6 dev_cla=door
-    - DI1-2 FALLING ISR (diPulseISR1/2) + publishDIPulse()
-    - arduino-cli compile 成功確認 (Generic RP2350, 179KB/2MB)
-    - needs_audit: true
+    検収板(kenshu) subtask_1096 戦略適合性チェック完了。判定: PASS。
+    Phase 3正式移行宣言(BBS成功率100%で条件充足)は根拠に基づき妥当。
+    subtask_1094 WARNINGのPhase3(現在)表記問題も本宣言で解消。
+    稼働中バグの正直な記載(thread_id形式)を高評価。検収板reply#134に投稿済み。
+  kenshu_reply: 134
+  verdict: PASS
+- cmd_id: cmd_499
+  commit: 6d7d247
+  detail_ref: python3 scripts/botsunichiroku.py subtask show subtask_1096
+  kenshu_thread: '109643'
+  read: true
+  reported_at: '2026-04-07T21:15:00'
+  status: completed
+  subtask_id: subtask_1096
+  summary: "v4設計書Phase 3移行宣言+チェックリスト更新完了。Phase 2.5 Wave2全チェック済み。Phase 3稼働中4項目確認。BBS POSTしました(thread:109643)"
+  worker: ashigaru1
+- cmd_id: cmd_499
+  subtask_id: subtask_1097
+  worker: gunshi
+  status: done
+  read: true
+  reported_at: "2026-04-08T01:25:00"
+  summary: |
+    検収板(kenshu) subtask_1097 戦略適合性チェック完了。判定: PASS。
+    Phase 3フロー図・gate一括実行(POST+scribe+herald)・自動/手動フォールバック二重構造いずれも健全。
+    kenshu_auto.py実在確認済み(3サブコマンドtrigger/status/gateがドキュメントと完全一致)。
+    検収板reply#130に投稿済み。
+  kenshu_reply: 130
+  verdict: PASS
+- subtask_id: subtask_1097
+  cmd_id: cmd_499
+  worker: ashigaru2
+  status: completed
+  reported_at: '2026-04-07T21:28:17'
+  read: true
+  summary: "BBS POSTしました(thread:10973)"
+- cmd_id: cmd_499
+  subtask_id: subtask_1094
+  worker: gunshi
+  status: done
+  read: true
+  reported_at: "2026-04-08T01:10:00"
+  summary: |
+    検収板(kenshu) subtask_1094 戦略適合性チェック完了。判定: PASS (WARNING 1件)。
+    廃止/存続判断基準(signal=YAML存続/data=BBS移行)が明確。scribe依存関係も正確。
+    WARNING: ashigaru.mdに「Phase 3（現在）」表記があるがPhase 3正式移行宣言の有無を確認要。
+    未宣言なら足軽がYAML詳細報告を早期スキップするリスク。検収板reply#122に投稿済み。
+  kenshu_reply: 122
+  verdict: PASS_WITH_WARNING
+- subtask_id: subtask_1094
+  cmd_id: cmd_499
+  worker: ashigaru2
+  status: completed
+  reported_at: '2026-04-07T21:23:11'
+  read: true
+  summary: "BBS POSTしました(thread:1094)"
+- cmd_id: null
+  output: docs/shogun/financial_datasets_analysis.md
+  reported_at: '2026-04-08T00:45:00'
+  read: true
+  status: done
+  subtask_id: subtask_1090_gunshi
+  summary: 'financial-datasets MCP server分析完了。将軍直接指令。
+
+    総合評価: 4/10。判定: Conditional No-Go。
+
+    致命的弱点: 日本市場はADR 20-30社のみ(TSE形式400エラー)。月額$200+で月額忌避に衝突。
+
+    唯一の独自価値: SEC 20-F Filing(ADR日本企業の英語開示)。ただしSEC EDGAR直接で代替可能性あり。
+
+    既存ツール(Crucix+YFinance+EDINETdb)で日米分析は十分カバー。
+
+    成果物: docs/shogun/financial_datasets_analysis.md
+
+    '
+  verdict: CONDITIONAL_NOGO
+  worker: gunshi
+- cmd_id: cmd_497
+  kenshu_reply: 119
+  read: true
+  reported_at: '2026-04-08T00:15:00'
+  status: done
+  subtask_id: subtask_1092
+  summary: '検収板(kenshu) subtask_1092 戦略適合性チェック完了。判定: PASS。
+
+    202行の実装レベル設計メモ。notify.py現状分析の正確性を確認(拙者のソースコード分析と一致)。
+
+    手動/自動フロー対比・循環通知防止ルール・F004適合5観点検証いずれも健全。
+
+    v4設計書§2.4(設計レベル)と本文書(実装レベル)の粒度分離が適切。
+
+    検収板reply#119に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_497
+  commit: e4e1fff
+  detail_ref: python3 scripts/botsunichiroku.py subtask show subtask_1092
+  kenshu_thread: '10922'
+  read: true
+  reported_at: '2026-04-07T21:00:30'
+  status: completed
+  subtask_id: subtask_1092
+  summary: 2F合議トリガー設計メモ context/trigger-design.md 新規作成。手動→自動フロー図・notify.py変更概要・循環通知防止・F004適合確認を網羅。BBS
+    POSTしました(thread:10922)
+  worker: ashigaru1
+- cmd_id: cmd_497
+  kenshu_reply: 114
+  read: true
+  reported_at: '2026-04-08T00:05:00'
+  status: done
+  subtask_id: subtask_1093
+  summary: '検収板(kenshu) subtask_1093 戦略適合性チェック完了。判定: PASS。
+
+    §2.4合議トリガー設計は軍師提案Option Cの正確な反映。循環通知防止4行ルール表が明確。
+
+    Phase 2.5 Wave追跡+Phase 3前提条件表も良好。
+
+    軽微1件:kenshu_gate FAIL時通知と勘定吟味役伝令の住み分け要整理(実装時)。
+
+    検収板reply#114に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_497
+  commit: 299234e
+  detail_ref: python3 scripts/botsunichiroku.py report list --subtask subtask_1093
+  kenshu_thread: '109342512'
+  read: true
+  reported_at: '2026-04-07T20:54:12'
+  status: completed
+  subtask_id: subtask_1093
+  summary: 'v4設計書Phase2.5Wave1チェック+2F合議トリガー設計追加。
+
+    Phase2.5にWave1完了(subtask_1090/1091)チェック。
+
+    §2.4「2F合議トリガー設計」新規追加(現方式/notify.py OptionC/循環通知防止/Phase3前提条件)。
+
+    '
+  worker: ashigaru2
+- cmd_id: cmd_497
+  kenshu_reply: 107
+  reported_at: '2026-04-07T23:55:00'
+  status: done
+  subtask_id: subtask_1091
+  summary: '検収板(kenshu) subtask_1091 戦略適合性チェック完了。判定: PASS。
+
+    ashigaru.md(足軽向けdual-write手順)+karo-kenshu.md(老中向け突合確認+4状態対処表)。
+
+    dual-mode-rules.md(全体規約)との三層構造で読者別粒度調整。
+
+    Phase 3自動化(notify.py)への接続点も明確。検収板reply#107に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_497
+  kenshu_reply: 104
+  reported_at: '2026-04-07T23:45:00'
+  status: done
+  subtask_id: subtask_1090
+  summary: '検収板(kenshu) subtask_1090 戦略適合性チェック完了。判定: PASS。
+
+    指揮系統(YAML)/品質系統(BBS)分離設計、subtask_1080条件(Phase 2.5)具体化。
+
+    通信種別×チャネル対応表・90%メトリクス駆動移行・BBS不通フォールバック健全。
+
+    検収板reply#104に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_497
+  commit: da590d3
+  detail_ref: python3 scripts/botsunichiroku.py report list --subtask subtask_1091
+  kenshu_thread: '1091'
+  read: true
+  reported_at: '2026-04-07T20:45:40'
+  status: completed
+  subtask_id: subtask_1091
+  summary: 'instructionsデュアルモード反映。ashigaru.md+karo-kenshu.md更新。
+
+    ashigaru.md: デュアルモード運用セクション追加（ライフサイクル表・dual-write手順・移行期注意）。
+
+    karo-kenshu.md: デュアルモード監視手順セクション追加（監視役割表・突合確認・4状態対処表）。
+
+    '
+  worker: ashigaru2
+- cmd_id: cmd_497
+  findings: roju_reports内に詳細記載(長文のため高札未使用)
+  read: true
+  reported_at: '2026-04-07T23:30:00'
+  status: done
+  subtask_id: null
+  summary: '2F合議自動トリガー設計 意見照会回答。結論: A/Bいずれも不要。
+
+    notify.pyにkenshu/kenshu_gateルーティング追加で解決。インフラは既に完成している。
+
+    do_reply_add()→notify_post()が投稿時に同期発火するが、kenshu分岐が未定義なだけ。
+
+    変更対象はnotify.pyのみ(~40行)。dat_server.py/reply.py変更不要。
+
+    循環通知防止(1F投稿→2F全員通知、2F投稿→老中のみ通知)が設計上の要注意点。
+
+    詳細はfindings参照。
+
+    '
+  verdict: OPTION_C_NOTIFY_PY_EXTENSION
+  worker: gunshi
+- branch: worktree-subtask-1090
+  cmd_id: cmd_497
+  commit: 5a1d1d5
+  detail_ref: curl -s localhost:8080/reports/995
+  kenshu_thread: '1090'
+  read: true
+  reported_at: '2026-04-07T23:20:00'
+  status: done
+  subtask_id: subtask_1090
+  summary: デュアルモード運用規約策定完了(+126行)。BBS POSTしました(thread:1090)
+  worker: ashigaru1
+- cmd_id: cmd_495
+  kenshu_reply: 96
+  read: true
+  reported_at: '2026-04-07T23:05:00'
+  status: done
+  subtask_id: subtask_1089
+  summary: '検収板(kenshu) subtask_1089 戦略適合性チェック完了。判定: PASS。
+
+    audit_records一覧コマンドはv4.0§2.2勘定吟味役・書記官機能の読取口として正しい位置付け。
+
+    既存CLI設計パターン踏襲、パラメタ化クエリでSQLi安全、choices=で二重防御。
+
+    worktree-subtask-1089で初の正式worktree納品。1F隔離原則が機能。
+
+    軽微3件(SELECT*、--limit未実装、ページネーション)はPASSに影響せず。
+
+    検収板reply#96に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- branch: worktree-subtask-1089
+  cmd_id: cmd_495
+  commit: 8f0e75d
+  detail_ref: curl -s localhost:8080/reports/994
+  kenshu_thread: '1089'
+  read: true
+  reported_at: '2026-04-07T22:55:00'
+  status: done
+  subtask_id: subtask_1089
+  summary: 'audit records コマンド新設完了。worktree-subtask-1089で作業。
+
+    全件一覧+verdict/severityフィルタ、3パターンテスト通過。kenshu POST成功(thread:1089)。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_495
+  commit: 2fa7575
+  detail_ref: python3 scripts/botsunichiroku.py report list --subtask subtask_1088
+  read: true
+  reported_at: '2026-04-07T20:29:29'
+  status: completed
+  subtask_id: subtask_1088
+  summary: 'karo.md Phase2更新(step 9.5-9.9追記)+context/karo-kenshu.md新規作成。
+
+    検収フロー全手順(kenshu読取/合議トリガー/gate判定/scribe/herald)をdocs化。
+
+    '
+  worker: ashigaru2
+- cmd_id: cmd_495
+  commit: fef08ea
+  detail_ref: curl -s localhost:8080/reports/992
+  kenshu_thread: '1087'
+  read: true
+  reported_at: '2026-04-07T22:40:00'
+  status: done
+  subtask_id: subtask_1087
+  summary: 'delivery_interface_schema Format B severity追記完了。3箇所修正済み。
+
+    kenshu BBS POST成功(thread:1087)。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_494
+  kenshu_reply: 91
+  reported_at: '2026-04-07T22:15:00'
+  status: done
+  subtask_id: subtask_1086
+  summary: '検収板(kenshu) subtask_1086 戦略適合性チェック完了。判定: PASS。
+
+    v4設計書更新(170行追加/22行削除)の全diff精読済み。
+
+    勘定吟味役4in1統合(§2.2)、インシデント分類S1-S4(§2.3)、権限マトリクスv4.0(§4.4)
+
+    いずれもv4.0設計思想・既存知見と整合。commit 58fce80 実在確認済み。
+
+    WARNING 1件: delivery_interface_schema.mdのkenshu_gateフォーマットにseverity未追加（文書間非同期）。
+
+    検収板reply#91に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_494
+  commit: 58fce80
+  detail_ref: curl -s localhost:8080/reports/991
+  kenshu_thread: '10864'
+  read: true
+  reported_at: '2026-04-07T21:55:00'
+  status: done
+  subtask_id: subtask_1086
+  summary: 'v4設計書commit+検収板BBS POST成功。delivery-postスキル初回試運転完了。
+
+    kenshu board thread 10864に納品スレ確認済み。
+
+    備考: mainブランチで作業(練習用のためworktree未使用)。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_494
+  detail_ref: curl -s localhost:8080/reports/990
+  read: true
+  reported_at: '2026-04-07T21:26:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1085
+  summary: skills/delivery-post.md新規作成完了。commit 23b8614。※skills/はgitignore→git add
+    -f使用
+  worker: ashigaru2
+- cmd_id: cmd_494
+  commit: 0e80669
+  detail_ref: curl -s localhost:8080/reports/989
+  read: true
+  reported_at: '2026-04-07T21:40:00'
+  status: done
+  subtask_id: subtask_1084
+  summary: 'ashigaru.md 検収板納品POST手順追記完了(L793直前)。
+
+    curlコマンド例・Format A全12フィールド早見表・BBS不応答フォールバック・
+
+    kenshu_gate投稿禁止・Phase 2.5まで両方必須を含む。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_493
+  detail_ref: curl -s localhost:8080/reports/988
+  read: true
+  reported_at: '2026-04-07T19:58:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1083
+  summary: kanjou_ginmiyaku.py 3点修正完了(reviewers両形式+severity+herald分岐)。commit b649a7a
+  worker: ashigaru2
+- cmd_id: cmd_493
+  commit: bc340ca
+  detail_ref: curl -s localhost:8080/reports/987
+  read: true
+  reported_at: '2026-04-07T20:00:00'
+  status: done
+  subtask_id: subtask_1082
+  summary: 'audit severity S1-S4追加完了。PRAGMA table_info確認後ALTER TABLE安全マイグレーション。
+
+    audit add --severity {S1,S2,S3,S4}(任意)追加。audit show severityはNULL非表示。
+
+    既存レコード後方互換確認済み。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_492
+  kenshu_reply: 75
+  reported_at: '2026-04-07T12:30:00'
+  status: done
+  subtask_id: subtask_1079
+  summary: '検収板(kenshu) subtask_1079 戦略適合性チェック完了。判定: PASS。
+
+    v4.0設計書(§2.1/§3.2)との整合、subtask_1080条件3件の充足、
+
+    POSIX対応・temperature理論との整合すべて確認。
+
+    軽微所見2件（スキーマバリデーション機構未定義、バージョニング手順未定義）は
+
+    PASSに影響せず。試運転として検収板reply#75に投稿済み。
+
+    '
+  verdict: PASS
+  worker: gunshi
+- cmd_id: cmd_491
+  detail_ref: curl -s localhost:8080/reports/986
+  read: true
+  reported_at: '2026-04-07T13:07:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1081
+  summary: kanjou_ginmiyaku.py 4モード実装完了(review/scribe/herald/search)。commit 03c7bbe。agent-swarm
+    SIGHUP誤停止→即復旧済み
+  worker: ashigaru2
+- cmd_id: cmd_491
+  commit: 973a441
+  detail_ref: curl -s localhost:8080/reports/985
+  read: true
+  reported_at: '2026-04-07T12:00:00'
+  status: done
+  subtask_id: subtask_1080
+  summary: 'audit_records テーブル新設+audit add/show追加完了。
+
+    - verdict CHECK制約(PASS/FAIL/CONDITIONAL)、不正値は引数エラーで拒否
+
+    - audit list --subtask フィルタ追加
+
+    - 既存 audit list/record/stats 正常動作確認済み（後方互換保持）
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_490
+  detail_ref: curl -s localhost:8080/reports/984
+  read: true
+  reported_at: '2026-04-07T11:12:10'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1079
+  summary: delivery_interface_schema.md新規作成完了。A(1F→2F納品IF)+B(kenshu_gate判定IF)定義。commit
+    cbc067f
+  worker: ashigaru2
+- cmd_id: cmd_490
+  commit: b25021d
+  detail_ref: curl -s localhost:8080/reports/983
+  read: true
+  reported_at: '2026-04-07T11:30:00'
+  status: done
+  subtask_id: subtask_1078
+  summary: 'agent-swarm Phase 0完了: kenshu/kenshu_gate板+kanjou_ginmiyaku追加。
+
+    yaml構文OK・init_db.py正常終了。init_db.py追加コード不要(board列動的管理)。
+
+    dat_server.py未作成確認済み。push不可: remote未設定(要対処または省略可否判断を)。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_480
+  conditions:
+  - §3.1に2F→1F逆通知経路を明記
+  - §4.3に合議タイブレーカールールを追記
+  - §6にPhase 2.5（デュアルモード）を挿入
+  findings:
+  - category: structural
+    detail: '■ 2F→1F逆通知の経路不明確
+
+      1F→2F（納品POST）は明記されているが、2F→1F（差し戻し通知）の具体的メカニズムが未記載。
+
+      FAILの場合、足軽はどう知るのか？ BBS通知(notify_exec)? send-keys? 定期読み取り？
+
+      → 修正案: §3.1に「kenshu_gate FAIL → 任務板にリジェクト通知POST → 1Fにsend-keys/notify_exec」を追記
+
+
+      ■ 没日録DBへの2F合議結果の書き戻し
+
+      2Fエージェントは没日録DB書き込み権限がない（権限マトリクス）。
+
+      合議結果（PASS/FAIL+理由）は老中が手動で没日録に転記する必要がある。
+
+      この手動転記が抜けると没日録とBBSが乖離し「正データは没日録」原則が崩れる。
+
+      → 修正案: 老中がkenshu_gateを読んだ時点で自動的にbotsunichiroku audit recordに記録するスクリプト/フックを設計
+
+
+      ■ 合議のタイブレーカー
+
+      お針子PASS+軍師FAILの場合（またはその逆）、誰がkenshu_gateに最終判定を書くか不明。
+
+      → 修正案: §4.3に「合議不一致時は老中裁定。老中判断困難な場合は殿にエスカレーション」を追記
+
+      '
+    verdict: WARNING
+  - category: harness
+    detail: '4要素とも概ねカバーされている。2点の穴:
+
+
+      ■ 合議の最低品質保証（アーキテクチャ制約の穴）
+
+      >>50強制判定は上限だが、下限がない。レス1件で「PASS」と書いて終わることが可能。
+
+      → 修正推奨: kenshu_gateへの投稿にminimum_reviews: 2を設け、
+
+      最低2名の実質的レビュー（「LGTM」だけでなく具体的コメント）を必須化
+
+
+      ■ 成功からの学習（改善サイクルの穴）
+
+      §5.4のミスパターン→ルール昇格はFAIL起点のみ。
+
+      PASSから「なぜうまくいったか」を学ぶ仕組みがない。
+
+      → 軽微。Phase 4以降で検討すれば十分。今は不要
+
+      '
+    verdict: PASS_WITH_CONDITIONS
+  - category: posix
+    detail: '対応表は概ね妥当。殿の洞察が正しく反映されている。軽微な指摘3点:
+
+
+      ■ pipe→BBSの対応がやや強引
+
+      POSIX pipeはpoint-to-point(producer-consumer)。BBSはpub/sub(1:N)。
+
+      より正確な対応: BBS板 ≒ message queue (POSIX mq_open), スレッド ≒ named pipe。
+
+      実害はないが、設計議論時に混乱の元になりうる。
+
+
+      ■ exit code未対応
+
+      POSIXプロセスは必ずexit codeを返す。足軽の「完了通知」に相当するが、
+
+      納品IFのtest_result(PASS/FAIL)がこれに該当する。明示的に対応表に追加すると良い。
+
+
+      ■ fork()未対応
+
+      支店の動的起動（worker_ctl.sh等）はfork()に相当。対応表に追加推奨。
+
+      '
+    verdict: PASS
+  - category: migration
+    detail: '■ Phase 2→3の飛躍が大きい
+
+      Phase 2で「足軽が直接POST」、Phase 3で「YAML inbox廃止」。
+
+      YAML inboxは現在のタスク割当の唯一の正データ。
+
+      BBS移行が不安定な段階でYAMLを廃止すると、タスク割当が失われるリスク。
+
+      → 修正推奨: Phase 2.5「デュアルモード（YAML+BBS並行運用）」を挿入。
+
+      BBS経由のタスク割当が90%成功するまでYAMLは残す。
+
+
+      ■ Phase 1の「手動実行」から Phase 2の「直接POST」への橋渡し
+
+      足軽にBBS POST能力を付与する（スキル化 or instructions改修）手順が未記載。
+
+      → Phase 1.5: 足軽instructionsに「納品POST手順」を追記、練習用subtaskで1回試行
+
+      '
+    verdict: WARNING
+  - category: consistency
+    detail: '■ temperature理論との整合: 良好
+
+      kenshu_gate(PASS/FAIL/CONDITIONAL)はt=0の判定ゲート。
+
+      2F合議(自由議論)はt>0。3F老中のマージ判断はt≈0。
+
+      「下層が上層を黙らせる」原則が三階建てでも維持されている。
+
+      ただし§6 Phase 4まで温度理論の適用が先送りされている。
+
+      → 推奨: §2.1に温度理論との対応を明記（実装はPhase 4でよいが、設計思想として記載）
+
+
+      ■ Y-Combinator型付け: §3.2で明示的に参照。完全に整合。
+
+      ■ bloom_routing: §5.3のワークフローに含まれている。
+
+      ただし三階建てでbloom_routingがどの階で発動するか不明確。
+
+      → 推奨: bloom_routingは3F(老中)で実行、L4-L6は2F(軍師板)経由、と明記
+
+      ■ Preflight Check: §5.3に含まれている。整合。
+
+      '
+    verdict: PASS
+  - category: scalability
+    detail: "■ 2F合議が支店数に比例してボトルネック化するリスク\n5支店が同時稼働 → 5並行検収スレ → お針子+軍師が5件同時レビュー。\n\
+      現実的に破綻する。\n→ 修正推奨: bloom別の検収ファストトラック設計\n  L1-L3: 老中スポットチェック(kenshu_gate直書き可)\
+      \ — 2F合議スキップ\n  L4-L5: お針子+軍師の2名合議\n  L6: フル合議(外部レビュア含む)\nこれで2Fの負荷が L4-L6 のみに限定される。\n\
+      \n■ kenshu_gateのwriter制限\n現状 writers: [お針子, 軍師] のみ。どちらかがbusy → gateがブロック。\n\
+      → 推奨: L1-L3ファストトラック用に老中もwriter追加\n"
+    verdict: WARNING
+  karo_review: cmd_480 v4.0設計レビュー確認。条件付き承認(WARNING4+推奨4)。殿直接指示案件につきdashboard.mdに転記。2ch上で軍師・お針子・足軽が修正条件を議論中。
+  read: true
+  recommendations:
+  - §2.1にtemperature理論との対応を注記
+  - 検収ファストトラック（bloom別分流）の設計
+  - bloom_routingの発動階を明記
+  - POSIX対応表にexit code, fork()を追加
+  reported_at: '2026-04-07T10:50:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1080
+  summary: 'v4.0三階建てアーキテクチャ設計書ダブルチェック完了。
+
+    総合判定: 条件付き承認（WARNING 4件、修正推奨3件）。
+
+    構造の根幹は健全。2F→1F逆通知経路の明確化、bloom別検収ファストトラック、
+
+    合議のタイブレーカー設計が未決。詳細は下記findings参照。
+
+    '
+  total_verdict: conditional_approved
+  worker: gunshi
+- cmd_id: cmd_490
+  karo_review: 設計書確認済み。Karpathy LLM Wiki→SQLite+DAT+matome板。Phase 0-3段階計画。2ch上で軍師・お針子・足軽が完了定義議論中。殿裁定待ち。
+  read: true
+  reported_at: '2026-04-06T18:35:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1080
+  summary: 'agent-swarmまとめwikiアーキテクチャ設計完了。Karpathy LLM Wikiパターンを
+
+    SQLite+DAT rendering方式で実装する設計。wiki_pages/wiki_links/wiki_sources/wiki_log
+
+    の4テーブル。まとめ板でJDim閲覧可能。Phase 0-3の段階的実装計画付き。
+
+    成果物: context/agent-swarm-wiki-architecture.md + gunshi_analysis.yaml
+
+    '
+  worker: gunshi
+- cmd_id: cmd_489
+  commit: 996336f
   detail_ref: curl -s localhost:8080/reports/981
+  karo_review: git diff確認済。家老L3 QC合格。お針子監査依頼済み。
+  read: true
+  reported_at: '2026-04-05T09:30:00'
+  status: done
+  subtask_id: subtask_1075
+  summary: 'subtask_1075 WebUI実装完了。subtask_1077 チャンネル割当+DIパルスカウント完了。
+
+    同一コミット(996336f)に両タスクをまとめて実装。
+
+    - HTTP WebUI port 80: GET /api/state + POST /api/relay/{ch} + HTML5ダッシュボード
+
+    - RO_NAMES/RO_KEYS/DI_NAMES alias定義 (§8.1-8.2)
+
+    - HA Discovery: relay nameにalias反映、DI3-6 dev_cla=door
+
+    - DI1-2 FALLING ISR (diPulseISR1/2) + publishDIPulse()
+
+    - arduino-cli compile 成功確認 (Generic RP2350, 179KB/2MB)
+
+    - needs_audit: true
+
+    '
+  worker: ashigaru1
 - cmd_id: cmd_489
   detail_ref: curl -s localhost:8080/reports/980
+  karo_review: git diff確認済。2行変更のみ(temperature→sht40_temperature, humidity→sht40_humidity)。老中承認。フル再監査免除(軍師・お針子合意)。
   read: true
   reported_at: '2026-04-05T01:52:36'
   skill_candidate: null
@@ -165,7 +685,6 @@ reports:
   subtask_id: subtask_1074
   summary: SHT40 HA Discovery val_tpl不整合修正完了(条件付き合格→修正済)。commit 572b2d7
   worker: ashigaru2
-  karo_review: "git diff確認済。2行変更のみ(temperature→sht40_temperature, humidity→sht40_humidity)。老中承認。フル再監査免除(軍師・お針子合意)。"
 - cmd_id: cmd_489
   findings: "arduino/rp2350_relay/ 新規作成:\n- rp2350_relay.ino: GPIO17-24直接リレー制御, DI割り込み(GPIO9-16),\n\
     \  W5500 SPI1 Ethernet, MQTT sub/pub, HA Auto Discovery(switch+binary_sensor),\n\
@@ -515,7 +1034,8 @@ reports:
 
     '
   worker: ashigaru1
-- cmd_id: cmd_468
+- audit_triggered: true
+  cmd_id: cmd_468
   needs_audit: true
   project: systrade
   read: true
@@ -550,7 +1070,8 @@ reports:
 
     '
   worker: gunshi
-- cmd_id: cmd_468
+- audit_triggered: true
+  cmd_id: cmd_468
   needs_audit: true
   project: systrade
   read: true
@@ -593,7 +1114,8 @@ reports:
 
     '
   worker: ashigaru1
-- cmd_id: cmd_467
+- audit_triggered: true
+  cmd_id: cmd_467
   needs_audit: true
   project: shogun
   read: true
@@ -649,7 +1171,8 @@ reports:
     \ Add credits」でクレジット追加要。\nまたは新規プロジェクト作成+キー発行。\nWave 2/3 はクレジット確認後に再開可能。\naider\
     \ フォールバックも同一APIキーのため同様のQuota exceeded になる見込み。\n"
   worker: ashigaru1
-- cmd_id: cmd_467
+- audit_triggered: true
+  cmd_id: cmd_467
   needs_audit: true
   project: shogun
   read: true
@@ -2726,3 +3249,24 @@ reports:
   subtask_id: subtask_1073
   summary: RP2350版Waveshare 8ch Relay全GPIOピンマップ確定。公式デモコード+ボード定義ヘッダから裏取り。設計書全面書換え
   worker: ashigaru6
+- cmd_id: cmd_500
+  reported_at: '2026-04-07T22:10:00'
+  status: kenshu_review
+  subtask_id: subtask_1100
+  worker: gunshi
+  summary: "subtask_1100 Docker支店設計メモ 戦略適合性チェック PASS。案B整合・Memory MCP除外設計・段階的移行 全て戦略的に正しい。S4懸念: コンテナ間send-keys制約の明示的言及"
+  read: true
+- cmd_id: cmd_500
+  reported_at: '2026-04-07T22:10:00'
+  status: kenshu_review
+  subtask_id: subtask_1099
+  worker: gunshi
+  summary: "subtask_1099 temperature理論実運用適用設計メモ 戦略適合性チェック PASS（高評価）。三ドメイン同型性の定式化が秀逸。Claude Code t=1.0固定の型締め代替策・kenshu_gate t=0絶対性 全て整合。懸念なし"
+  read: true
+- cmd_id: cmd_500
+  reported_at: '2026-04-07T22:10:00'
+  status: kenshu_review
+  subtask_id: subtask_1101
+  worker: gunshi
+  summary: "subtask_1101 勘定吟味役ベンチマーク設計メモ 戦略適合性チェック PASS。Crucix同居制約下の現実的設計。S4懸念: bench_*.diffテストデータ未作成がクリティカルパス"
+  read: true

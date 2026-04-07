@@ -317,6 +317,210 @@ def audit_records_list(args) -> None:
     print_table(headers, table_rows, [5, 16, 10, 12, 9, 22, 16])
 
 
+def audit_dashboard(args) -> None:
+    """検収PASS率ダッシュボード — audit_records から集計表示。"""
+    conn = get_connection()
+
+    exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_records'"
+    ).fetchone()
+    if not exists:
+        print("audit_records テーブルが存在しません。")
+        conn.close()
+        return
+
+    # --- 全体集計 ---
+    total = conn.execute("SELECT COUNT(*) FROM audit_records").fetchone()[0]
+    if total == 0:
+        print("検収記録が0件です。")
+        conn.close()
+        return
+
+    verdict_rows = conn.execute(
+        "SELECT verdict, COUNT(*) as cnt FROM audit_records GROUP BY verdict ORDER BY cnt DESC"
+    ).fetchall()
+    verdict_map = {r["verdict"]: r["cnt"] for r in verdict_rows}
+    pass_cnt = verdict_map.get("PASS", 0)
+    fail_cnt = verdict_map.get("FAIL", 0)
+    cond_cnt = verdict_map.get("CONDITIONAL", 0)
+    pass_rate = pass_cnt * 100.0 / total if total > 0 else 0.0
+
+    # --- severity 分布 ---
+    sev_rows = conn.execute(
+        "SELECT COALESCE(severity, '(未設定)') as sev, COUNT(*) as cnt FROM audit_records GROUP BY severity ORDER BY sev"
+    ).fetchall()
+
+    # --- 直近N件PASS率 ---
+    recent_n = getattr(args, "recent", 10)
+    recent_rows = conn.execute(
+        "SELECT id, subtask_id, cmd_id, verdict, severity, reviewers, created_at FROM audit_records ORDER BY id DESC LIMIT ?",
+        (recent_n,),
+    ).fetchall()
+    recent_pass = sum(1 for r in recent_rows if r["verdict"] == "PASS")
+    recent_rate = recent_pass * 100.0 / len(recent_rows) if recent_rows else 0.0
+
+    # --- 足軽別PASS率 (JOIN subtasks for worker_id) ---
+    worker_rows = conn.execute(
+        """SELECT COALESCE(s.worker_id, '(不明)') as worker,
+                  COUNT(*) as total,
+                  SUM(CASE WHEN ar.verdict = 'PASS' THEN 1 ELSE 0 END) as pass_cnt
+           FROM audit_records ar
+           LEFT JOIN subtasks s ON ar.subtask_id = s.id
+           GROUP BY s.worker_id
+           ORDER BY total DESC"""
+    ).fetchall()
+
+    conn.close()
+
+    if args.json:
+        data = {
+            "total": total,
+            "pass": pass_cnt,
+            "fail": fail_cnt,
+            "conditional": cond_cnt,
+            "pass_rate": round(pass_rate, 1),
+            "recent_n": recent_n,
+            "recent_pass_rate": round(recent_rate, 1),
+            "severity": {r["sev"]: r["cnt"] for r in sev_rows},
+            "by_worker": [
+                {"worker": r["worker"], "total": r["total"], "pass": r["pass_cnt"],
+                 "rate": round(r["pass_cnt"] * 100.0 / r["total"], 1) if r["total"] > 0 else 0}
+                for r in worker_rows
+            ],
+            "recent": [
+                {"id": r["id"], "subtask": r["subtask_id"], "cmd": r["cmd_id"],
+                 "verdict": r["verdict"], "severity": r["severity"]}
+                for r in recent_rows
+            ],
+        }
+        print_json(data)
+        return
+
+    # --- CLI表示 ---
+    print("═══════════════════════════════════════════════")
+    print("  検収PASS率ダッシュボード (audit_records)")
+    print("═══════════════════════════════════════════════")
+    print()
+    print(f"  総検収件数: {total}件")
+    print(f"    PASS: {pass_cnt}  |  FAIL: {fail_cnt}  |  CONDITIONAL: {cond_cnt}")
+    print(f"    全体PASS率: {pass_rate:.1f}%")
+    print()
+    print(f"  直近{recent_n}件PASS率: {recent_rate:.1f}% ({recent_pass}/{len(recent_rows)})")
+    print()
+
+    print("  severity分布:")
+    for r in sev_rows:
+        bar = "█" * r["cnt"]
+        print(f"    {r['sev']:6s}: {r['cnt']:2d}件 {bar}")
+    print()
+
+    print("  足軽別PASS率:")
+    for r in worker_rows:
+        w_rate = r["pass_cnt"] * 100.0 / r["total"] if r["total"] > 0 else 0.0
+        bar = "█" * r["pass_cnt"] + "░" * (r["total"] - r["pass_cnt"])
+        print(f"    {r['worker']:12s}: {w_rate:5.1f}% ({r['pass_cnt']}/{r['total']}) {bar}")
+    print()
+
+    print(f"  直近{recent_n}件推移:")
+    for r in reversed(recent_rows):
+        mark = "✓" if r["verdict"] == "PASS" else ("✗" if r["verdict"] == "FAIL" else "△")
+        sev = r["severity"] or "-"
+        print(f"    #{r['id']:2d} {r['subtask_id']:16s} {r['cmd_id'] or '-':10s} {mark} {r['verdict']:12s} {sev}")
+    print("═══════════════════════════════════════════════")
+
+    # --- dashboard.md 自動更新 ---
+    if getattr(args, "update_dashboard", False):
+        _update_dashboard_md(total, pass_cnt, fail_cnt, cond_cnt, pass_rate,
+                             recent_n, recent_rate, recent_pass, len(recent_rows),
+                             sev_rows, worker_rows, recent_rows)
+
+
+def _update_dashboard_md(total, pass_cnt, fail_cnt, cond_cnt, pass_rate,
+                         recent_n, recent_rate, recent_pass, recent_total,
+                         sev_rows, worker_rows, recent_rows) -> None:
+    """dashboard.md に検収PASS率セクションを書き込む。"""
+    from pathlib import Path
+    from . import PROJECT_ROOT
+
+    dashboard_path = PROJECT_ROOT / "dashboard.md"
+    if not dashboard_path.exists():
+        print(f"Warning: {dashboard_path} not found, skipping update.")
+        return
+
+    content = dashboard_path.read_text(encoding="utf-8")
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    section_lines = [
+        "## 検収PASS率 (自動生成)",
+        "",
+        f"最終更新: {ts}",
+        "",
+        f"| 指標 | 値 |",
+        f"|------|-----|",
+        f"| 総検収件数 | {total}件 |",
+        f"| PASS | {pass_cnt} |",
+        f"| FAIL | {fail_cnt} |",
+        f"| CONDITIONAL | {cond_cnt} |",
+        f"| 全体PASS率 | {pass_rate:.1f}% |",
+        f"| 直近{recent_n}件PASS率 | {recent_rate:.1f}% ({recent_pass}/{recent_total}) |",
+        "",
+        "### severity分布",
+        "",
+        "| Severity | 件数 |",
+        "|----------|------|",
+    ]
+    for r in sev_rows:
+        section_lines.append(f"| {r['sev']} | {r['cnt']} |")
+
+    section_lines.extend([
+        "",
+        "### 足軽別PASS率",
+        "",
+        "| Worker | PASS率 | PASS/Total |",
+        "|--------|--------|------------|",
+    ])
+    for r in worker_rows:
+        w_rate = r["pass_cnt"] * 100.0 / r["total"] if r["total"] > 0 else 0.0
+        section_lines.append(f"| {r['worker']} | {w_rate:.1f}% | {r['pass_cnt']}/{r['total']} |")
+
+    section_lines.extend([
+        "",
+        f"### 直近{recent_n}件推移",
+        "",
+        "| # | Subtask | CMD | Verdict | Severity |",
+        "|---|---------|-----|---------|----------|",
+    ])
+    for r in reversed(recent_rows):
+        sev = r["severity"] or "-"
+        section_lines.append(f"| {r['id']} | {r['subtask_id']} | {r['cmd_id'] or '-'} | {r['verdict']} | {sev} |")
+
+    section_lines.append("")
+    new_section = "\n".join(section_lines)
+
+    # Replace existing section or append
+    marker_start = "## 検収PASS率 (自動生成)"
+    marker_end_candidates = ["## ", "---"]
+
+    if marker_start in content:
+        start_idx = content.index(marker_start)
+        rest = content[start_idx + len(marker_start):]
+        end_idx = None
+        for line_start in rest.split("\n"):
+            if line_start.startswith("## ") and line_start != marker_start:
+                end_idx = start_idx + len(marker_start) + rest.index(line_start)
+                break
+        if end_idx is not None:
+            content = content[:start_idx] + new_section + "\n" + content[end_idx:]
+        else:
+            content = content[:start_idx] + new_section
+    else:
+        content = content.rstrip() + "\n\n" + new_section
+
+    dashboard_path.write_text(content, encoding="utf-8")
+    print(f"dashboard.md 更新完了: 検収PASS率セクション")
+
+
 def stats_show(args) -> None:
     conn = get_connection()
 

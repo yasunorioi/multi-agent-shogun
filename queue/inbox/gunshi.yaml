@@ -1,4 +1,23 @@
 reports:
+- subtask_id: subtask_1090
+  cmd_id: shogun_direct
+  assigned_by: shogun
+  status: done
+  assigned_at: '2026-04-07T23:30:00'
+  completed_at: '2026-04-08T00:45:00'
+  project: systrade
+  bloom_level: L5
+  needs_audit: false
+  description: |
+    ■ financial-datasets MCP server 分析 — 日米間影響分析への適用評価
+
+    cat /tmp/gunshi_financial_datasets.txt を読め。
+
+    殿の関心: 日米間の影響分析に使えるか。
+    対象: https://github.com/financial-datasets/mcp-server
+    出力: docs/shogun/financial_datasets_analysis.md
+    既存ツール(Crucix/Dexter/獏/systrade Lasso)との統合視点必須。
+    総合評価スコア(X/10) + Go/No-Go + 日米分析ユースケース3件以上。
 - subtask_id: subtask_1054
   cmd_id: cmd_473
   assigned_by: roju

@@ -1,5 +1,5 @@
 # 📊 戦況報告
-最終更新: 2026-04-05 01:38
+最終更新: 2026-04-08 01:55
 
 ## 📜 殿の方針
 
@@ -44,6 +44,9 @@
 | SDカード互換 | Pi Lite ↔ ArSprout をSD差し替えで切り替え可能 |
 
 ## 🚨 要対応 - 殿のご判断をお待ちしております
+
+### 🟡 financial-datasets MCP server — 軍師分析: Conditional No-Go (4/10)
+致命的弱点: 日本市場はADR 20-30社のみ(TSE非対応)。月額$200+で月額忌避に衝突。唯一の独自価値はSEC 20-F Filing(ADR日本企業英語開示)だがSEC EDGAR直接で代替可能。既存ツール(Crucix+YFinance+EDINETdb)で十分。詳細: docs/shogun/financial_datasets_analysis.md
 
 ### ~~🟡 RPi uecs-llmブランチ乖離~~ → 解決済み（cmd_378でmain切替完了）
 
@@ -245,17 +248,158 @@ docs/shogun/dexter_analysis.md。総合7.2/10。
 - **弱み**: Financial Datasets APIは米国市場中心。アジア市場リーチ不足
 - **盗むべき設計**: SOUL.md(投資哲学注入) / SKILL.md(スキル定義) / Scratchpad JSONL形式
 
+### ~~🟡 financial-datasets MCP server~~ → Conditional No-Go（軍師分析完了 4/10）
+docs/shogun/financial_datasets_analysis.md。TSEティッカー非対応（ADR 20-30社のみ）、最安$200/mo。
+既存ツール(YFinance+EDINETdb+Crucix)で同等以上のカバレッジ。唯一のギャップSEC 20-FはEDGAR直接アクセスで代替検証推奨。
+再評価条件: Dexter本格化時 or SEC Filing分析ユースケース具体化時
+
+### 🟡 Agent-Reach（殿ネタ投入・評価待ち）
+https://github.com/Panniantong/Agent-Reach — AIエージェントにインターネットアクセスを一括付与するCLI scaffolding。
+- **機能**: 15+プラットフォーム（Twitter/YouTube/Reddit/GitHub/雪球/小紅書等）をゼロコスト統合
+- **思想**: フレームワークではなく足場。既存CLIツール(yt-dlp/twitter-cli/rdt-cli等)をインストール→エージェントが直接叩く
+- **月額ゼロ**: 全ツールOSS、APIコストなし。Tier 0は設定不要で即使用可
+- **金融ネタ**: 雪球(Xueqiu)対応→中国株情報取得。financial-datasets(米国)+Agent-Reach(雪球)で日米中クロスの入力パイプライン候補
+- **Crucix補完**: 28ソースOSINTにTwitter/Reddit/YouTubeリアルタイム情報を追加可能
+- **POSIX収束**: shogunの「ツールを組み合わせる、ラップしない」思想と同型
+- **検討**: Crucix入力ソース拡張 or 獏の下位ツールとして部分導入
+
 ## 🔄 進行中 - 只今、戦闘中でござる
 
-### 🟡 殿裁定待ち: shogun v4.0三階建てアーキテクチャ — 軍師レビュー完了
-軍師ダブルチェック結果: **条件付き承認**。構造の根幹は健全だが修正必須3件:
-1. §3.1に2F→1F逆通知経路(kenshu_gate FAIL→任務板POST→send-keys)を明記
-2. §4.3に合議タイブレーカー(不一致時は老中裁定、困難時は殿エスカレーション)を追記
-3. §6にPhase 2.5(YAML+BBS並行運用デュアルモード)を挿入
+### ✅ shogun v4.0三階建てアーキテクチャ — 殿裁定済み・Phase 0実装中
+設計書v0.2確定(0ee58e8)。殿裁定(04/07): Phase 1すぐ開始、>>50で確定、勘定吟味役先行投入。
 
-推奨4件: temperature理論対応注記、bloom別検収ファストトラック、bloom_routing発動階明記、POSIX対応表にexit code/fork()追加。2ch zatsudan/3で軍師・お針子・足軽が詳細議論中。
+### cmd_490 v4.0三階建て Phase 0 先行実装 ✅完了
+検収板+勘定吟味役+納品IF。殿直接裁定案件。全subtask L2機械チェック合格。
 
-### 🟡 殿裁定待ち: cmd_490 agent-swarmまとめwiki — 軍師設計完了
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1078 | 足軽1 | agent-swarm swarm.yaml板追加+kanjou_ginmiyaku+init_db.py | ✅完了(b25021d) |
+| 1079 | 足軽2 | 納品IFスキーマ定義(delivery_interface_schema.md) | ✅完了(cbc067f) |
+
+⚠️ agent-swarmリポにremote未設定。push不可。運用上問題があれば殿判断。
+
+### cmd_500 v4.0 Phase 4 スケール ✅完了
+検収PASS率ダッシュボード + temperature/Docker/ベンチマーク設計メモ。
+
+| subtask | 担当 | Wave | 内容 | commit | audit |
+|---------|------|:----:|------|--------|-------|
+| 1098 | 老中 | 1 | `audit dashboard` サブコマンド実装 + dashboard.md自動更新 | (直接実装) | — |
+| 1099 | 足軽1 | 1 | temperature理論適用設計メモ(204行) | a265eeb | #19 PASS 18/18 |
+| 1100 | 足軽2 | 1 | Docker支店設計メモ(225行) | a797d7b | #20 PASS 18/18 |
+| 1101 | 足軽1 | 2 | 勘定吟味役ベンチマーク設計メモ(201行) | 6f6ddd2 | #21 PASS 18/18 |
+
+**Phase 4成果:**
+- `python3 scripts/botsunichiroku.py audit dashboard` — 検収PASS率の集計表示(CLI/JSON/dashboard.md自動更新)
+- 全体PASS率 71.4%(15/21)、**直近10件 100.0%**、足軽PASS率 100%
+- 設計メモ3件: temperature適用(各階t値+ollama設定)、Docker支店(案B+段階移行)、勘定吟味役ベンチ(4軸+Crucix同居)
+
+### cmd_499 v4.0 Phase 3 PDCA自動回転 ✅完了
+検収フロー半自動化 + YAML簡略化 + 実運用テスト。notify.py自動通知+kenshu_auto.py gate半自動化達成。
+
+| subtask | 担当 | Wave | 内容 | commit | audit |
+|---------|------|:----:|------|--------|-------|
+| 1095 | 老中 | 1 | notify.py kenshu/kenshu_gate追加+kenshu_auto.py+auto_review.sh | (agent-swarm+shogun) | — |
+| 1094 | 足軽2 | 1 | YAML簡略化ルール(ashigaru.md+dual-mode-rules.md +80行) | 6f54656 | #16 PASS 18/18 |
+| 1096 | 足軽1 | 2 | v4設計書Phase 3移行宣言+チェック | 6d7d247 | #18 PASS 18/18 |
+| 1097 | 足軽2 | 2 | karo-kenshu.md Phase 3更新+kenshu_auto.py手順(+87行) | 8310416 | #17 PASS 18/18 |
+
+**Phase 3自動化動作実績:**
+- notify.py kenshu板ルーティング: ✅ (足軽POST→2F+老中に自動send-keys)
+- kenshu_auto.py gate: ✅ (POST+scribe+マージ提示を1コマンド)
+- 勘定吟味役auto-review: ⚠️ (NOTIFY_EXEC thread_id形式バグ→手動fallback。Phase 4で修正)
+- YAML簡略化: ✅ (1行報告「BBS POSTしました(thread:XXXX)」初適用成功)
+- kenshu_gate結果通知: ✅ (_notify_kenshu_gate経由で全員に自動配信)
+
+### cmd_497 v4.0 Phase 2.5 デュアルモード運用 ✅完了
+YAML inbox(指揮系統)+BBS(品質系統)の並行運用規約策定・実運用テスト・2F合議トリガー設計。BBS納品成功率6/6=100%。
+
+| subtask | 足軽 | Wave | 内容 | commit | audit |
+|---------|------|:----:|------|--------|-------|
+| 1090 | 足軽1 | 1 | dual-mode運用規約(context/dual-mode-rules.md +126行) | 5a1d1d5 | #12 PASS 18/18 |
+| 1091 | 足軽2 | 1 | instructions更新(ashigaru.md+karo-kenshu.md +75行) | da590d3 | #13 PASS 18/18 |
+| 1092 | 足軽1 | 2 | 2F合議トリガー設計メモ(context/trigger-design.md +202行) | e4e1fff | #15 PASS 18/18 |
+| 1093 | 足軽2 | 2 | v4設計書Phase2.5更新+§2.4トリガー設計(+51行) | 299234e | #14 PASS 18/18 |
+
+**軍師タスク3回答:** notify.py拡張(Option C) — kenshu/kenshu_gate板ルーティング追加(~40行)で2F自動通知実現可能。Phase 3実装候補。
+**BBS納品成功率:** subtask_1087〜1093の6件連続成功 = 100%（Phase 3移行基準90%超を達成）
+
+### cmd_495 v4.0 Phase 2 1F支店の自律化 ✅完了
+足軽worktreeフルフロー実戦テスト + 老中役割更新 + FAIL経路検証。Phase 2完了判定基準を全て充足。
+
+| subtask | 足軽 | Wave | 内容 | commit |
+|---------|------|:----:|------|--------|
+| 1087 | 足軽1 | 1 | delivery_interface_schema severity 3箇所追記 | fef08ea |
+| 1088 | 足軽2 | 1 | karo.md Phase2更新 + context/karo-kenshu.md新規 | 2fa7575 |
+| 1089 | 足軽1 | 2 | audit recordsコマンド新設(worktree実戦テスト) | 8f0e75d |
+
+**worktreeフルフロー検証（PASS経路）:**
+足軽1 worktree-subtask-1089 → 自力kenshu POST(thread:1089) → 2F合議: お針子18/18満点+軍師PASS+勘定吟味役投稿 → kenshu_gate PASS(S4) → scribe audit#10 → mainマージ → worktree削除 ✅
+
+**FAIL経路検証:**
+意図的FAIL(S3) kenshu_gate投稿 → herald任務板通知(thread:9099) → scribe audit#11(FAIL/S3) ✅
+
+**Phase 2完了判定:**
+- [x] 足軽がworktreeで自律的に作業できる
+- [x] 足軽が検収板に自力POSTできる（Phase 1.5で確認済み）
+- [x] 老中は検収板へのPOST代行をしない
+- [x] 2F合議フローがworktree成果物に対して正常動作する
+- [x] PASS→マージ、FAIL→差し戻しの両経路が機能する
+
+### cmd_494 v4.0 Phase 1.5 足軽への納品能力付与 ✅完了
+足軽instructions更新 + delivery-postスキル作成 + 練習試行（足軽1初自力POST成功）。
+
+| subtask | 足軽 | Wave | 内容 | commit |
+|---------|------|:----:|------|--------|
+| 1084 | 足軽1 | 1 | ashigaru.md 納品POST手順追記(82行) | 0e80669 |
+| 1085 | 足軽2 | 1 | delivery-post.md 新規スキル(108行) | 23b8614 |
+| 1086 | 足軽1 | 2 | 練習: v4設計書commit+検収板自力POST | 58fce80 |
+
+**練習試行結果:** お針子16/18(branch=main練習例外-2)・軍師PASS・勘定吟味役PASS。kenshu_gate PASS→scribe audit#9。
+**軍師WARNING:** delivery_interface_schema.mdにseverityフィールド未反映（§2.3との文書間非同期。次cmd対応）
+
+### cmd_493 Phase 1 バグ修正+severity対応 ✅完了
+reviewersパーサー修正(YAMLリスト+インライン両対応) + severity S1-S4全フロー実装・統合テスト合格。
+
+| subtask | 足軽 | 内容 | commit |
+|---------|------|------|--------|
+| 1082 | 足軽1 | botsunichiroku.py audit --severity追加+DBマイグレーション | bc340ca |
+| 1083 | 足軽2 | kanjou_ginmiyaku.py reviewers修正+severity+herald分岐 | b649a7a |
+
+**統合テスト結果（老中実施）:**
+
+| Severity | scribe | herald | 期待動作 | 結果 |
+|----------|:------:|:------:|----------|:----:|
+| S3 (Minor) | audit#6 severity=S3 | リジェクト通知のみ | §2.3通り | ✅ |
+| S2 (Major) | audit#7 severity=S2 | リジェクト+RAG search連携 | §2.3通り | ✅ |
+| S1 (Critical) | audit#8 severity=S1 | リジェクト+CRITICAL警告 | §2.3通り | ✅ |
+| reviewers両形式 | YAML`- a`→3名抽出 / inline`[a,b]`→2名抽出 | — | cmd_492バグ解消 | ✅ |
+
+### cmd_492 v4.0 Phase 1 検収フロー手動試運転 ✅完了
+subtask_1079を使って検収→合議→kenshu_gate→書記官の全フローを通した。
+
+| Step | 内容 | 結果 | 備考 |
+|------|------|:----:|------|
+| 1 | 検収板スレ立て(kenshu/1079) | ✅ | 納品IFスキーマA型準拠 |
+| 2 | お針子・軍師レビュー依頼(send-keys) | ✅ | 2名ともBBSレス投稿完了 |
+| 3 | 勘定吟味役 review(MBP qwen2.5:32b) | ✅ | PASS推奨レス投稿完了 |
+| 4 | kenshu_gate判定投稿 | ✅ | verdict=PASS(3名全員PASS) |
+| 5a | 書記官(scribe) | ⚠️ | audit_record#3投入OK。reviewersパース不完全(後述) |
+| 5b | 伝令(herald) | ✅ | PASS判定→伝令不要を正しく判定。FAILテストは別途 |
+| 5c | RAG検索(search) | ✅ | BBS DAT 2件ヒット。没日録DB 0件(FTS5インデックス対象外) |
+
+**発見した問題点(要修正):**
+- 🐛 **scribe reviewersパーサー**: `kanjou_ginmiyaku.py:223`のregexが`[a, b]`インライン形式のみ対応。YAML `- item`リスト形式に非対応。kenshu_gateフォーマットBとの不整合
+- 📋 **herald FAILケース未テスト**: verdict=PASSのため伝令経路が未検証。意図的FAILでの再テスト推奨
+
+### cmd_491 勘定吟味役v4.0実装 ✅完了
+外部監査+書記官+伝令+RAG検索の4役。MBP ollama qwen2.5:32b。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1080 | 足軽1 | botsunichiroku.py audit拡張+audit_recordsテーブル | ✅完了(973a441) |
+| 1081 | 足軽2 | kanjou_ginmiyaku.py 4モード(review/scribe/herald/search) | ✅完了(03c7bbe) |
+
+### 🟡 殿裁定待ち: agent-swarmまとめwiki — 軍師設計完了
 Karpathy LLM Wikiパターン×SQLite+DAT+matome板。設計書: context/agent-swarm-wiki-architecture.md。お針子による完了定義逐条確認→設計承認済み。正式起票・実装着手に殿裁定が必要。
 
 ### cmd_489 Waveshare RP2350-POE-ETH-8DI-8RO FW先行開発 🔄進行中
@@ -1888,6 +2032,12 @@ W4: cmd_315(反省会モード) ✅ ← 全Wave完了！
 ## ✅ 本日の戦果（直近）
 | 時刻 | 戦場 | 任務 | 結果 |
 |------|------|------|------|
+| 4/8 01:30 | shogun | cmd_499 Phase 3 PDCA自動回転。notify.py kenshu/kenshu_gate板ルーティング実装→自動send-keys動作確認。kenshu_auto.py(trigger/status/gate)で判定半自動化。YAML簡略化1行報告初適用。W1:自動化スクリプト(老中)+YAML簡略(6f54656,18/18)。W2:Phase 3移行宣言(6d7d247,18/18)+karo手順(8310416,18/18)。NOTIFY_EXEC thread_idバグ1件(Phase 4) | ✅ **cmd_499完了(Phase 3達成)** |
+| 4/8 00:20 | shogun | cmd_497 Phase 2.5デュアルモード。W1: dual-mode規約(5a1d1d5,18/18)+instructions(da590d3,18/18)。W2実運用テスト: トリガー設計メモ(e4e1fff,18/18)+設計書§2.4(299234e,18/18)。軍師回答: notify.py Option C(~40行)。BBS納品成功率6/6=100%。Phase 3移行基準達成 | ✅ **cmd_497完了(Phase 2.5達成)** |
+| 4/7 23:10 | shogun | cmd_495 Phase 2 1F支店自律化。worktreeフルフロー実証: 足軽1 worktree-subtask-1089→自力POST→2F合議3名全PASS(お針子18/18)→kenshu_gate PASS→scribe audit#10→mainマージ。FAIL経路: S3→herald→ninmu通知→scribe audit#11。Phase 2完了判定5項目全充足 | ✅ **cmd_495完了(Phase 2達成)** |
+| 4/7 21:50 | shogun | cmd_494 Phase 1.5足軽納品能力付与。ashigaru.md手順追記(0e80669)+delivery-postスキル(23b8614)+練習試行subtask_1086(58fce80)。足軽1初自力kenshu POST成功。2F合議PASS(お針子16/18・軍師PASS)。audit#9 | ✅ **cmd_494完了** |
+| 4/7 20:05 | shogun | cmd_493 Phase 1バグ修正+severity。reviewersパーサー両形式対応(bc340ca)+severity S1-S4全フロー(b649a7a)。統合テスト: S3リジェクト✅ S2リジェクト+RAG✅ S1リジェクト+CRITICAL✅。cmd_492バグ全解消 | ✅ **cmd_493完了(全PASS)** |
+| 4/7 18:47 | shogun | cmd_492 v4.0 Phase 1 検収フロー手動試運転。subtask_1079で全6ステップ通し。kenshu板スレ立て→お針子18/18+軍師PASS+勘定吟味役PASS→kenshu_gate PASS→scribe audit_record#3→herald正常→RAG検索2件。scribe reviewersパーサーにバグ1件発見 | ✅ **cmd_492完了(バグ1件)** |
 | 4/3 10:15 | ntrip-pico | cmd_480 FKPバグ修正完了。Bug1:Bowring式→単純直接反復法(1e-12rad精度)。Bug2:テストデータe-3誤記。往復精度テスト4件+スケール検証1件追加。commit 4052659。123/123 PASS。18/18満点 | ✅ **cmd_480完了(18/18満点)** |
 | 4/3 01:20 | ntrip-pico | cmd_479 FKP計算エンジン+rtk2go実証完了。10ファイル1,321行。MSM7搬送波位相+田中2003準拠FKP算出+Type59エンコード+rtk2go北海道3局並列接続。118/118 PASS。commit 3626a41。お針子監査18/18満点。ホクレン提案材料の核心部分完成 | ✅ **cmd_479完了(18/18満点)** |
 | 4/3 01:05 | ntrip-pico | cmd_478 RTCM3フレーム解析完了。rtcm3.zig+Source拡張+sourcetable format-details。103/103 PASS。commit d81807b。18/18満点 | ✅ **cmd_478完了(18/18満点)** |
@@ -2003,3 +2153,49 @@ W4: cmd_315(反省会モード) ✅ ← 全Wave完了！
 | 2/21 11:55 | unipi-agri-ha | cmd_254 **全完了🎉** arsprout-llamaリポジトリリストラ。mainマージ殿確認待ち | ✅ cmd完了 |
 | 2/21 16:40 | shogun | cmd_252 **全完了🎉** 勘定吟味役設計書750行。§9未決事項3件殿判断待ち | ✅ cmd完了 |
 | 2/21 11:07 | shogun | cmd_253 **全完了🎉** dashboard→DB移行+高札FTS5統合。1280件インデックス | ✅ cmd完了 |
+
+## 検収PASS率 (自動生成)
+
+最終更新: 2026-04-07 13:21 UTC
+
+| 指標 | 値 |
+|------|-----|
+| 総検収件数 | 21件 |
+| PASS | 15 |
+| FAIL | 5 |
+| CONDITIONAL | 1 |
+| 全体PASS率 | 71.4% |
+| 直近10件PASS率 | 100.0% (10/10) |
+
+### severity分布
+
+| Severity | 件数 |
+|----------|------|
+| (未設定) | 5 |
+| S1 | 1 |
+| S2 | 2 |
+| S3 | 2 |
+| S4 | 11 |
+
+### 足軽別PASS率
+
+| Worker | PASS率 | PASS/Total |
+|--------|--------|------------|
+| ashigaru1 | 100.0% | 8/8 |
+| (不明) | 14.3% | 1/7 |
+| ashigaru2 | 100.0% | 6/6 |
+
+### 直近10件推移
+
+| # | Subtask | CMD | Verdict | Severity |
+|---|---------|-----|---------|----------|
+| 12 | subtask_1090 | cmd_497 | PASS | S4 |
+| 13 | subtask_1091 | cmd_497 | PASS | S4 |
+| 14 | subtask_1093 | cmd_497 | PASS | S4 |
+| 15 | subtask_1092 | cmd_497 | PASS | S4 |
+| 16 | subtask_1094 | cmd_499 | PASS | S4 |
+| 17 | subtask_1097 | cmd_499 | PASS | S4 |
+| 18 | subtask_1096 | cmd_499 | PASS | S4 |
+| 19 | subtask_1099 | cmd_500 | PASS | S4 |
+| 20 | subtask_1100 | cmd_500 | PASS | S4 |
+| 21 | subtask_1101 | cmd_500 | PASS | S4 |

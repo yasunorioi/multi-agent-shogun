@@ -1,0 +1,44 @@
+# notification_config.yaml
+# rotation-planner-ios iMessage通知設定テンプレート
+#
+# 使い方:
+#   1. recipient に送信先の電話番号 or Apple ID を設定
+#   2. enabled: true にして通知を有効化
+#   3. 種別ごとのon/offで細かく制御
+
+# ===== 基本設定 =====
+
+# 通知全体のon/off（false にすると全通知停止）
+enabled: false
+
+# 送信先（iMessageが届く電話番号 or Apple ID メールアドレス）
+recipient: ""
+# 例:
+#   recipient: "+819012345678"
+#   recipient: "farmer@example.com"
+
+# ===== 種別ごとのon/off =====
+
+triggers:
+  # 圃場作業リマインダー
+  # タイミング: 未定（NotificationTrigger.fieldReminder）
+  field_reminder:
+    enabled: true
+    # 将来設定項目（未実装）:
+    #   advance_hours: 18   # 何時間前に通知するか
+
+  # 収穫アラート
+  # タイミング: 未定（NotificationTrigger.harvestAlert）
+  harvest_alert:
+    enabled: true
+    # 将来設定項目（未実装）:
+    #   check_schedule: "06:00"  # 毎朝6時にチェック
+
+  # カスタム通知（任意メッセージ）
+  custom:
+    enabled: true
+
+# ===== メッセージテンプレート（将来実装用） =====
+# templates:
+#   field_reminder: "【作業リマインダー】明日 {field_name} で {task_name} の予定です"
+#   harvest_alert:  "【収穫アラート】{field_name} の {crop_name} が収穫適期に達しました"

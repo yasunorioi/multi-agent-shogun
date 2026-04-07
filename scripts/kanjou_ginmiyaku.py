@@ -208,26 +208,41 @@ def mode_scribe(thread_id: str, board: str = "kenshu_gate"):
     summary = ""
     subtask_id = None
     cmd_id = None
+    severity = None
 
     for p in reversed(posts):
         body = p["body"]
         # YAML-like フィールド抽出
         m_verdict   = re.search(r"verdict:\s*(PASS|FAIL|CONDITIONAL)", body)
-        m_reviewers = re.search(r"reviewers:\s*\[([^\]]+)\]", body)
         m_summary   = re.search(r"summary:\s*[\"']?(.+?)[\"']?\s*$", body, re.M)
         m_subtask   = re.search(r"subtask_id:\s*(subtask_\d+)", body)
         m_cmd       = re.search(r"cmd_id:\s*(cmd_\d+)", body)
+        m_severity  = re.search(r"severity:\s*(S[1-4])", body)
 
         if m_verdict and verdict is None:
             verdict = m_verdict.group(1)
-        if m_reviewers and not reviewers:
-            reviewers = [r.strip().strip('"\'') for r in m_reviewers.group(1).split(",")]
+        if not reviewers:
+            # インライン形式: reviewers: [a, b]
+            m_inline = re.search(r"reviewers:\s*\[([^\]]+)\]", body)
+            if m_inline:
+                reviewers = [r.strip().strip('"\'') for r in m_inline.group(1).split(",")]
+            else:
+                # YAMLリスト形式: reviewers:\n  - a\n  - b
+                m_block = re.search(r"reviewers:\s*\n((?:\s*-\s*.+\n?)+)", body)
+                if m_block:
+                    reviewers = [
+                        r.strip().lstrip("- ").strip()
+                        for r in m_block.group(1).strip().split("\n")
+                        if r.strip().startswith("-")
+                    ]
         if m_summary and not summary:
             summary = m_summary.group(1).strip()
         if m_subtask and not subtask_id:
             subtask_id = m_subtask.group(1)
         if m_cmd and not cmd_id:
             cmd_id = m_cmd.group(1)
+        if m_severity and not severity:
+            severity = m_severity.group(1)
 
         if verdict and reviewers and summary and subtask_id:
             break
@@ -239,7 +254,7 @@ def mode_scribe(thread_id: str, board: str = "kenshu_gate"):
         print("[scribe] subtask_idが見つかりません", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[scribe] subtask={subtask_id} verdict={verdict} reviewers={reviewers}")
+    print(f"[scribe] subtask={subtask_id} verdict={verdict} reviewers={reviewers} severity={severity}")
 
     # 没日録DBにaudit record投入
     cmd = [
@@ -251,15 +266,23 @@ def mode_scribe(thread_id: str, board: str = "kenshu_gate"):
     ]
     if cmd_id:
         cmd += ["--cmd", cmd_id]
+    if severity:
+        cmd += ["--severity", severity]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
         print(f"[scribe] 没日録DB audit record投入完了: {result.stdout.strip()}")
     else:
         print(f"[scribe] audit add失敗: {result.stderr.strip()}", file=sys.stderr)
-        print(f"[scribe] コマンド: {' '.join(cmd)}", file=sys.stderr)
-        # subtask_1080でaudit add CLIが実装される。現時点ではエラーを報告して続行
-        print("[scribe] ※ subtask_1080完了後に統合テスト予定", file=sys.stderr)
+        # --severity未対応CLIへのフォールバック（subtask_1082完了前）
+        if severity and "--severity" in " ".join(cmd):
+            cmd_fallback = [c for c in cmd if c != "--severity" and c != severity]
+            result2 = subprocess.run(cmd_fallback, capture_output=True, text=True)
+            if result2.returncode == 0:
+                print(f"[scribe] --severity除外フォールバック成功: {result2.stdout.strip()}")
+            else:
+                print(f"[scribe] フォールバックも失敗: {result2.stderr.strip()}", file=sys.stderr)
+                print("[scribe] ※ subtask_1080/1082完了後に統合テスト予定", file=sys.stderr)
 
 
 # ============================================================
@@ -279,13 +302,15 @@ def mode_herald(thread_id: str, board: str = "kenshu_gate"):
     subtask_id = None
     summary = ""
     findings = []
+    severity = None
 
     for p in reversed(posts):
         body = p["body"]
-        m_verdict = re.search(r"verdict:\s*(PASS|FAIL|CONDITIONAL)", body)
-        m_subtask = re.search(r"subtask_id:\s*(subtask_\d+)", body)
-        m_summary = re.search(r"summary:\s*[\"']?(.+?)[\"']?\s*$", body, re.M)
+        m_verdict  = re.search(r"verdict:\s*(PASS|FAIL|CONDITIONAL)", body)
+        m_subtask  = re.search(r"subtask_id:\s*(subtask_\d+)", body)
+        m_summary  = re.search(r"summary:\s*[\"']?(.+?)[\"']?\s*$", body, re.M)
         m_findings = re.findall(r"-\s+(.+)", body)
+        m_severity = re.search(r"severity:\s*(S[1-4])", body)
 
         if m_verdict and verdict is None:
             verdict = m_verdict.group(1)
@@ -295,20 +320,23 @@ def mode_herald(thread_id: str, board: str = "kenshu_gate"):
             summary = m_summary.group(1).strip()
         if m_findings and not findings:
             findings = m_findings
+        if m_severity and not severity:
+            severity = m_severity.group(1)
 
         if verdict and subtask_id:
             break
 
-    print(f"[herald] verdict={verdict} subtask={subtask_id}")
+    print(f"[herald] verdict={verdict} subtask={subtask_id} severity={severity}")
 
     if verdict != "FAIL":
         print(f"[herald] verdict={verdict} — FAIL以外のため伝令不要。終了します。")
         return
 
-    # 任務板にリジェクト通知POST
+    # 任務板にリジェクト通知POST（severity共通）
     findings_text = "\n".join(f"- {f}" for f in findings[:5]) if findings else "詳細はkenshu_gate参照"
+    sev_label = severity or "S3"
     message = (
-        f"[リジェクト通知] {subtask_id or 'subtask不明'}\n"
+        f"[リジェクト通知] {subtask_id or 'subtask不明'} [{sev_label}]\n"
         f"verdict: FAIL\n"
         f"理由: {summary}\n"
         f"指摘:\n{findings_text}\n"
@@ -316,11 +344,20 @@ def mode_herald(thread_id: str, board: str = "kenshu_gate"):
         f"→ 修正後、検収板に再納品してください。"
     )
 
-    if bbs_post("ninmu", thread_id, message):
-        print(f"[herald] 任務板にリジェクト通知POST完了 (subtask={subtask_id})")
-    else:
+    if not bbs_post("ninmu", thread_id, message):
         print("[herald] 任務板POST失敗", file=sys.stderr)
         sys.exit(1)
+    print(f"[herald] 任務板にリジェクト通知POST完了 (subtask={subtask_id} severity={sev_label})")
+
+    # severity分岐（§2.3準拠）
+    effective_sev = severity or "S3"
+    if effective_sev == "S2":
+        # S2 (Major): search連携 → 検収板に類似パターンをレス投稿
+        print(f"[herald] S2: mode_search連携 query={subtask_id}")
+        mode_search(query=subtask_id or "", thread_id=thread_id, board="kenshu")
+    elif effective_sev == "S1":
+        # S1 (Critical): 老中エスカレーション警告
+        print(f"[S1 CRITICAL] 老中エスカレーション必要: {subtask_id}")
 
 
 # ============================================================

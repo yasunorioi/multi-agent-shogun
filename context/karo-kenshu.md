@@ -1,6 +1,26 @@
 # karo-kenshu.md — 検収・kenshu_gate操作手順
 
-v4.0三階建て Phase 2: 老中による検収板(kenshu)読取・2F合議トリガー・kenshu_gate判定・判定後処理の全手順。
+v4.0三階建て Phase 2/3: 老中による検収板(kenshu)読取・2F合議トリガー・kenshu_gate判定・判定後処理の全手順。
+
+---
+
+## Phase 3 フロー図（自動化）
+
+```
+足軽がkenshu板にPOST（Format A）
+  │
+  ▼ notify.py が自動検知 → 2Fメンバー(お針子/軍師)にsend-keys自動通知
+  │
+  ▼ 2F合議（kenshu板レスで自由議論）
+  │
+  ▼ kenshu_auto.py gate → kenshu_gate板に判定投稿 + scribe自動実行（DB書き戻し）
+  │
+  ├─ PASS  → git merge worktree-subtask-XXXX → git push fork main
+  └─ FAIL  → herald自動実行（任務板通知 + severity分岐）
+```
+
+> **Phase 2との差分**: 老中の手動send-keys・手動scribe・手動heraldが `kenshu_auto.py` に置き換わる。
+> フォールバックとして手動手順は引き続き有効。
 
 ---
 
@@ -31,6 +51,17 @@ for i, line in enumerate(text.strip().split('\n'), 1):
 ---
 
 ## 2F合議トリガー
+
+### 自動トリガー（Phase 3標準 / notify.py稼働時）
+
+```bash
+python3 scripts/kenshu_auto.py trigger --thread {thread_id}
+```
+
+notify.pyがkenshu板を監視し、新着スレを検知した時点で自動発火する。
+老中が明示的に呼ぶ必要があるのはフォールバック時のみ。
+
+### フォールバック（手動 / notify.py不通時）
 
 ```bash
 # お針子(ooku:agents.1)にsend-keys（2回に分ける）
@@ -112,6 +143,61 @@ python3 scripts/kanjou_ginmiyaku.py herald --thread {kenshu_gate_thread_id}
 - S3: 任務板にリジェクト通知POST → 足軽に差し戻し
 - S2: リジェクト通知 + search連携（類似パターン提示）
 - S1: CRITICAL警告 → 老中が直接対処
+
+---
+
+## kenshu_auto.py 利用手順（Phase 3）
+
+`scripts/kenshu_auto.py` は検収フローの自動化CLI。trigger/status/gate の3サブコマンドを持つ。
+
+### trigger — 2F合議トリガー発火
+
+```bash
+python3 scripts/kenshu_auto.py trigger --thread {kenshu_thread_id}
+```
+
+- kenshu板の指定スレを読み取り、お針子・軍師にsend-keys自動通知
+- 勘定吟味役のreviewも自動起動
+- notify.py稼働中は自動検知のため手動呼出し不要
+
+### status — レビュー状況確認
+
+```bash
+python3 scripts/kenshu_auto.py status --thread {kenshu_thread_id}
+```
+
+- kenshu板スレのレス数・参加者・合議進捗を表示
+- gate実行前の確認に使う
+
+### gate — 判定投稿 + scribe + herald 一括実行
+
+```bash
+# PASS判定
+python3 scripts/kenshu_auto.py gate \
+  --thread {kenshu_thread_id} \
+  --subtask subtask_XXXX \
+  --cmd cmd_YYY \
+  --verdict PASS
+
+# FAIL判定（severity必須）
+python3 scripts/kenshu_auto.py gate \
+  --thread {kenshu_thread_id} \
+  --subtask subtask_XXXX \
+  --cmd cmd_YYY \
+  --verdict FAIL \
+  --severity S3
+```
+
+gate コマンドは以下を一括実行する:
+1. kenshu_gate板に判定投稿（Format B）
+2. 勘定吟味役 scribe 実行（没日録DB書き戻し）
+3. FAIL時: herald 実行（任務板通知 + severity分岐）
+
+| verdict | severity | gateの動作 |
+|---------|---------|-----------|
+| PASS | — | kenshu_gate POST + scribe |
+| CONDITIONAL | S3/S4 | kenshu_gate POST + scribe |
+| FAIL | S1-S3 | kenshu_gate POST + scribe + herald |
 
 ---
 

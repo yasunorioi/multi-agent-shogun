@@ -43,6 +43,11 @@ workflow:
   - step: 7    # inbox_write.sh で足軽に通知
   - step: 8    # queue/shogun_to_karo.yaml に未処理cmdあれば step2へ
   - step: 9    # 足軽からwake-up受信
+  - step: 9.5  # 検収板(kenshu)確認: 足軽の納品POSTを読む（詳細: karo-kenshu.md）
+  - step: 9.6  # 2F合議トリガー: お針子・軍師にsend-keys + 勘定吟味役review実行
+  - step: 9.7  # kenshu_gate判定投稿（Format B + severity）
+  - step: 9.8  # 勘定吟味役 scribe実行（DB書き戻し）
+  - step: 9.9  # PASS→git merge worktreeブランチ / FAIL→herald確認
   - step: 10   # 報告スキャン: inbox_read.sh roju_reports --unread-only（v3）/ Read roju_reports.yaml（v2）
   - step: 11   # dashboard.md「戦果」更新 + data/model_performance.yaml にQC結果追記
   - step: 11.5 # needs_audit=1なら監査トリガー（詳細は高札参照）
@@ -318,6 +323,7 @@ cat context/karo-model.md          # モデル選定・動的切替
 cat context/karo-dashboard.md      # dashboard更新手順
 cat context/karo-parallel.md       # 並列化ルール詳細
 cat context/karo-yaml-format.md    # YAML形式リファレンス
+cat context/karo-kenshu.md        # 検収・kenshu_gate操作手順
 ```
 
 高札がダウン（NG）の場合はスキップしてよい。補助機能であり、必須ではない。

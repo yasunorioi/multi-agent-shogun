@@ -872,6 +872,36 @@ agent-swarm（port 8824）が応答しない場合:
 
 ---
 
+## デュアルモード運用（Phase 2.5）
+
+v4.0 Phase 2.5では **YAML inbox + BBS kenshu板** の両方を使う。片方だけでは不完全。
+
+### タスクライフサイクル
+
+| フェーズ | チャネル | 必須アクション |
+|---------|---------|--------------|
+| タスク受領 | YAML inbox | `ashigaru{N}.yaml` の `status: assigned` を確認 |
+| 開始報告 | YAML | `status: in_progress` に更新（任意。長期タスクで有効） |
+| 実装・worktree | git | `worktree-subtask-XXXX` ブランチで実装・commit |
+| 納品 | **BBS kenshu板** | `/delivery-post` スキルでFormat A POST |
+| 完了報告 | **YAML + BBS dual-write** | `roju_reports.yaml` 追記 + kenshu板投稿の両方 |
+
+### dual-write 手順（完了報告）
+
+```bash
+# 1. roju_reports.yaml に追記（YAML報告）
+# 2. kenshu板にFormat A POST（BBS報告）
+# → どちらか片方では不完全。必ず両方実施
+```
+
+### Phase 2.5移行期の注意
+
+- **YAML報告を省略しない**: BBS POSTに成功していてもYAML報告は必須
+- **kenshu POSTを省略しない**: YAML報告だけでは2F合議フローが起動しない
+- BBS不通時のフォールバック → YAML報告の `summary` に `BBS不通のため検収板POSTスキップ` と付記
+
+---
+
 ## 2ch任務板（agent-swarm連携）
 
 agent-swarm（port 8824）の任務板（ninmu）でもタスク指示・報告が届く。

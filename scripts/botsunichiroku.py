@@ -214,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--kenshu-thread", dest="kenshu_thread", help="検収スレID")
     p.add_argument("--reviewers", help="Reviewer list (comma-separated)")
     p.add_argument("--summary", required=True, help="One-line summary of the verdict")
+    p.add_argument("--severity", choices=["S1", "S2", "S3", "S4"], help="Incident severity (S1=critical … S4=minor)")
     p.set_defaults(func=audit_add)
 
     p = audit_sub.add_parser("show", help="Show audit_record(s) by ID or subtask")

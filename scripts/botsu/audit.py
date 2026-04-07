@@ -170,7 +170,7 @@ def audit_history_stats(args) -> None:
 
 
 def _ensure_audit_records(conn) -> None:
-    """audit_records テーブルが存在しない場合は作成（マイグレーション）。"""
+    """audit_records テーブルが存在しない場合は作成、severity カラムをマイグレーション。"""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS audit_records (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,6 +183,10 @@ def _ensure_audit_records(conn) -> None:
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    # severity カラム追加（既存テーブルへの後方互換マイグレーション）
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(audit_records)").fetchall()]
+    if "severity" not in cols:
+        conn.execute("ALTER TABLE audit_records ADD COLUMN severity TEXT")
 
 
 def _print_audit_record(r) -> None:
@@ -191,6 +195,8 @@ def _print_audit_record(r) -> None:
     print(f"  subtask : {r['subtask_id']}")
     print(f"  cmd     : {r['cmd_id'] or '-'}")
     print(f"  verdict : {r['verdict']}")
+    if r['severity']:
+        print(f"  severity: {r['severity']}")
     print(f"  thread  : {r['kenshu_thread'] or '-'}")
     print(f"  reviewers: {r['reviewers'] or '-'}")
     print(f"  summary : {r['summary']}")
@@ -206,8 +212,8 @@ def audit_add(args) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     conn.execute(
         """INSERT INTO audit_records
-           (subtask_id, cmd_id, verdict, kenshu_thread, reviewers, summary, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (subtask_id, cmd_id, verdict, kenshu_thread, reviewers, summary, severity, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             args.subtask_id,
             args.cmd,
@@ -215,13 +221,16 @@ def audit_add(args) -> None:
             args.kenshu_thread,
             args.reviewers,
             args.summary,
+            getattr(args, "severity", None),
             ts,
         ),
     )
     conn.commit()
     row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
-    print(f"Created: audit_record #{row_id} (subtask={args.subtask_id}, verdict={args.verdict})")
+    sev = getattr(args, "severity", None)
+    sev_str = f", severity={sev}" if sev else ""
+    print(f"Created: audit_record #{row_id} (subtask={args.subtask_id}, verdict={args.verdict}{sev_str})")
 
 
 def audit_show(args) -> None:

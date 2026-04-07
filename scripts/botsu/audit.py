@@ -271,6 +271,52 @@ def audit_show(args) -> None:
         print("audit_id (positional) または --subtask SUBTASK_ID を指定してください")
 
 
+def audit_records_list(args) -> None:
+    """audit_records テーブルの一覧表示（verdict/severityフィルタ対応）。"""
+    conn = get_connection()
+
+    exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_records'"
+    ).fetchone()
+    if not exists:
+        print("audit_records テーブルが存在しません。audit add を先に実行してください。")
+        conn.close()
+        return
+
+    conditions = []
+    params = []
+    if args.verdict:
+        conditions.append("verdict = ?")
+        params.append(args.verdict)
+    if args.severity:
+        conditions.append("severity = ?")
+        params.append(args.severity)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"SELECT * FROM audit_records {where} ORDER BY id DESC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if not rows:
+        print("No audit_records found.")
+        return
+
+    headers = ["ID", "SUBTASK", "CMD", "VERDICT", "SEVERITY", "REVIEWERS", "CREATED"]
+    table_rows = [
+        [
+            str(r["id"]),
+            r["subtask_id"],
+            r["cmd_id"] or "-",
+            r["verdict"],
+            r["severity"] or "-",
+            (r["reviewers"] or "-")[:20],
+            (r["created_at"] or "")[:16],
+        ]
+        for r in rows
+    ]
+    print_table(headers, table_rows, [5, 16, 10, 12, 9, 22, 16])
+
+
 def stats_show(args) -> None:
     conn = get_connection()
 

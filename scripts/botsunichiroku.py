@@ -61,7 +61,7 @@ from botsu.subtask import subtask_list, subtask_add, subtask_update, subtask_sho
 from botsu.report import report_add, report_list
 from botsu.agent import agent_list, agent_update
 from botsu.counter import counter_next, counter_show
-from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show, audit_add, audit_show
+from botsu.audit import audit_list, audit_record, audit_history_stats, stats_show, audit_add, audit_show, audit_records_list
 from botsu.archive import archive_run
 from botsu.diary import diary_add, diary_list, diary_show, diary_today
 from botsu.kenchi import kenchi_add, kenchi_list, kenchi_show, kenchi_update, kenchi_search, kenchi_delete
@@ -221,6 +221,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("audit_id", nargs="?", type=int, help="audit_record ID (positional, optional)")
     p.add_argument("--subtask", help="Filter by subtask ID")
     p.set_defaults(func=audit_show)
+
+    p = audit_sub.add_parser("records", help="List all audit_records (v4.0 合議結果一覧)")
+    p.add_argument("--verdict", choices=["PASS", "FAIL", "CONDITIONAL"], help="Filter by verdict")
+    p.add_argument("--severity", choices=["S1", "S2", "S3", "S4"], help="Filter by severity")
+    p.set_defaults(func=audit_records_list)
 
     p = audit_sub.add_parser("record", help="Record a retry-loop audit result to audit_history")
     p.add_argument("subtask_id", help="Subtask ID (e.g. subtask_XXX)")

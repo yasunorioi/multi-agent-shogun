@@ -872,33 +872,49 @@ agent-swarm（port 8824）が応答しない場合:
 
 ---
 
-## デュアルモード運用（Phase 2.5）
+## デュアルモード運用（Phase 2.5 → Phase 3）
 
-v4.0 Phase 2.5では **YAML inbox + BBS kenshu板** の両方を使う。片方だけでは不完全。
+### タスクライフサイクル（チャネル対応）
 
-### タスクライフサイクル
+| フェーズ | チャネル | Phase 2.5 | Phase 3（現在） |
+|---------|---------|-----------|----------------|
+| タスク受領 | YAML inbox | status: assigned 確認 | **変更なし** |
+| 開始報告 | YAML | status: in_progress（任意） | **変更なし** |
+| 問題報告 | YAML | status: blocked + send-keys | **変更なし** |
+| 実装・worktree | git | worktree-subtask-XXXX で作業 | **変更なし** |
+| 納品 | **BBS kenshu板** | Format A POST（主） | **変更なし** |
+| 完了報告 | **BBS主 + YAML1行** | YAML full + BBS POST | **YAML簡略化** |
 
-| フェーズ | チャネル | 必須アクション |
-|---------|---------|--------------|
-| タスク受領 | YAML inbox | `ashigaru{N}.yaml` の `status: assigned` を確認 |
-| 開始報告 | YAML | `status: in_progress` に更新（任意。長期タスクで有効） |
-| 実装・worktree | git | `worktree-subtask-XXXX` ブランチで実装・commit |
-| 納品 | **BBS kenshu板** | `/delivery-post` スキルでFormat A POST |
-| 完了報告 | **YAML + BBS dual-write** | `roju_reports.yaml` 追記 + kenshu板投稿の両方 |
+### Phase 3: 完了報告の簡略化ルール
 
-### dual-write 手順（完了報告）
+**BBS kenshu板POSTが完了報告の正**。YAML報告は1行で十分。
 
-```bash
-# 1. roju_reports.yaml に追記（YAML報告）
-# 2. kenshu板にFormat A POST（BBS報告）
-# → どちらか片方では不完全。必ず両方実施
+```yaml
+# roju_reports.yaml — Phase 3フォーマット（1行報告）
+- subtask_id: subtask_XXXX
+  cmd_id: cmd_YYY
+  worker: ashigaru2
+  status: completed
+  reported_at: 'YYYY-MM-DDTHH:MM:SS'
+  read: false
+  summary: "BBS POSTしました(thread:XXXX)"
 ```
 
-### Phase 2.5移行期の注意
+詳細（diff/テスト結果/self_review）はkenshu板のFormat A YAMLに記載済みのため、YAML側での重複記述は不要。
 
-- **YAML報告を省略しない**: BBS POSTに成功していてもYAML報告は必須
-- **kenshu POSTを省略しない**: YAML報告だけでは2F合議フローが起動しない
-- BBS不通時のフォールバック → YAML報告の `summary` に `BBS不通のため検収板POSTスキップ` と付記
+### チャネル別役割（Phase 3確定）
+
+| 通信種別 | 正チャネル | YAMLの扱い |
+|---------|----------|-----------|
+| タスク受領・割当 | YAML inbox | 継続（指揮命令系統） |
+| 開始/進捗/問題報告 | YAML inbox | 継続 |
+| 完了報告（詳細） | BBS kenshu板 | Format A が正 |
+| 完了報告（通知） | YAML roju_reports | 1行簡略で可 |
+| 没日録DB書き戻し | 勘定吟味役(scribe)が自動 | 足軽の手動不要 |
+
+### BBS不通時フォールバック
+
+YAML報告の `summary` に `BBS不通のためkenshu POSTスキップ` と付記。BBS復旧後に再POST（任意）。
 
 ---
 

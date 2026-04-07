@@ -115,6 +115,51 @@ YAML報告での重複記述は不要。
 
 ---
 
+## 8. Phase 3ルール（YAML簡略化）
+
+> **対象フェーズ**: Phase 3移行後（BBS納品成功率 ≥ 90% 達成時点から適用）
+
+### 完了報告の正チャネル変更
+
+Phase 3では **BBS kenshu板POSTが完了報告の正** となる。
+没日録DBへの書き戻しは勘定吟味役（scribe）が自動で行うため、足軽の手動登録は不要。
+
+| 報告種別 | Phase 2.5 | Phase 3 |
+|---------|-----------|---------|
+| 完了詳細 | YAML full（diff/テスト/self_review） | **kenshu板 Format A が正** |
+| 完了通知 | YAML roju_reports full | **YAML 1行簡略** |
+| 没日録DB | 足軽が手動登録 | **scribeが自動登録** |
+
+### Phase 3 YAML簡略フォーマット
+
+```yaml
+# roju_reports.yaml — Phase 3（1行）
+- subtask_id: subtask_XXXX
+  cmd_id: cmd_YYY
+  worker: ashigaru{N}
+  status: completed
+  reported_at: 'YYYY-MM-DDTHH:MM:SS'
+  read: false
+  summary: "BBS POSTしました(thread:XXXX)"
+```
+
+### 廃止対象 vs 存続対象
+
+| 項目 | Phase 3 | Phase 4方針 |
+|------|---------|------------|
+| YAML完了報告（full） | **廃止**（1行簡略へ） | 廃止確定 |
+| YAML完了報告（1行） | **存続**（通知手段として） | 廃止検討 |
+| YAML タスク受領確認 | **存続**（指揮系統） | 存続（廃止しない） |
+| YAML 問題/ブロック報告 | **存続**（指揮系統） | 存続（廃止しない） |
+| YAML タスク割当（老中→足軽） | **存続**（指揮命令系統） | 存続（廃止しない） |
+| 没日録DB手動登録 | **廃止**（scribe自動化） | 廃止確定 |
+
+> **廃止の原則**: 指揮命令系統（タスク割当・問題報告）のYAMLは廃止しない。
+> 完了報告のYAMLはBBSで代替できるため段階的に廃止。
+> **YAML完全廃止はPhase 4の判断**。Phase 3では簡略化のみ。
+
+---
+
 ## 関連ドキュメント
 
 | 文書 | 内容 |

@@ -1,5 +1,5 @@
 # 📊 戦況報告
-最終更新: 2026-03-26 07:45
+最終更新: 2026-04-05 01:38
 
 ## 📜 殿の方針
 
@@ -79,7 +79,66 @@
 
 ### ~~🟡 cmd_405 夢見パイプライン~~ → ✅PDCA Phase 1完了（2026-03-14）
 
+### ~~🔴 cmd_473 TiDE Phase 0~~ → ✅殿裁定GO → cmd_474で実装着手中
+
+### 🟡 cmd_467 OpenAI API足軽 — No-Go判定。解約判断をお願いいたします
+Wave3統合テスト完了。インフラ（codex_worker.sh・AGENTS.md・BBS通信）は全て正常動作。
+しかし **ChatGPT Plus ($20/月) ≠ API Credits** であり、API Quota Exceeded で codex exec 不可。
+- 選択肢A: platform.openai.com で API credits $5-10 チャージ → 再実験
+- 選択肢B: ChatGPT Plus 解約（API足軽不要と判断）
+- 選択肢C: ChatGPT Plus は維持、API足軽は断念（UI利用のみ）
+
+### 🟡 systrade git remote未設定（push不可）
+/home/yasu/systrade/ にgit remoteが設定されていない。足軽がcommitしてもpushできない状態。
+殿の対応: `cd /home/yasu/systrade && git remote add private git@github.com:殿のユーザー名/systrade.git && git push -u private main`
+
+### ~~🟡 EDINET DB APIキー取得~~ → ✅解決済み（殿が ~/.config/env/edinet.env に格納済み。変数名 EDINET_API）
+
 ### ~~🟡 pm-skills整理~~ → 後回し（殿裁定）
+
+### ~~🟡 cmd_466 MBPスリープ運用方針~~ → ✅殿裁定済み（蓋閉じ運用、スリープ対策は殿が実施済み。caffeinate不要）
+
+### 🟡 cmd_466 MBP→さくらVPS WireGuard未設定
+MBP(mbp.local)からさくらVPS(153.127.46.167)へのWG接続が未設定。鍵作成+WG導入は殿が予定しているが未実施。
+当面はLAN mDNS(7600x.local)+SSH exec方式で運用。VPN経由の外出先リモート接続は後日対応。
+殿の対応: MBPにWireGuard導入+鍵作成+VPSピア追加を実施後、報告をお願いします。
+
+### ~~🟡 cmd_450 feature-dev足軽導入~~ → ✅殿裁定: 軽量モード(P2必須)で導入。上流=老中/下流=支店のためP2探索・計画検証のみ。subtask_1009で ashigaru.md反映中
+
+### ~~🔴 cmd_468 TurboQuant turbo4クラッシュ~~ → ⏸️凍結（殿裁定: 案C llama.cpp本流マージ待ち Q3 2026）
+現状ollama維持。LlamaServerProvider(23a747a)は温存。llama.cpp本流にopenai_moe_iswaサポートがマージされた時点で再開。
+
+### ⏸️ cmd_467 OpenAI API足軽 — 保留（殿裁定: creditsチャージ待ち）
+インフラ構築済み（Codex CLI + notify.py exec_notify + codex_worker.sh + AGENTS.md）。
+残Wave 3（統合テスト+Go/NoGo判定）のみ。殿がAPI creditsチャージ後に再開。
+再開時: platform.openai.com → Add to credit balance → $5〜$10 → 老中に報告
+
+### 🟡 cmd_448 足軽パーミッションallowlist整理提案（殿承認待ち）
+
+**問題**: settings.local.jsonに場当たり的allowlist59件蓄積（`__NEW_LINE_*`ハッシュ付きゴミ、一回限りの特定subtaskコマンド等）。一方、頻用パターンにproject未登録のものあり。
+
+**提案A: settings.local.json クリーンアップ（推奨）**
+settings.local.jsonを以下の有用パターンのみに整理し、ゴミ59件を削除:
+```
+追加候補（project settings.jsonに追記）:
+  Bash(date *)        — 報告タイムスタンプ（全足軽必須）
+  Bash(echo *)        — デバッグ出力
+  Bash(source *)      — venv activate
+  Bash(cat *)         — ファイル確認（Read推奨だが実態として使われる）
+  Bash(head *)        — ファイル先頭確認
+  Bash(tail *)        — ファイル末尾確認
+  Bash(grep *)        — 検索（Grep推奨だが実態として使われる）
+  Bash(find *)        — ファイル探索
+  Bash(unset *)       — 環境変数操作
+  Bash(.venv/bin/pytest *) — テスト実行
+  Bash(git -C *)      — 他リポ操作（unipi-agri-ha等）
+```
+settings.local.jsonは空にリセット。
+
+**提案B: 現状維持+最小追加**
+settings.local.jsonはそのまま、project settings.jsonに `Bash(date *)` のみ追加。
+
+**老中所見**: 提案A推奨。ゴミ蓄積は今後も再発する。定期クリーンアップのスキル化も将来検討
 
 ### ~~🔴 cmd_302 RPi実機cron修正~~ → 解決済み（camera_upload.shは既にcron未登録。cmd_390 subtask_863で確認）
 
@@ -188,17 +247,330 @@ docs/shogun/dexter_analysis.md。総合7.2/10。
 
 ## 🔄 進行中 - 只今、戦闘中でござる
 
-### cmd_445 CCA老中救済 Wave 9 — calibration + worktree + bloom×Preflight 🔄再開
-3系統6subtask。stale block解除+足軽2再投入（03-26 22:55）。
+### 🟡 殿裁定待ち: shogun v4.0三階建てアーキテクチャ — 軍師レビュー完了
+軍師ダブルチェック結果: **条件付き承認**。構造の根幹は健全だが修正必須3件:
+1. §3.1に2F→1F逆通知経路(kenshu_gate FAIL→任務板POST→send-keys)を明記
+2. §4.3に合議タイブレーカー(不一致時は老中裁定、困難時は殿エスカレーション)を追記
+3. §6にPhase 2.5(YAML+BBS並行運用デュアルモード)を挿入
+
+推奨4件: temperature理論対応注記、bloom別検収ファストトラック、bloom_routing発動階明記、POSIX対応表にexit code/fork()追加。2ch zatsudan/3で軍師・お針子・足軽が詳細議論中。
+
+### 🟡 殿裁定待ち: cmd_490 agent-swarmまとめwiki — 軍師設計完了
+Karpathy LLM Wikiパターン×SQLite+DAT+matome板。設計書: context/agent-swarm-wiki-architecture.md。お針子による完了定義逐条確認→設計承認済み。正式起票・実装着手に殿裁定が必要。
+
+### cmd_489 Waveshare RP2350-POE-ETH-8DI-8RO FW先行開発 🔄進行中
+2棟目ハウス統合制御ノード。**RP2350版に切替**（殿裁定: ESP32のWiFi/BTデバッグ面倒、PoE前提ならRP2350+arduino-pico）。
+**殿追加方針(04/05)**: RO1-4=側窓A/B開閉, RO5=電磁弁, RO6-7=循環扇, RO8=予備。DI=灌水パルス+窓リミット。UART=排水センサー。WebUI追加。制御判断はuecs-llm側。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1071 | 部屋子1 | ESP32-S3版リサーチ+設計書 | ✅完了(929f7f1) ※RP2350切替で要更新 |
+| ~~1072~~ | ~~足軽1~~ | ~~ESP32-S3版FW実装~~ | ❌cancelled(RP2350切替) |
+| 1073 | 部屋子1 | RP2350版Wikiリサーチ+ピンマップ確定(DEV_Config.h裏取り) | ✅完了(b88c0a3) |
+| 1074 | 足軽1 | RP2350版FW基盤(MQTT+HA+WDT+GPIO) | ✅完了(9bf57fd+572b2d7) 監査13/18→SHT40修正→老中承認 |
+| 1075 | 足軽1 | WebUI (HTTP server, 状態確認+手動操作) | ✅完了(996336f) 監査満点18/18 |
+| **1076** | **足軽1** | **UART排水センサー (RS485→MQTT pub)** | 🟡assigned(実機到着待ち) |
+| 1077 | 足軽1 | チャンネル割当+DIパルスカウント+窓リミット | ✅完了(996336f) 監査満点18/18 |
+
+### cmd_488 TiDE推論ランタイム tflite→ONNX Runtime切替 ✅完了 — 監査満点(18/18)
+RPi5(Python3.13)でtflite-runtime aarch64 wheel不在のため、onnxruntime>=1.18に移行。ONNX優先+TFLite fallbackのデュアルパス。convert_to_onnx.py新規。commit 832449b。421テスト全PASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1073 | 足軽1 | tide_forecaster.py ONNX対応+convert_to_onnx.py+テスト4件(421/421) | ✅完了・監査満点(18/18) |
+
+### cmd_487 setup.shデプロイ修正一括 ✅完了 — 監査満点(18/18)
+TiDE依存[tide] extras + sensor-logger service + nullclaw __REPO_DIR__化 + パーミッション修正 + README更新。commit fca32af。505テストPASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1072 | 足軽1 | pyproject.toml+setup.sh+systemd+README修正(505/505) | ✅完了・監査満点(18/18) |
+
+### cmd_486 TiDE Phase3バグ修正 ✅完了 — 監査満点(18/18)
+om_forecast→past_matrix反映 + fromisoformat Python3.10互換fallback。commit 0d005b6。505テストPASS。最小差分。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1071 | 足軽1 | tide_forecaster.py+rule_engine.py修正+テスト3件追加(505/505) | ✅完了・監査満点(18/18) |
+
+### cmd_483 TiDE Phase3: tide_forecaster+先行換気統合 ✅完了 — 監査合格(17/18)
+tide_forecaster.py新規 + rule_engine.py改修(Priority3.5先行換気)。commit 1bf93b8。502テストPASS。
+減点: 設計書§3.5のJSONスキーマとキー名乖離（機能的には動作。設計書更新で対応可）。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1070 | 足軽1 | tide_forecaster.py+rule_engine.py+systemd+テスト(502/502) | ✅完了・監査合格(17/18) |
+
+### cmd_482 Financeトリガー体系リサーチ ✅完了（軍師分析+追補2本）
+5カテゴリ40+指標を網羅分類。未カバー12件優先順位付け。設計書: context/finance-triggers.md
+
+| 項目 | 内容 |
+|------|------|
+| Wave 1（即着手） | USDJPY / Sahm Rule / Cu-Au比 / SKEW — daily_risk.py数行追加、半日 |
+| Wave 2（カレンダー） | FRED releases/dates API経済カレンダー化 + Crucix発表日ブースト |
+| Wave 3（気候・地政学） | ONI(El Niño) / GPR Index / ACLED |
+| Wave 4（オルタナ） | Hindenburg Omen / Google Trends / AIS船舶 |
+| §10追補 | 4層因果モデル(実体/構造/心理/外生) + Layer A×B複合条件 + 棍棒=Layer A戦略 |
+| §11追補 | Q1 2026 5事例因果チェーン実証。ハルシネーション3類型=LLM幻覚と同型。映像=temperature |
+| §13追補 | Law/Neutral/Chaosアラインメント + スキンインザゲーム・フィルター。@xRINGx=Neutral原型。統合マトリクス(アラインメント×Layer×Temperature)で全理論接続 |
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1069 | 軍師 | 5カテゴリ40+指標+§10-§13(因果/実証/temperature/アラインメント) | ✅完了 |
+
+### cmd_481 ntripcaster FKP設定パース ✅完了 — 監査合格(17→18/18)
+fkp_enable/fkp_sources/fkp_mountpoint/fkp_interval パース実装。FkpSource構造体新設。conf追記。commit 0c83d97+54f8a2f。135/135 PASS。
+お針子指摘(2局警告)対応済み→満点相当。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1062 | 足軽2 | parser.zig改修+conf追記+テスト12件+warn追加(135/135) | ✅完了・監査合格(17→18/18) |
+
+### cmd_470 uecs-hardwares リポ切り出し ✅完了 — 監査16/18合格
+uecs-llmからHW通信基盤(daemon/10モジュール)をgit filter-repoで履歴付き分離。
+179コミット保持、pytest 209 passed、元リポ無変更。/home/yasu/uecs-hardwares/に配置。
+
+### cmd_469 Pico W NTRIP Server ✅完了 — 監査満点(18/18)
+Pico W NTRIP v1 Source Server。F9P UART→リングバッファ→WiFi TCP→ntripcaster バイトパススルー。
+commit ccd967b。arduino-cli compile警告ゼロ。printf不使用。お針子満点合格(バイナリサイズ完全一致再現)。
+
+### ⏸️ cmd_468 TurboQuant MBP — 凍結（殿裁定: 案C llama.cpp本流マージ待ち Q3 2026）
+turbo4/turbo4はopenai_moe_iswa未対応クラッシュ。現状ollama維持。LlamaServerProvider(23a747a)温存。
+偵察2段+実装+監査17/18完了。再開条件: llama.cpp本流にopenai_moe_iswaサポートがマージされた時。
+
+### cmd_473 TiDE × agriha 温室制御予測層 偵察・設計 ✅偵察完了・監査合格(18/18満点)
+推奨: **案A (Layer 2補強)** — TiDE予測をrule_engineの計算として組み込み。三層原則維持。
+設計書: context/agriha-tide.md / 分析: gunshi_analysis.yaml
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1054 | 軍師 | TiDE精読+4案比較+統合設計書(案A推奨) | ✅完了・監査合格(18/18満点) |
+
+### cmd_478 ntripcaster RTCM3フレーム解析 ✅完了・監査合格(18/18満点)
+0xD3同期+CRC-24Q+メッセージタイプ抽出+sourcetable連携。commit d81807b。103/103 PASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1059 | 足軽2 | rtcm3.zig(124行)+source/sourcetable/server改修+テスト(184行) | ✅完了・監査合格(18/18満点) |
+
+### cmd_480 FKPデモ バグ修正 ✅完了・監査合格(18/18満点)
+Bug1: Bowring式→単純直接反復法(15回,1e-12rad)。Bug2: テストデータe-3誤記。commit 4052659。123/123 PASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1061 | 足軽2 | WGS84修正+FKPスケール修正+テスト5件追加(123/123) | ✅完了・監査合格(18/18満点) |
+
+### cmd_479 ntripcaster FKP計算エンジン+rtk2go実証 ✅完了・監査合格(18/18満点)
+10ファイル1,321行。msm7+engine+type59+demo+bits。commit 3626a41。118/118 PASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1060 | 足軽2 | Phase1-4全完了(1,321行)+テスト15件追加(118/118) | ✅完了・監査合格(18/18満点) |
+
+### cmd_477 ntripcaster Zig版 sourcetable動的生成 ✅完了・監査合格(18/18満点)
+接続中ソースをstate.sourcesから動的列挙。commit ce4029a。85/85 PASS。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1058 | 足軽2 | sourcetable.zig+server.zig+dat+テスト3件(85/85) | ✅完了・監査合格(18/18満点) |
+
+### cmd_476 ntripcaster Zig版 接続数制限エンフォース ✅完了・監査合格(18/18満点)
+max_clients/max_clients_per_source/max_sources の3箇所チェック追加。commit 7216fa9。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1057 | 足軽2 | 3箇所エンフォース+テスト3件追加(82/82 PASS) | ✅完了・監査合格(18/18満点) |
+
+### cmd_475 TiDE Phase 2: PoC学習+精度評価 ✅完了・監査合格(17/18)
+Phase 1スキップ。ArSprout 2025前年データ(5-9月)でTiDE学習。commit 6e169c0。
+精度: **InAirTemp RMSE=3.24℃** / InAirHumid RMSE=11.9% / InAirCO2 RMSE=130ppm
+27℃超過1h先検知率=81.8% / TFLite変換成功(2.3MB)。減点: pytestなし(-1)
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1056 | 足軽1 | export+train+eval(3,585行) RMSE=3.24℃ TFLite OK | ✅完了・監査合格(17/18) |
+
+### cmd_474 TiDE Phase 0: sensor_logger.py ✅完了・監査合格(18/18満点)
+殿裁定GO。MQTT→SQLite時系列ログ基盤 + systemdサービス化。commit e843636。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1055 | 足軽1 | sensor_logger.py(291行)+systemd+テスト16/16 PASS | ✅完了・監査合格(18/18満点) |
+
+### cmd_471 codedb fork .gitignore/venv除外実装 ✅完了
+justrach/codedb (Zig製MCP) のFilteredWalkerに.gitignore対応を独自実装。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1053 | 足軽2 | fork+GitignoreFilter実装(172行)+zig build+配置+6テスト全PASS | ✅完了(dcfb692) |
+
+### ~~cmd_467 OpenAI API足軽 実験導入~~ — ✅No-Go完了（殿裁定待ち: 要対応参照）
+インフラ全疎通(worker+BBS+AGENTS.md)確認済みだがAPI Quota Exceeded。ChatGPT Plus≠API Credits。
+
+### cmd_466 MBP投資支店 機能分離設計+構築 ✅全Wave完了・監査合格(18/18)
+Crucix+EDINET+daily_riskをMBPに集約、7600x依存ゼロ化。SSH exec方式でagent-swarmレポート連携。
+baku.py改修せず、systrade側にinvestment_report.py新規作成で分離。殿がmbp_setup.sh実行で運用開始。
+
+**軍師偵察 重大発見:**
+- MBP WireGuard未起動（LAN mDNS代替OK）
+- agent-swarm dat_server.py 127.0.0.1バインド → SSH exec方式で迂回
+- MBP Python 3.9.6 → homebrew python@3.12必要
+- ollamaモデル変更済み（qwen3→gpt-oss-fin-thinking 22GB）
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1034 | 軍師 | 偵察+実行計画: SSH実地偵察・重大発見5件・4 subtask分解(§1-§6) | ✅完了 |
+| 1035 | 足軽1 | Wave 1: mbp_setup.sh(Step0-8)+env.example+swarm.yaml mbp_branch登録 | ✅完了(d294abd+8267e7b) |
+| 1036 | 足軽1 | Wave 2: swarm_post.py+flush_pending.py(SSH exec+pending蓄積, 154PASS) | ✅完了(9398f48) |
+| 1037 | 足軽1 | Wave 3: investment_report.py(Crucix+EDINET+daily_risk+ollama集約, 175PASS) | ✅完了(a024e21) |
+| 1038 | 足軽1 | Wave 4: mbp_crontab.txt+log_rotate.sh+§9チェックリスト(175PASS) | ✅監査合格(18/18) |
+
+### cmd_465 EDINET棍棒パイプライン ✅全Wave完了・全監査合格(18/18×3)
+大量保有報告書(5%ルール)+有報XBRL突���パイプライン。edinet-tools==0.4.3。+1,988行、25テストPASS。
+
+| subtask | ���当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1030 | 軍師 | 偵察+設計: API仕様・XBRL構造・OSS���較・Crucix接続・アーキ設計(§1-§6) | ✅完了 |
+| 1031 | 足軽1 | Wave 1: edinet_pipeline.py基盤(689行)+SQLite 3テーブ��+config+edinet-tools | ✅完了(3952aa5) |
+| 1032 | 足軽1 | Wave 2: edinet-tools統合(+691行, pytest 11PASS/1SKIP) | ✅完了(1ddbca8) |
+| 1033 | 足軽1 | Wave 3: 急変検出+dreams注���+swarm連携(+539行, 25PASS/1SKIP) | ✅監査合格(18/18) |
+
+### cmd_464 --effort max 全エージェント適用（本家v4.4.0追従） ✅完了
+shutsujin_departure.sh の全claude起動コマンドに `--effort max` を追加（9箇所）。commit b2d2fcb、push済み。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1029 | 足軽1 | --effort max 追加（9箇所置換+構文チェック） | ✅完了(b2d2fcb) |
+
+### cmd_455 獏改修 — ラプラシアンフィルタ+噛み砕きループ ✅完了・監査合格
+Phase 0+1実装完了（baku.py +312行, テスト31件）。APIコスト$0.8→$0.3圧縮見込み。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1010 | 軍師 | 設計分析(§1-§8, 5案比較, ロードマップ) | ✅完了 |
+| 1011 | 足軽1 | Phase 0: Content Hash + Delta Score Filter (+138行, 17テスト) | ✅監査合格(17/18) |
+| 1012 | 足軽1 | Phase 1: 噛み砕きループ chew_loop (+174行, 14テスト) | ✅監査合格(18/18満点) |
+
+### cmd_457 EDINET DB systrade統合 ✅完了（監査中）
+軍師分析完了。Free枠100回/日で¥0維持。二段リスク判定: daily_risk(マクロ)→edinetdb_drill(ミクロ)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1015 | 軍師 | 技術調査+統合設計(§1-§7, 22ツール全容, 棍棒指標Tier分類) | ✅完了 |
+| 1016 | 部屋子1 | EDINET DB深掘りSKILL.md(276行, 棍棒9種+監視15社) | ✅完了(7481c2b) |
+| 1017 | 足軽2 | MCP設定+APIキー取得手順書(3成果物: guide.md+.mcp.json+settings) | ✅完了 |
+| 1018 | 足軽1 | edinetdb_drill.py新規(574行+44テスト, 棍棒9種+監視15社+複合赤信号+キャッシュ) | ✅監査合格(18/18満点) |
+
+### cmd_463 ntripcaster Zigフルリライト ✅全Phase完了（全監査合格）
+BKG原典C(10,464行)→Zig。98テスト+deb/rpm/opkg+CI/CD+BKGクレジット。タグpushで殿Releaseへ。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1022 | 軍師 | Phase 1: 原典14ファイル読解+NTRIP仕様+Zig設計書(591行) | ✅完了 |
+| 1023 | 足軽1 | Phase 2a: build.zig + config + auth (31テスト) | ✅完了(d730d7c) |
+| 1024 | 足軽1 | Phase 2b: protocol + sourcetable + relay + log (69テスト) | ✅完了(408c2ec) |
+| 1025 | 足軽1 | Phase 2c: server統合 + shutdown(.both)修正 (79+8テスト) | ✅完了(dda5b3d) |
+| 1026 | 足軽1 | Phase 2d: 相互運用11PASS+クロスコンパイル+use-after-free修正+legacy | ✅監査合格(18/18満点) |
+| 1027 | 足軽1 | Phase 3: deb/rpm/opkg+CI/CD (make package-deb/opkg確認済) | ✅監査合格(17/18) |
+| 1028 | 足軽2 | Phase 4: README(BKGクレジット5箇所)+LICENSE+CHANGELOG+ARCHITECTURE | ✅監査合格(18/18満点) |
+
+### cmd_461 ntripcaster systemd service化+パッケージ整備 ✅完了（監査合格18/18満点）
+cmd_459の上に積む。service/conf.example/Makefile install/README。push済み(2f2d468)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1021 | 足軽1 | 3 commit: service改修+conf.example / install target / README全面改訂 | ✅監査合格(18/18満点) |
+
+### cmd_459 ntripcasterフォーク修正 ✅完了（監査合格17/18）
+C言語。ビルドシステム+configパスハードコード+musl libc互換の3点修正。Alpine muslビルド成功（老中再現確認済み）。push未実施（殿GitHub認証要）。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1020 | 足軽1 | 3 commit: autoreconf対応+configパス動的化+musl互換 | ✅監査合格(17/18) |
+
+### cmd_458 rotation-planner-ios iMessage通知基盤 ✅完了
+MBPリポ用コード4ファイルをdocs/shogun/imessage_notification/に生成。殿がMBPにコピー適用。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1019 | 足軽2 | iMessage通知基盤コード生成(AppleScript+Swiftスタブ+config+README) | ✅完了 |
+
+### cmd_456 獏 トウシルRSS+YouTube字幕要約パイプライン ✅完了
+YouTube字幕要約汎用モジュール+トウシルRSS仕入れ+仕入れ先config化。テスト47件全合格。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1013 | 足軽1 | YouTube字幕要約汎用モジュール(227行+テスト23件) | ✅完了(f710147) |
+| 1014 | 足軽1 | トウシルRSS+baku.py統合(+460行, テスト47件) | ✅完了(db62e61) |
+
+### cmd_453 dat_server /docs/静的ファイル配信 ✅完了
+長文(分析書/設計書)をdocs/にファイル保全、2chレスにはサマリ+リンク。worktree共有設計。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1007 | 足軽1 | dat_server.py /docs/エンドポイント追加(静的配信+リスティング+パストラバーサル防止) | ✅完了(7af5f17) |
+| 1008 | 足軽2 | instructions長文投稿規約追記(karo.md/ashigaru.md/gunshi.md) | ✅完了(732121b) |
+
+### cmd_452 shogunシステムDocker化 設計調査 ✅完了
+Bloom L5。軍師分析完了。docs/shogun/docker_design_survey.md §0-§8。殿の3拠点方針反映済み。
+
+**調査要点**:
+- **3構成案**: 案A(1コンテナ1エージェント=過剰)、案B(セッション単位=現実解★★★)、案C(HTTP完全分離=将来理想)
+- **技術障壁**: Memory MCP捨て可(殿方針整合)、tmux依存はswarm Phase 2で解消、`--bare`問題は設定マウントで対処
+- **移行ロードマップ**: Phase 0(Dockerfile試作)→Phase 1(セッション単位)→Phase 2(HTTP完全分離)
+- **3拠点設計**: MBP=壁打ち(軽量将軍コンテナ)、RPi=HW制御(Pythonコンテナ、Claude Code不要)、VPS=放置運用(restart+healthcheck)
+- **推奨**: Phase 0即着手可。本格移行はswarm Phase 2完了後。当面allowlist拡充で凌ぐ
+- **VPS自己回復**: `restart: unless-stopped`+healthcheckはswarm Phase 2を待たず実現可能（判断変更）
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1006 | 軍師 | コンテナ構成+技術障壁+移行ロードマップ+3拠点設計 | ✅完了 |
+
+### cmd_451 Dexterパターン分析 → systrade設計反映 ✅完了
+Dexterから3パターン(Scratchpad/SKILL.md/SOUL.md)を盗んでsystradeに適用。全commit済み、push待ち(remote未設定)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1001 | 軍師 | Dexterアーキテクチャ分析+分解案 | ✅完了 |
+| 1003 | 足軽2 | Scratchpad JSONL(scratchpad.py+5テスト) | ✅完了(51876a8) |
+| 1004 | 部屋子1 | リスクアラートSKILL.md(184行) | ✅完了(a75f984) |
+| 1005 | 足軽1 | CLAUDE.md投資原則SOUL追記 | ✅完了(e42c727) |
+
+### cmd_450 feature-devプラグイン足軽導入 ✅完了
+殿裁定: 軽量モード(P2必須)。上流=老中/下流=支店。P2探索・計画検証のみ残す運用。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 999 | 足軽1 | /feature-devで動作確認テスト | ✅完走(9c8e86d+4d177f1) |
+| 1000 | 部屋子1 | ashigaru.md組み込み案策定 | ✅分析完了 |
+| 1009 | 足軽2 | ashigaru.md P2必須運用規約追記 | ✅完了(f6f6b43) |
+
+### cmd_449 agent-swarm Phase 1 デュアルライト ✅完了
+W4(instructions差分)+W5(運用テスト)全完了。bbs.cgiスレ立て/レス投稿/dat確認 全OK。テストスレID=4495。
+
+| subtask | 担当 | Wave | 内容 | 状態 |
+|---------|------|------|------|------|
+| 996 | 足軽1 | W4 | karo.md デュアルライト手順追記 | ✅完了(87531be) |
+| 997 | 足軽2 | W4 | ashigaru.md デュアルライト手順追記 | ✅完了(2fcb6ab) |
+| 998 | 足軽1 | W5 | 運用テスト（デュアルライト検証） | ✅全5ステップOK |
+
+### cmd_448 足軽パーミッションallowlist ✅完了
+提案A実行済み。settings.json +11件(計47件)、local.json空リセット。
+
+### cmd_446 未コミット変更精査・処理 ✅完了
+足軽落下副作用4件 → 全件正当、3コミットに分割。baku.py(7c71b26) + dat_server.py(b3f43ab) + 運用更新(57ae5f1混入)。
+
+### cmd_445 CCA老中救済 Wave 9 — calibration + worktree + bloom×Preflight ✅完了
+3系統6subtask全完了。stale block解除後、足軽2が残3件を一括完了。
 
 | subtask | 担当 | 系統 | 内容 | 状態 |
 |---------|------|------|------|------|
 | 987 | 足軽2 | A | 没日録DBから監査事例3件抽出 | ✅完了 |
-| 988 | 足軽2 | A | SKILL.md few-shot examples追加 | 🔄再開指示済み(block解除) |
-| 989 | 足軽2 | B | SHOGUN_ROOT + PROJECT_ROOT修正 | ✅完了(既実装確認、監査不要) |
-| 990 | 足軽2 | B | ashigaru.md worktree手順追記 | 🔄再開指示済み |
+| 988 | 足軽2 | A | SKILL.md few-shot examples追加 | ✅完了(58ab2ad) |
+| 989 | 足軽2 | B | SHOGUN_ROOT + PROJECT_ROOT修正 | ✅完了(既実装確認) |
+| 990 | 足軽2 | B | ashigaru.md worktree手順追記 | ✅完了(709dbdb) |
 | 991 | 足軽2 | C | bloom_router classify()追加 | ✅監査合格(17/18) |
-| 992 | 足軽2 | C | ashigaru.md bloom連動ルール追記 | 🔄再開指示済み(block解除) |
+| 992 | 足軽2 | C | ashigaru.md bloom連動ルール追記 | ✅完了(57ae5f1) |
 
 ### cmd_440 ベクトル検索(sqlite-vec + Ruri v3) Phase 0 ✅完了
 全subtask監査合格。vec.py + migrate_vec.py + CLI --hybrid。バッチベクトル化はバックグラウンド完走待ち。
@@ -1516,6 +1888,24 @@ W4: cmd_315(反省会モード) ✅ ← 全Wave完了！
 ## ✅ 本日の戦果（直近）
 | 時刻 | 戦場 | 任務 | 結果 |
 |------|------|------|------|
+| 4/3 10:15 | ntrip-pico | cmd_480 FKPバグ修正完了。Bug1:Bowring式→単純直接反復法(1e-12rad精度)。Bug2:テストデータe-3誤記。往復精度テスト4件+スケール検証1件追加。commit 4052659。123/123 PASS。18/18満点 | ✅ **cmd_480完了(18/18満点)** |
+| 4/3 01:20 | ntrip-pico | cmd_479 FKP計算エンジン+rtk2go実証完了。10ファイル1,321行。MSM7搬送波位相+田中2003準拠FKP算出+Type59エンコード+rtk2go北海道3局並列接続。118/118 PASS。commit 3626a41。お針子監査18/18満点。ホクレン提案材料の核心部分完成 | ✅ **cmd_479完了(18/18満点)** |
+| 4/3 01:05 | ntrip-pico | cmd_478 RTCM3フレーム解析完了。rtcm3.zig+Source拡張+sourcetable format-details。103/103 PASS。commit d81807b。18/18満点 | ✅ **cmd_478完了(18/18満点)** |
+| 4/3 00:15 | ntrip-pico | cmd_477 ntripcaster sourcetable動的生成完了。buildResponse()+sendSourcetableResponse()改修+conf/sourcetable.dat+テスト3件(85/85 PASS)。source_lock最小スコープ。commit ce4029a。お針子監査18/18満点 | ✅ **cmd_477完了(18/18満点)** |
+| 4/2 14:15 | ntrip-pico | cmd_476 ntripcaster接続数制限エンフォース完了。server/client/source 3箇所+テスト3件(82/82 PASS)。実装27行・テスト118行。fetchAdd後>判定でoff-by-one回避。commit 7216fa9。お針子監査18/18満点 | ✅ **cmd_476完了(18/18満点)** |
+| 4/2 13:00 | uecs-llm | cmd_475 TiDE Phase 2 PoC完了。ArSprout 2025データでTiDE学習。InAirTemp RMSE=3.24℃/27℃超過1h検知81.8%/TFLite 2.3MB。お針子監査17/18合格(pytest未実装-1)。温度予測は実用水準、湿度・CO2は要改善 | ✅ **cmd_475完了(17/18)** |
+| 4/2 09:25 | uecs-llm | cmd_474 TiDE Phase 0 sensor_logger.py完了。MQTT→SQLite時系列ログ基盤(291行)+systemdサービス+テスト16/16 PASS。commit e843636。お針子監査18/18満点。次: RPi4デプロイ→6ヶ月データ蓄積開始 | ✅ **cmd_474完了(18/18満点)** |
+| 4/2 08:45 | uecs-llm | cmd_473 TiDE×agriha予測層偵察完了。軍師4案比較→案A(Layer 2補強)推奨。お針子監査18/18満点合格（PC3訂正: context/.gitignore除外は仕様通り）。Phase 0 sensor_logger.py即着手要(データ蓄積6ヶ月) | ✅ **偵察完了・監査合格(殿裁定待ち)** |
+| 4/2 00:30 | shogun | cmd_472 codedb MCPサーバー グローバル登録。~/.claude.json mcpServers追加（settings.jsonはスキーマ非対応→.claude.jsonに修正）。backup作成済み。再起動後に12ツール利用可 | ✅ **cmd_472完了** |
+| 4/2 00:25 | shogun | cmd_471 codedb fork .gitignore除外実装。GitignoreFilter+globMatch(172行)。zig build成功、~/.local/bin/codedb配置。6テスト全PASS。commit dcfb692 origin push済み | ✅ **cmd_471完了** |
+| 4/1 23:42 | shogun | cmd_467 OpenAI API足軽実験 No-Go。インフラ全疎通(worker+BBS+AGENTS.md)確認済みだがAPI Quota Exceeded。ChatGPT Plus≠API Credits。殿裁定待ち(チャージ/解約/維持) | 🚨 **No-Go(殿裁定待ち)** |
+| 4/1 15:00 | uecs-hardwares | cmd_470 uecs-hardwares独立リポ切り出し。軍師偵察(依存ゼロ確認)+足軽filter-repo(179コミット保持, 209passed)。daemon/→uecs_hardwares/リネーム。お針子16/18合格。/home/yasu/uecs-hardwares/ | ✅ **cmd_470完了** |
+| 4/1 02:30 | ntrip-pico | cmd_469 Pico W NTRIP v1 Source Server。F9P UART→リングバッファ→WiFi TCP→ntripcaster。printf不使用。compile警告ゼロ。お針子満点18/18(バイナリ完全一致再現)。commit ccd967b | ✅ **cmd_469完了** |
+| 3/30 23:30 | systrade | cmd_468 subtask_1049完了。turboquant_plusビルド成功(M4 Pro Metal)。turbo4/turbo4はopenai_moe_iswa未対応クラッシュ。Crucix形式GPU OOM。LlamaServerProvider完成(23a747a)。ロールバック済み。殿裁定待ち(Q5_K_M/ngl削減/本流待ち/現状維持) | 🚨 **殿裁定待ち** |
+| 3/30 23:00 | systrade | cmd_468 TurboQuant偵察2段。①Wait→②Go(条件付き)。致命的訂正: KVキャッシュ圧縮≠重み量子化。決定打: turboquant_plus v1+llama-server直接実行でCrucix3行改修。MBP15分実験手順§9.6。docs/shogun/turboquant_recon.md | ✅ **偵察完了(Go)** |
+| 3/30 13:15 | systrade | cmd_466 MBP投資支店全完了。軍師偵察(SSH実地+重大発見5件)+足軽4Wave(環境構築→投稿ヘルパー→投資日報→cron)。6スクリプト新規。お針子18/18満点。commits: d294abd→9398f48→a024e21→a8b7ce0+agent-swarm:8267e7b | ✅ **cmd_466完了** |
+| 3/30 03:15 | systrade | cmd_465 EDINET棍棒パイプライン全完了。軍師偵察(§1-§6)+足軽3Wave(基盤→パーサー→シグナル)。edinet_pipeline.py +1,988行、25PASS。お針子18/18×3満点。commits: 3952aa5→1ddbca8→2edb935 | ✅ **cmd_465完了** |
+| 3/30 01:02 | shogun | cmd_464 --effort max全エージェント適用。shutsujin_departure.sh 9箇所置換。1ファイル+9/-9。commit b2d2fcb push済み | ✅ **cmd_464完了** |
 | 3/24 22:20 | shogun | cmd_439 Phase 1実装完了: policy_checker.py(145行,fail-open二重防御)+bloom_router.py(92行,FTS5自動effort)。監査17/18+17/18。お針子自身がF001でブロックされLive動作確認 | ✅ **cmd_439完了** |
 | 3/24 21:45 | shogun | cmd_438 Phase 0実装完了: Preflight Check(P1-P5)+拒否3段階(L1-L3)+18点ルーブリック(PC1-PC3)+effort設定。監査15/15+13/15。指摘修正(94fe5f9): 15→18点統一(ohariko.md+audit/SKILL.md) | ✅ **cmd_438完了** |
 | 3/24 21:10 | shogun | cmd_437 第2次リサーチ: CogRouter/AgentSpec/ToolSafe精読+Claude Code hooks/think tool突き合わせ。4名並列→675行一貫設計書v2。全Phase加算的・非破壊・月額ゼロ。Phase 0即時実施可(68行) | ✅ **cmd_437完了** |

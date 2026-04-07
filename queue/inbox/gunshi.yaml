@@ -1,4 +1,251 @@
 reports:
+- subtask_id: subtask_1054
+  cmd_id: cmd_473
+  assigned_by: roju
+  status: done
+  completed_at: '2026-04-02T08:30:00'
+  project: uecs-llm
+  bloom_level: L5
+  needs_audit: true
+  assigned_at: '2026-04-02T08:22:55'
+  description: |
+    ■ 戦略分析: TiDE × agriha 温室制御予測層 偵察・設計
+
+    【目的】
+    LLM丸投げ方式の弱点「先読み」を補完する予測層としてTiDEを評価。
+    統合設計案をcontext/agriha-tide.mdに出力せよ。
+
+    【殿の過去裁定（Memory MCP）】
+    - 先読み制御: LLMに温度勾配計算させるのは無理。rule_engineで計算してLLMに渡す方式(案B)を採用済み
+    - 三層構造: 爆発(緊急停止)→ガムテ(ルールベース)→知恵(LLM)。下層が上層を黙らせる
+    - 1時間予報+緊急フラグ方式: cronで1時間毎にHaiku→アクション計画JSON→RPiが実行
+    - マクガイバー精神: シンプル・ローコスト・手元の道具で解決
+
+    【調査項目】
+    1. google-research/google-research/tide/ 精読
+       - モデル構造・入力形式・学習/推論パイプライン
+       - カスタムデータセット投入手順
+       - 依存ライブラリ（TF? PyTorch?）
+       - 推論の計算量・メモリ要件
+    2. agriha統合設計案
+       - 入力: センサーデータ(温度/湿度/CO2/日射) + Open-Meteo天気予報(共変量)
+       - 出力: N時間先の温度・湿度予測 → LLMのsystem_promptに注入
+       - 推論環境: RPi4で動くか? vx2(Ryzen5)前提か?
+       - forecast_engine.py(§3.7)との関係・統合方式
+       - 三層制御構造のどこに位置づけるか(ガムテ層? 知恵層の補助?)
+    3. 学習データ確保方針
+       - agriha_control.pyのcronログ蓄積状況
+       - 必要データ量の見積もり
+       - Open-Meteo過去データの利用可否
+    4. 設計書 context/agriha-tide.md 出力
+
+    【既存コード参照】
+    - /home/yasu/Project/uecs-llm/src/agriha/control/forecast_engine.py
+    - /home/yasu/Project/uecs-llm/config/forecast.yaml
+
+    【成果物】
+    context/agriha-tide.md（設計書ドラフト）
+    queue/inbox/gunshi_analysis.yaml（分析サマリ+推奨事項）
+
+    報告先: roju_reports.yaml
+- subtask_id: subtask_1051
+  cmd_id: cmd_470
+  assigned_by: roju
+  status: done
+  completed_at: '2026-04-01T12:30:00'
+  project: uecs-hardwares
+  bloom_level: L5
+  assigned_at: '2026-04-01T11:00:00'
+  description: |
+    ■ uecs-llm HW通信基盤ファイル特定+依存関係整理（偵察）
+
+    【目的】
+    uecs-llmリポからHW通信基盤（CCM/MQTT/W5500/PicoW等）を独立リポ uecs-hardwares として
+    git filter-repoで履歴付き切り出しするための準備。対象ファイル特定と依存関係整理。
+
+    【uecs-llmリポ所在】
+    /home/yasu/Project/uecs-llm
+
+    【調査内容】
+    1. uecs-llmリポの全ファイルを走査し、以下のカテゴリに分類:
+       a) HW通信基盤（切り出し対象）:
+          - CCMプロトコル実装（UECS CCM XML生成・パース・送受信）
+          - Mosquitto/MQTT通信（publish/subscribe、ブローカー接続）
+          - W5500 Ethernet関連（SPI、TCP/IP）
+          - PicoW WiFi関連（WiFi接続管理、mDNS）
+          - Arduino/Picoスケッチ、ライブラリ、ヘッダ
+          - センサードライバ（SHT41, SCD41, BH1750, DS18B20等のI2C/1-Wire/ADC）
+          - アクチュエータ制御（リレー、GPIO）
+       b) LLM制御/UI（残留対象）:
+          - agriha_control.py, agriha_chat.py等のLLM呼び出し
+          - Web UI（HTML/CSS/JS）
+          - system_prompt.txt
+          - LINE Bot連携
+          - 設定UI
+       c) 共有/境界ファイル（両方から参照されるもの）:
+          - 共通config（thresholds.yaml, network.yaml等）
+          - 共通ユーティリティ
+
+    2. 依存関係マップ:
+       - HW→LLM方向の依存（HWコードがLLM側を呼んでいるか）
+       - LLM→HW方向の依存（LLMコードがHW側を呼んでいるか）
+       - 循環依存の有無
+
+    3. git filter-repo用パスリスト:
+       - --path で指定すべきディレクトリ/ファイルの一覧
+       - 除外すべきパスがあればその理由
+
+    【成果物】
+    gunshi_analysis.yaml に以下を記載:
+    - 切り出し対象パスリスト（git filter-repo --path 用）
+    - 残留対象パスリスト
+    - 境界ファイルの扱い提案
+    - 依存関係の要注意箇所
+    - 推奨: フェーズ2（足軽実行）の手順案
+
+    【参考】
+    - cmd_443: uecs-llm内部通信仕様書修正（MQTT棚卸しあり: subtask_906）
+    - context/uecs-llm/ 以下にPJ固有知見あり
+
+    報告先: roju_reports.yaml + gunshi_analysis.yaml
+  report_to: roju_reports.yaml
+- subtask_id: subtask_1034
+  cmd_id: cmd_466
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T11:15:00'
+  project: systrade
+  bloom_level: L5
+  decompose: true
+  assigned_at: '2026-03-30T10:22:20'
+  description: |
+    ■ MBP投資支店 偵察 + 実行計画策定（L5分析・decompose付き）
+
+    【目的】
+    7600x.localが単一障害点。MBP(mbp.local)を投資系自己完結マシンとして機能分離し、
+    7600x.localが落ちてもCrucix+EDINET+獏の投資パイプラインが回り続ける構成にする。
+
+    【現状（既知情報）】
+    - MBP: M4 Pro 48GB, 10.10.0.12 (WG VPN疎通済み)
+    - MBP既存: ollama(qwen3:8b + qwen3.5:35b-a3b), Crucix(cron30分, 28ソースOSINT)
+    - 7600x.local: shogun本店, agent-swarm, 農業系
+    - systradeリポ: yasunorioi/systrade (private, push済み)
+    - APIキー: ~/.config/env/edinet.env (EDINET_API)
+
+    【偵察項目（§1-§5）】
+
+    §1. MBP現状構成棚卸し
+       - Crucix: crontab内容・実行頻度・依存パッケージ・出力先
+       - ollama: モデル一覧・launchd設定・APIポート
+       - Python環境: バージョン・venv構成・pip list
+       - ディレクトリ構成: ~/systrade/, ~/agent-swarm/ 等の有無
+       - ※MBPにSSH可能か確認: ssh yasu@mbp.local (WG: 10.10.0.12)
+
+    §2. systrade既存スクリプト依存マップ
+       - edinet_pipeline.py: 環境変数(EDINET_API_KEY/EDINET_API)、DB(edinet_holdings.db)、edinet-tools
+       - edinetdb_drill.py: 環境変数、DB、依存ライブラリ
+       - daily_risk.py等: 他スクリプトの有無と依存関係
+       - requirements.txt / pyproject.toml の完全性チェック
+
+    §3. baku.py投資リサーチ機能の切り出し範囲
+       - /home/yasu/multi-agent-shogun/scripts/baku.py を確認
+       - 投資リサーチ(Crucix/EDINET連携)部分とshogun内部機能の境界線
+       - dreams.jsonlの読み書きパス・フォーマット
+       - MBPに移植すべき範囲 vs shogunに残すべき範囲
+
+    §4. agent-swarm通信設計
+       - agent-swarm(7600x.local:8824)のAPI仕様確認
+       - MBP支店長→agent-swarm finance板 レポート投稿の具体方式
+       - WG VPN経由の疎通確認方法
+       - 7600x.local障害時のフォールバック（ローカル蓄積→復帰後同期？）
+
+    §5. 7600x.local依存ゼロ検証チェックリスト
+       - MBP単体で何が回り、何が回らないかの完全リスト
+       - DNS/NTP/外部API等の非7600x依存の確認
+       - agent-swarm不通時のgraceful degradation設計
+
+    【設計書+実行計画（§6）】
+    偵察結果を踏まえ:
+       - MBP投資支店の目標構成図
+       - 殿向けMBPセットアップ手順書（ssh先で殿が実行するコマンド列）
+       - 足軽向け実行subtask分解（各subtask半日以内）
+       - cron設定一式（Crucix既存+EDINET追加+獏投資リサーチ）
+
+    【重要制約】
+    - MBPはリモートマシン。7600x.localから直接ファイル操作不可
+    - 足軽が作れるのは「設計書+手順書+スクリプト」。MBP上での実行は殿が行う
+    - systradeリポはprivate push済み。MBPでgit pull可能
+    - 80%で出荷。過剰設計するな
+    - agent-swarm: /home/yasu/agent-swarm/（独立リポ）
+
+    【成果物】
+    docs/shogun/mbp_investment_branch.md（偵察+設計+手順書一体、§1-§6構成）
+
+- subtask_id: subtask_1030
+  cmd_id: cmd_465
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T02:40:00'
+  project: systrade
+  bloom_level: L5
+  decompose: true
+  assigned_at: '2026-03-30T02:07:26'
+  description: |
+    ■ EDINET棍棒パイプライン偵察+設計（L5分析・分解込み）
+
+    【背景】
+    cmd_457でEDINET DB MCP統合+edinetdb_drill.py完成済み。
+    今回はEDINET API v2を直叩きし、大量保有報告書×有報XBRLの突合パイプラインを設計する。
+    殿の投資仮説: アジアインフラ×GIS×オルタナティブデータ、棍棒で殴れるファンダメンタルズ戦略。
+
+    【偵察項目（§1-§5）】
+
+    §1. EDINET API v2 仕様調査
+       - エンドポイント一覧、認証方式、レートリミット
+       - データ形式（JSON / XBRL / ZIP）
+       - 書類一覧API・書類取得APIの使い分け
+       - ※EDINET DBとEDINET APIの違いを明確にせよ
+
+    §2. 大量保有報告書 XBRLデータ構造
+       - 5%ルール報告書のXBRLタクソノミー
+       - 取得可能フィールド: 保有者名、銘柄コード、株数、保有割合、変動理由
+       - 変動報告書との差分構造
+       - 取得→パースの具体的コードパス
+
+    §3. 有価証券報告書 XBRL差分検知
+       - 前期比テキスト差分の実現可能性（リスク情報、設備投資、地域セグメント）
+       - 数値変動検知（売上、利益、設備投資額等の前期比）
+       - XBRL Inlineの扱い
+
+    §4. 既存OSSライブラリ調査
+       - edinet-python、xbrl-parser、arelle、その他
+       - 各ライブラリの成熟度・メンテ状況・機能カバレッジ比較表
+       - 殿のスタック（Python + SQLite）との親和性
+
+    §5. Crucix/獏との接続ポイント
+       - baku.py の仕入れ先config（sources.yaml）への追加方式
+       - 噛み砕き→Crucix投入のデータフロー
+       - cron頻度設計（大量保有=日次？有報=四半期？）
+
+    【設計書（§6）】
+    偵察結果を踏まえ、全体アーキテクチャ設計書を出力せよ:
+       - データ取得→SQLite蓄積→差分検知→獏噛み砕き→Crucix投入のフロー図
+       - 既存パイプライン（トウシルRSS、edinetdb_drill.py）との統合方針
+       - 実装subtask分解案（足軽向け、各subtask半日以内）
+
+    【先行成果物（参照必須）】
+    - /home/yasu/systrade/scripts/edinetdb_drill.py — EDINET DB棍棒ドリル
+    - /home/yasu/systrade/skills/ — EDINET DB SKILL.md
+    - /home/yasu/systrade/scripts/baku.py or /home/yasu/multi-agent-shogun/scripts/baku.py — 獏
+
+    【成果物】
+    docs/shogun/edinet_pipeline_recon.md（偵察+設計書一体、§1-§6構成）
+
+    【制約】
+    - 80%で出荷。過剰設計するな
+    - APIキーは殿が未取得（偵察は公開仕様で可能）
+    - 月額ゼロ維持が原則（EDINET API無料枠内）
+
 - subtask_id: subtask_1022
   cmd_id: cmd_463
   assigned_by: roju
@@ -1062,3 +1309,500 @@ tasks:
     完了後、roju_reports.yaml + 将軍ペイン(shogun:main.0)にsend-keysで報告
 
     報告先: roju_reports.yaml
+- subtask_id: subtask_1039
+  cmd_id: cmd_467
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T14:00:00'
+  assigned_at: '2026-03-30T12:00:00'
+  project: shogun
+  bloom_level: L5
+  decompose: true
+  description: |
+    ■ OpenAI API足軽 偵察 + 実験計画策定（L5分析・decompose付き）
+
+    【目的】
+    殿がOpenAI Plus契約+APIキーを保有。OpenAI CLIエージェントを足軽として
+    shogun指揮系統に組み込めるか実験導入の可否を判定せよ。
+    「ダメなら解約」が殿方針。判定基準を明確にし、最小コスト実験計画を立案。
+
+    【先行調査】
+    cmd_080（2026-02-07）でCodex CLI下調べ済み。約2ヶ月経過のため差分更新が必要。
+    没日録: python3 scripts/botsunichiroku.py cmd show cmd_080
+
+    【偵察項目（§1-§5）】
+
+    §1. Codex CLI最新仕様（cmd_080差分更新）
+       - 現在のバージョン・インストール方法（npm? pip?）
+       - 対応モデル（GPT-4o, GPT-4.1, o3等）
+       - CLI引数・設定ファイル（AGENTS.md等）
+       - 非対話モード（ヘッドレス実行）の有無・引数
+       - ファイル読み書き・bash実行の権限管理
+       - --dangerously-skip-permissions 相当の自動承認モード
+
+    §2. 代替CLIエージェント比較
+       - aider（https://github.com/paul-gauthier/aider）
+       - open-interpreter
+       - その他2026年3月時点で有力なもの
+       - 各ツールのOpenAI API対応・モデル選択・CLI操作体系
+
+    §3. tmux + send-keys + YAML通信互換性（最重要）
+       以下が可能か、各ツールについて○/△/×で判定:
+       a. tmuxペインに住まわせて常駐できるか
+       b. send-keysでテキスト入力→実行できるか
+       c. capture-paneで出力取得できるか
+       d. instructions/ashigaru.md をシステムプロンプトとして注入できるか
+          （AGENTS.md、--system-prompt、設定ファイル等の機構）
+       e. YAML inbox読み書き（ファイルRead/Write）ができるか
+       f. bash実行（botsunichiroku.py呼び出し等）ができるか
+       g. 非対話モード（1コマンド→完了→次のsend-keys待ち）が可能か
+
+    §4. コスト試算
+       - GPT-4o / GPT-4.1 / o3 のトークン単価（input/output）
+       - 足軽1タスク（ファイル修正+commit程度）あたりの概算コスト
+       - Claude Code足軽との比較（Sonnet/Haiku相当）
+       - 月額上限設定の可否
+
+    §5. 統合判定 + 実験計画立案
+       - 判定基準（Go/NoGo）を明確に定義
+         - Must: tmux常駐 + send-keys通信 + ファイルR/W + bash実行
+         - Want: instructions注入 + 非対話モード
+       - 最有力候補の選定理由
+       - 実験計画（フェーズ2）: 何をどのペインでどう試すか
+         - 簡単なタスク例（ファイル修正→commit）
+         - YAML inbox読み書きテスト
+         - 想定所要時間・トークン消費見積もり
+
+    【環境情報】
+    - OpenAI APIキー: ~/.config/env/openai.env
+    - 現行shogunペイン構成: CLAUDE.md参照
+    - 空きペイン: なし（新ペイン作成 or 既存流用を検討）
+
+    【制約】
+    - 最小コスト厳命。WebSearchベースの机上調査のみ
+    - 実際のインストール・API呼び出しは行うな（偵察フェーズ）
+    - 80%で出荷。完璧な比較表は不要
+
+    【成果物】
+    docs/shogun/openai_agent_recon.md に偵察結果を出力
+    完了後、roju_reports.yaml にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- subtask_id: subtask_1043
+  cmd_id: cmd_467
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T16:00:00'
+  assigned_at: '2026-03-30T15:00:00'
+  project: shogun
+  bloom_level: L5
+  decompose: true
+  description: |
+    ■ 追加偵察: Codex足軽 × agent-swarm BBS通信設計（L5分析・decompose付き）
+
+    【背景・殿裁定】
+    cmd_467方針変更: Codex足軽はtmuxペインを使わず、agent-swarm BBS経由で通信する。
+    既存足軽はPhase 1デュアルライト据え置き。Codex足軽だけswarm通信のみで先行参入。
+    これによりtmuxペイン枯渇問題も回避。
+
+    【先行成果物（必読）】
+    1. docs/shogun/openai_agent_recon.md — Codex CLI偵察（subtask_1039, §1-§8）
+       → codex exec --full-auto --model gpt-4.1 の非対話実行が核心
+    2. docs/shogun/2ch_workflow_design.md — 2ch通信レイヤー全面置換設計
+       → 任務板(ninmu), bbs.cgi POST, @メンション通知ルーティング
+    3. queue/inbox/gunshi_analysis.yaml — subtask_1039の分解案（Wave 1-3）
+
+    【subtask_1040 Wave1実験結果】
+    - codex-cli v0.117.0 インストール成功
+    - APIキー有効（/v1/models 200, 109モデル確認）
+    - completion APIはQuota exceededだったが殿チャージ完了、利用可能
+    - gpt-4.1, gpt-5.1-codex〜gpt-5.3-codex, o3, o4-mini 利用可能
+
+    【偵察項目（§1-§4）】
+
+    §1. Codex足軽のswarm通信フロー設計
+       Codex足軽はtmuxペインに住まない。以下のフローを設計せよ:
+       a. タスク受信: 老中がbbs.cgi POSTで任務板にレス→何がCodex足軽を起動するか？
+          - 案A: bbs.cgiのnotifyフックがcodex execを起動するラッパースクリプトを実行
+          - 案B: cron定期ポーリング（殿の禁止事項F004に抵触注意）
+          - 案C: inotifywaitでDB変更検知→起動
+          - 他の案があれば提案
+       b. タスク実行: codex exec --full-auto --model gpt-4.1 "タスク内容"
+          - 作業ディレクトリはどこか？（multi-agent-shogun? 対象リポ?）
+          - AGENTS.mdはどこに置くか？
+       c. 結果報告: 実行完了後にbbs.cgi POSTで任務板にレス
+          - codex exec -o result.txt → result.txtをパース → bbs.cgi POST
+          - ラッパースクリプトが必要（codex_worker.sh的なもの）
+       d. エラーハンドリング: Codex execが失敗した場合の報告
+
+    §2. ラッパースクリプト設計（codex_worker.sh or .py）
+       Codex足軽の起動〜報告を一貫管理するスクリプト:
+       - 入力: 任務板のレス（タスク指示テキスト）
+       - 処理: CODEX_API_KEY設定 → codex exec --full-auto → 結果取得
+       - 出力: bbs.cgi POSTで結果報告
+       - 環境変数: CODEX_API_KEY, CODEX_MODEL(gpt-4.1), CODEX_WORKDIR
+       - ログ: 実行ログ保存先
+
+    §3. 既存swarmインフラとの整合性
+       - dat_server.pyの通知ルーティング: Codex足軽向けの通知先はどうなるか？
+         （tmuxペインなし→send-keysできない→代替手段）
+       - BOARD_WRITERSへのCodex足軽ID追加
+       - swarm.yamlへのcodex_ashigaru登録
+       - トリップキー: Codex足軽の◆IDはどう生成するか
+       - cmd_466のswarm_post.py/flush_pending.pyとの関係
+
+    §4. Wave 2/3の改訂計画
+       subtask_1041/1042は元々tmux+YAML通信前提だった。
+       殿裁定によりswarm通信に変更。Wave 2/3を以下の観点で再設計:
+       - Wave 2改: codex exec動作確認 + bbs.cgi POST報告テスト
+       - Wave 3改: swarm経由の完全ワークフローテスト + Go/NoGo判定
+       - 必要なら追加Waveも提案
+
+    【環境情報】
+    - agent-swarm: /home/yasu/agent-swarm/
+    - dat_server.py: agent-swarm内（127.0.0.1バインド、SSH exec方式あり）
+    - Codex CLI: npm i -g @openai/codex 済み（v0.117.0）
+    - OpenAI APIキー: ~/.config/env/openai.env (OPEN_AI="sk-proj-...")
+
+    【制約】
+    - 殿の禁止事項F004: ポーリング禁止を遵守せよ
+    - 既存足軽（Claude Code）への影響ゼロを保証
+    - 最小構成。Phase 2全面移行前の先行実験として設計
+    - 80%で出荷
+
+    【成果物】
+    docs/shogun/openai_agent_recon.md に§9「swarm通信設計」を追記
+    完了後、roju_reports.yaml + 老中ペイン(multiagent:agents.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- subtask_id: subtask_1047
+  cmd_id: cmd_468
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T22:00:00'
+  assigned_at: '2026-03-30T21:00:00'
+  project: systrade
+  bloom_level: L5
+  decompose: false
+  description: |
+    ■ TurboQuant MBP ollama高速化 偵察（L5評価・Go/Wait/NoGo判定）
+
+    【目的】
+    MBPのollama(gpt-oss-fin-thinking 22GB)をTurboQuant(KVキャッシュ3bit圧縮)で
+    高速化・軽量化できるか評価。22GB→4GB前後、推論速度8倍の報告あり。
+    殿が「今すぐMBPで試せるか」のGo/Wait/NoGo判定を求めている。
+
+    【MBP環境（既知情報）】
+    - MBP: Apple Silicon M4 Pro 48GB
+    - ollama: gpt-oss-fin-thinking 22GB 稼働中
+    - llama.cppベース（ollamaの内部エンジン）
+    - Metal GPU対応
+
+    【偵察項目（§1-§5）】
+
+    §1. llama.cpp TQ3_0の実装状況
+       - GitHub ggml-org/llama.cpp Discussion #20969 の進捗
+       - マージ済みか、PR段階か、実験段階か
+       - TQ1_0/TQ2_0との違い（3bitの位置づけ）
+       - ollamaに降りてきているか（ollama/ollama のissue/PR確認）
+       - ollamaのllama.cpp追従サイクル（通常どのくらいのラグか）
+
+    §2. TheTom/turboquant_plus の成熟度
+       - GitHub リポジトリの状態（star数、最終更新、リリース有無）
+       - TQ3_0 GGUF形式を出力できるか
+       - ollamaで直接読めるGGUFフォーマットとの互換性
+       - Apple Silicon(Metal)対応状況
+       - 依存関係（Python? C++? ビルド要件）
+
+    §3. 0xSero/turboquant（vLLM統合）
+       - Apple Silicon対応の有無（vLLMはCUDA前提が多い）
+       - MBPで動くか → 多分NoGoだが根拠を示せ
+
+    §4. gpt-oss-fin-thinking への適用可能性
+       - 元モデルのアーキテクチャ（Llama系? Mistral系? 確認）
+       - TurboQuantの対応アーキテクチャ範囲
+       - 既にTQ3量子化済みのGGUFがHuggingFaceに公開されていないか
+         （"gpt-oss-fin-thinking TQ3" "turboquant" で検索）
+       - 現在の22GBはどの量子化形式か（Q4_K_M? Q5_K_M?）
+       - TQ3_0に変換した場合の推定サイズ
+
+    §5. Go/Wait/NoGo判定
+       以下の基準で判定:
+       - Go: llama.cppにマージ済み+ollamaに降りている+GGUFファイルが入手可能
+       - Wait: llama.cppにマージ済みだがollama未対応、or GGUFファイル未公開
+         → 待つ場合のタイムライン見積もり（Q2? Q3?）
+       - NoGo: アーキテクチャ非対応、or 実装が実験段階で不安定
+       - 判定理由を明確に記載
+
+    【制約】
+    - WebSearchベースの机上調査のみ（MBPでの実験は行うな）
+    - 80%で出荷。学術論文精読不要
+    - 偵察のみ。実装判定は殿が決める
+
+    【成果物】
+    docs/shogun/turboquant_recon.md に偵察報告書を出力
+    完了後、roju_reports.yaml + 老中ペイン(multiagent:agents.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- subtask_id: subtask_1048
+  cmd_id: cmd_468
+  assigned_by: roju
+  status: done
+  completed_at: '2026-03-30T23:00:00'
+  assigned_at: '2026-03-30T22:30:00'
+  project: systrade
+  bloom_level: L5
+  decompose: false
+  description: |
+    ■ 追加偵察: TheTom/turboquant_plus 詳細調査（判定見直し）
+
+    【背景】
+    subtask_1047でWait判定を出したが、殿から追加情報:
+    - TheTom/turboquant_plus: Star 666, v1 Complete
+    - llama.cpp C port + Metal kernel済み
+    - Apple Silicon M1-M5検証済み
+    - --cache-type-k turbo3 --cache-type-v turbo3 でKVキャッシュ4.6倍圧縮
+    - 品質劣化+1%
+    これは「今すぐ試せる」状態の可能性がある。判定見直しが必要。
+
+    【前回の懸念点と再検証】
+    1. K/V非対称問題: 前回「対称turbo3/turbo3はMoEモデルで破綻リスク」と指摘。
+       殿情報では品質劣化+1%。対称でも安全なケースがあるのか？
+       → turboquant_plusのベンチマーク結果を確認せよ
+    2. ollama統合不可: 前回「ollamaで使えない」が最大障壁。
+       → turboquant_plusはollama対応しているか？ or llama-server直接実行で
+         Crucixパイプラインを最小改修で接続できるか？
+    3. Crucixパイプライン破壊: 前回リスク高と判定。
+       → ollama /api/generate → llama-server /completion への切り替えコストは？
+
+    【重点偵察項目（§1-§5）】
+
+    §1. turboquant_plus リポジトリ詳細
+       - GitHubリポの構造・ビルド手順・依存関係
+       - v1 Completeのリリースノート内容
+       - Metal kernel実装の範囲（TQ2/TQ3/TQ4全対応か）
+       - Apple Silicon検証結果（M1-M5どのベンチマーク？スループット比較）
+       - 品質劣化+1%のソース（どのモデル・どの評価方法で？）
+       - Star/Fork/Issue/PR数から成熟度判定
+
+    §2. K/V対称 vs 非対称の安全性再評価
+       - turboquant_plusのベンチマークで対称turbo3/turbo3の結果
+       - MoEモデル(gpt-oss-fin-thinking相当)での検証データはあるか
+       - 品質劣化+1%は何のメトリクスか（PPL? accuracy?）
+       - 前回指摘のQwen2.5-7B Q4_K_M壊滅は低bit重みモデル固有か、
+         Q8_0なら対称でも安全か
+
+    §3. ollama統合可否（最重要）
+       3パターンを評価:
+       a. turboquant_plusがollamaのバックエンドとして動くか
+          （ollamaはllama.cppをバンドル。カスタムllama.cppに差し替え可能か）
+       b. ollama非経由: llama-server直接起動 + Crucixを/completion APIに向ける
+          → Crucixの改修範囲は？（ollama /api/generate → llama-server /completion）
+       c. Modelfileで--cache-type-vを指定する方法はあるか
+
+    §4. MBP即時実験手順（Go判定時の具体手順）
+       もしGo判定なら、以下の手順を具体的に記載:
+       1. turboquant_plusのビルド手順（MBP M4 Pro）
+       2. gpt-oss-fin-thinking Q8_0 GGUFでのllama-server起動コマンド
+       3. 動作確認方法（curl /completion テスト）
+       4. Crucix接続方法（最小改修案）
+       5. ロールバック手順（失敗時にollamaに戻す方法）
+
+    §5. Go/Wait/NoGo判定見直し
+       前回Wait判定を以下の新情報で再評価:
+       - turboquant_plus v1 Complete + Metal対応
+       - 品質劣化+1%
+       - MBP M4 Pro 48GBでの実行可能性
+       判定基準:
+       - Go: llama-server直接実行でCrucixに最小改修で接続可能
+       - Wait: ollama統合待ち（前回判定維持）
+       - NoGo: MoEモデルで対称TQ3が不安定
+
+    【環境情報（既知）】
+    - MBP: Apple Silicon M4 Pro 48GB
+    - ollama: gpt-oss-fin-thinking Q8_0 22GB
+    - Crucix: cron 30分、ollama /api/generate 使用
+    - 前回偵察: docs/shogun/turboquant_recon.md (§1-§8)
+
+    【制約】
+    - WebSearchベースの机上調査のみ
+    - 80%で出荷
+    - 前回の偵察結果を更新する形で記載（§9以降に追記）
+
+    【成果物】
+    docs/shogun/turboquant_recon.md に§9「turboquant_plus詳細+判定見直し」を追記
+    完了後、roju_reports.yaml + 老中ペイン(multiagent:agents.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml
+- subtask_id: subtask_1069
+  cmd_id: cmd_482
+  assigned_by: shogun
+  status: done
+  completed_at: '2026-04-04T01:05:00'
+  assigned_at: '2026-04-04T00:00:00'
+  project: systrade
+  bloom_level: L5
+  needs_audit: false
+  description: |
+    ■ 戦略分析: Finance トリガー体系リサーチ — 市場を動かすシグナルの網羅的分類
+
+    【背景】
+    Finance部門(Crucix等)を24時間稼働させたいが、「何をトリガーにすべきか」の
+    シグナル定義が未整理。hookの技術実装以前に、そもそも市場を動かすシグナルの
+    体系的分類が必要。
+
+    【調査項目】
+    1. マクロ経済トリガー分類（定説）
+       - 米国: FOMC/雇用統計/CPI/PMI/失業率/GDP
+       - 中国: PMI/貿易統計/不動産指標/人民元政策
+       - ロシア: エネルギー供給/制裁動向/ルーブル
+       - 欧州: ECB/ユーロ圏PMI
+       - 日本: 日銀/円相場/貿易統計
+    2. 地政学トリガー
+       - 戦争・紛争/制裁/通商政策/選挙/外交
+    3. 気候・環境トリガー
+       - 異常気象/エルニーニョ/農産物先物/エネルギー需給
+    4. オルタナティブデータ・トンデモ系
+       - X(Twitter) FinTwit界隈で話題のシグナル
+       - 衛星画像/船舶AIS/クレジットカード消費
+       - センチメント指標/恐怖指数(VIX)
+       - 陰謀論的だが実は効くもの（ヒンデンブルグオーメン等）
+    5. hookable化の評価
+       - 各シグナルの取得可能性（APIあるか、無料か）
+       - 更新頻度（リアルタイム/日次/週次/月次）
+       - hookとしての実装難易度
+
+    【殿の方針】
+    - 棍棒で殴れるファンダメンタルズ戦略（systrade_asia_thesis参照）
+    - 定説から始めて「実はこんなのもある」まで幅広く
+    - 最終的にCrucix/shogunシステムでhook化できるシグナルを特定したい
+
+    【成果物】
+    context/finance-triggers.md（トリガー体系分類書）
+    完了後、roju_reports.yaml + 老中ペイン(multiagent:agents.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml
+
+- subtask_id: subtask_1080
+  cmd_id: cmd_490
+  assigned_by: shogun
+  status: done
+  assigned_at: '2026-04-06T03:30:00'
+  project: agent-swarm
+  bloom_level: L6
+  needs_audit: false
+  description: |
+    ■ 戦略設計: agent-swarm「まとめwiki」アーキテクチャ — スレ横断知識コンパイラ
+
+    【背景】
+    Karpathy「LLM Wiki」パターン(gist:442a6bf5)が公開された。
+    LLMが個人知識ベースをWikiとして維持・蓄積する設計書。
+    殿は既にshogunシステム（没日録DB+Memory MCP+baku夢DB）で
+    同等の知識蓄積を実現しているが、cross-referenceが弱い。
+
+    最終的にshogunシステムはagent-swarmに統合・クローズ予定。
+    2ch互換BBS上のスレ議論をまとめwiki化する機能を設計し、
+    shogun→agent-swarm移行の橋頭堡とする。
+
+    【Karpathyパターンの要点】
+    1. Raw Sources（不変の原資料）→ Wiki（LLM生成markdown）→ Schema（CLAUDE.md）
+    2. Ingest: 1ソース追加で10-15ページ更新（cross-reference自動生成）
+    3. Lint: 矛盾検出・孤立ページ検出・欠落リンク検出
+    4. log.md: append-only時系列ログ（没日録と同型）
+    5. RAGとの違い: 「毎回再発見」ではなく「一度コンパイルして維持」
+
+    【殿の既存資産（移行対象）】
+    - 没日録DB: 443 commands, FTS5全文検索, SQLite完結
+    - baku dreams.jsonl: 1843件（617件interpreted）
+    - Memory MCP: tono-preferences, system-rules等
+    - context/*.md: PJ固有知見（足軽参照用）
+
+    【設計要件】
+    1. wiki/ ディレクトリ構成
+       - index.md（カテゴリ別目次、自動生成）
+       - entities/（人物・PJ・技術・ハードウェア）
+       - concepts/（設計思想・理論・パターン）
+       - synthesis/（スレ横断分析・時系列変化の追跡）
+       - log.md（append-only、Karpathy形式準拠）
+
+    2. パイプライン設計
+       - スレ完走(>>990)→まとめwikiページ自動生成
+       - 没日録DB FTS5 → 関連スレ・レス抽出 → wiki cross-reference
+       - baku夢データ(interpreted, action=investigate) → entities/concepts更新
+       - 定期lint: 矛盾検出・孤立ページ・欠落cross-reference
+
+    3. shogun→agent-swarm移行パス
+       - 没日録DB → wiki初期データ一括変換スクリプト設計
+       - Memory MCP → entities/概念ページへのマッピング
+       - context/*.md → そのまま移植 or wiki統合
+
+    4. 2ch文化との整合
+       - 「まとめサイト」のメタファーを活かす
+       - スレの流れ（時系列議論）→ wikiの構造（概念整理）の変換
+       - dat落ち（過去ログ化）→ wiki残存のライフサイクル
+
+    5. 技術制約
+       - SQLite完結（殿の方針）
+       - マクガイバー精神（シンプル・ローコスト）
+       - agent-swarm既存のBBS構造を壊さない
+
+    【参考資料】
+    - Karpathy gist: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+    - agent-swarm: /home/yasu/agent-swarm/
+    - 没日録CLI: python3 scripts/botsunichiroku.py
+    - shogun CLAUDE.md: コンテキスト四層モデル参照
+
+    【成果物】
+    context/agent-swarm-wiki-architecture.md
+    - wiki構成案
+    - パイプライン設計（スレ→wiki変換フロー）
+    - 没日録→wiki移行スクリプト設計
+    - lint/health-check仕様
+    - 実装優先順位（Phase 1-3）
+
+    完了後、roju_reports.yaml + 老中ペイン(multiagent:agents.0)にsend-keysで報告
+
+    報告先: roju_reports.yaml
+
+- subtask_id: subtask_1080
+  cmd_id: cmd_480
+  assigned_by: shogun
+  status: done
+  assigned_at: '2026-04-07T10:20:48'
+  project: shogun
+  bloom_level: L5
+  needs_audit: false
+  description: |
+    ■ 戦略レビュー: shogun v4.0 三階建てアーキテクチャ設計書のダブルチェック
+
+    【背景】
+    殿との壁打ちで三階建てアーキテクチャ（1F支店群/2F agent-swarm合議/3F本店最終判断）の
+    設計書を起草した。大改造になるため殿から軍師ダブルチェックの指示。
+
+    【対象ファイル】
+    docs/shogun/v4_three_story_architecture.md
+
+    【レビュー観点】
+    1. 構造的欠陥: 三階間の通信で抜け漏れ・デッドロック・情報ロスのリスクはないか
+    2. ハーネス4要素の網羅性: 制約・フィードバック・制御・改善サイクルに穴はないか
+    3. POSIX対応表の妥当性: 無理な対応づけや見落とした概念はないか
+    4. 移行計画のリスク: Phase順序の依存関係に問題はないか。段階的に壊さず移行できるか
+    5. 既存知見との整合: temperature理論・Y-Combinator型付け・bloom_routing・Preflight Checkとの矛盾はないか
+    6. スケーラビリティ: 支店数が増えた時に2Fがボトルネックにならないか
+
+    【参照すべきコンテキスト】
+    - docs/shogun/v4_three_story_architecture.md（レビュー対象）
+    - Memory MCP: tono-preferences, system-rules, shogun-system
+    - context/finance-triggers.md §12（temperature理論）
+
+    【成果物】
+    検収板(kenshu)がまだないため、roju_reports.yaml に以下を報告:
+    - 各観点のPASS/FAIL/WARNING判定
+    - 構造的欠陥があれば具体的な修正案
+    - 見落としている設計考慮事項
+    - 総合判定（承認/条件付き承認/差し戻し）
+
+    完了後、roju_reports.yaml + 将軍ペイン(shogun:main.0)にsend-keysで報告
+    ※本件は殿の直接指示のため、将軍に直接報告してよい
+
+    報告先: roju_reports.yaml + shogun:main.0

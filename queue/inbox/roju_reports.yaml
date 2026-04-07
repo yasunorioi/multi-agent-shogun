@@ -1,16 +1,876 @@
 reports:
-- subtask_id: subtask_1027
-  cmd_id: cmd_463
-  worker: ashigaru1
-  status: completed
-  completed_at: '2026-03-28T17:00:00'
-  commit: 5570989
-  read: true
+- cmd_id: cmd_480
+  subtask_id: subtask_1080
+  worker: gunshi
+  status: done
+  reported_at: "2026-04-07T10:50:00"
   summary: |
-    Phase 3完了。packaging/(deb/rpm/opkg)+.github/workflows/(ci.yml+release.yml)+Makefile。
+    v4.0三階建てアーキテクチャ設計書ダブルチェック完了。
+    総合判定: 条件付き承認（WARNING 4件、修正推奨3件）。
+    構造の根幹は健全。2F→1F逆通知経路の明確化、bloom別検収ファストトラック、
+    合議のタイブレーカー設計が未決。詳細は下記findings参照。
+  findings:
+    # ─── 観点1: 構造的欠陥 → WARNING ───
+    - category: structural
+      verdict: WARNING
+      detail: |
+        ■ 2F→1F逆通知の経路不明確
+        1F→2F（納品POST）は明記されているが、2F→1F（差し戻し通知）の具体的メカニズムが未記載。
+        FAILの場合、足軽はどう知るのか？ BBS通知(notify_exec)? send-keys? 定期読み取り？
+        → 修正案: §3.1に「kenshu_gate FAIL → 任務板にリジェクト通知POST → 1Fにsend-keys/notify_exec」を追記
+
+        ■ 没日録DBへの2F合議結果の書き戻し
+        2Fエージェントは没日録DB書き込み権限がない（権限マトリクス）。
+        合議結果（PASS/FAIL+理由）は老中が手動で没日録に転記する必要がある。
+        この手動転記が抜けると没日録とBBSが乖離し「正データは没日録」原則が崩れる。
+        → 修正案: 老中がkenshu_gateを読んだ時点で自動的にbotsunichiroku audit recordに記録するスクリプト/フックを設計
+
+        ■ 合議のタイブレーカー
+        お針子PASS+軍師FAILの場合（またはその逆）、誰がkenshu_gateに最終判定を書くか不明。
+        → 修正案: §4.3に「合議不一致時は老中裁定。老中判断困難な場合は殿にエスカレーション」を追記
+
+    # ─── 観点2: ハーネス4要素 → PASS (条件付き) ───
+    - category: harness
+      verdict: PASS_WITH_CONDITIONS
+      detail: |
+        4要素とも概ねカバーされている。2点の穴:
+
+        ■ 合議の最低品質保証（アーキテクチャ制約の穴）
+        >>50強制判定は上限だが、下限がない。レス1件で「PASS」と書いて終わることが可能。
+        → 修正推奨: kenshu_gateへの投稿にminimum_reviews: 2を設け、
+        最低2名の実質的レビュー（「LGTM」だけでなく具体的コメント）を必須化
+
+        ■ 成功からの学習（改善サイクルの穴）
+        §5.4のミスパターン→ルール昇格はFAIL起点のみ。
+        PASSから「なぜうまくいったか」を学ぶ仕組みがない。
+        → 軽微。Phase 4以降で検討すれば十分。今は不要
+
+    # ─── 観点3: POSIX対応表 → PASS (軽微指摘) ───
+    - category: posix
+      verdict: PASS
+      detail: |
+        対応表は概ね妥当。殿の洞察が正しく反映されている。軽微な指摘3点:
+
+        ■ pipe→BBSの対応がやや強引
+        POSIX pipeはpoint-to-point(producer-consumer)。BBSはpub/sub(1:N)。
+        より正確な対応: BBS板 ≒ message queue (POSIX mq_open), スレッド ≒ named pipe。
+        実害はないが、設計議論時に混乱の元になりうる。
+
+        ■ exit code未対応
+        POSIXプロセスは必ずexit codeを返す。足軽の「完了通知」に相当するが、
+        納品IFのtest_result(PASS/FAIL)がこれに該当する。明示的に対応表に追加すると良い。
+
+        ■ fork()未対応
+        支店の動的起動（worker_ctl.sh等）はfork()に相当。対応表に追加推奨。
+
+    # ─── 観点4: 移行計画 → WARNING ───
+    - category: migration
+      verdict: WARNING
+      detail: |
+        ■ Phase 2→3の飛躍が大きい
+        Phase 2で「足軽が直接POST」、Phase 3で「YAML inbox廃止」。
+        YAML inboxは現在のタスク割当の唯一の正データ。
+        BBS移行が不安定な段階でYAMLを廃止すると、タスク割当が失われるリスク。
+        → 修正推奨: Phase 2.5「デュアルモード（YAML+BBS並行運用）」を挿入。
+        BBS経由のタスク割当が90%成功するまでYAMLは残す。
+
+        ■ Phase 1の「手動実行」から Phase 2の「直接POST」への橋渡し
+        足軽にBBS POST能力を付与する（スキル化 or instructions改修）手順が未記載。
+        → Phase 1.5: 足軽instructionsに「納品POST手順」を追記、練習用subtaskで1回試行
+
+    # ─── 観点5: 既存知見との整合 → PASS ───
+    - category: consistency
+      verdict: PASS
+      detail: |
+        ■ temperature理論との整合: 良好
+        kenshu_gate(PASS/FAIL/CONDITIONAL)はt=0の判定ゲート。
+        2F合議(自由議論)はt>0。3F老中のマージ判断はt≈0。
+        「下層が上層を黙らせる」原則が三階建てでも維持されている。
+        ただし§6 Phase 4まで温度理論の適用が先送りされている。
+        → 推奨: §2.1に温度理論との対応を明記（実装はPhase 4でよいが、設計思想として記載）
+
+        ■ Y-Combinator型付け: §3.2で明示的に参照。完全に整合。
+        ■ bloom_routing: §5.3のワークフローに含まれている。
+        ただし三階建てでbloom_routingがどの階で発動するか不明確。
+        → 推奨: bloom_routingは3F(老中)で実行、L4-L6は2F(軍師板)経由、と明記
+        ■ Preflight Check: §5.3に含まれている。整合。
+
+    # ─── 観点6: スケーラビリティ → WARNING ───
+    - category: scalability
+      verdict: WARNING
+      detail: |
+        ■ 2F合議が支店数に比例してボトルネック化するリスク
+        5支店が同時稼働 → 5並行検収スレ → お針子+軍師が5件同時レビュー。
+        現実的に破綻する。
+        → 修正推奨: bloom別の検収ファストトラック設計
+          L1-L3: 老中スポットチェック(kenshu_gate直書き可) — 2F合議スキップ
+          L4-L5: お針子+軍師の2名合議
+          L6: フル合議(外部レビュア含む)
+        これで2Fの負荷が L4-L6 のみに限定される。
+
+        ■ kenshu_gateのwriter制限
+        現状 writers: [お針子, 軍師] のみ。どちらかがbusy → gateがブロック。
+        → 推奨: L1-L3ファストトラック用に老中もwriter追加
+
+  total_verdict: conditional_approved
+  conditions:
+    - "§3.1に2F→1F逆通知経路を明記"
+    - "§4.3に合議タイブレーカールールを追記"
+    - "§6にPhase 2.5（デュアルモード）を挿入"
+  recommendations:
+    - "§2.1にtemperature理論との対応を注記"
+    - "検収ファストトラック（bloom別分流）の設計"
+    - "bloom_routingの発動階を明記"
+    - "POSIX対応表にexit code, fork()を追加"
+  skill_candidate: null
+  read: true
+  karo_review: "cmd_480 v4.0設計レビュー確認。条件付き承認(WARNING4+推奨4)。殿直接指示案件につきdashboard.mdに転記。2ch上で軍師・お針子・足軽が修正条件を議論中。"
+- cmd_id: cmd_490
+  subtask_id: subtask_1080
+  worker: gunshi
+  status: done
+  reported_at: "2026-04-06T18:35:00"
+  summary: |
+    agent-swarmまとめwikiアーキテクチャ設計完了。Karpathy LLM Wikiパターンを
+    SQLite+DAT rendering方式で実装する設計。wiki_pages/wiki_links/wiki_sources/wiki_log
+    の4テーブル。まとめ板でJDim閲覧可能。Phase 0-3の段階的実装計画付き。
+    成果物: context/agent-swarm-wiki-architecture.md + gunshi_analysis.yaml
+  skill_candidate: null
+  read: true
+  karo_review: "設計書確認済み。Karpathy LLM Wiki→SQLite+DAT+matome板。Phase 0-3段階計画。2ch上で軍師・お針子・足軽が完了定義議論中。殿裁定待ち。"
+- cmd_id: cmd_489
+  subtask_id: subtask_1075
+  worker: ashigaru1
+  status: done
+  reported_at: '2026-04-05T09:30:00'
+  read: true
+  commit: 996336f
+  karo_review: "git diff確認済。家老L3 QC合格。お針子監査依頼済み。"
+  summary: |
+    subtask_1075 WebUI実装完了。subtask_1077 チャンネル割当+DIパルスカウント完了。
+    同一コミット(996336f)に両タスクをまとめて実装。
+    - HTTP WebUI port 80: GET /api/state + POST /api/relay/{ch} + HTML5ダッシュボード
+    - RO_NAMES/RO_KEYS/DI_NAMES alias定義 (§8.1-8.2)
+    - HA Discovery: relay nameにalias反映、DI3-6 dev_cla=door
+    - DI1-2 FALLING ISR (diPulseISR1/2) + publishDIPulse()
+    - arduino-cli compile 成功確認 (Generic RP2350, 179KB/2MB)
+    - needs_audit: true
+  detail_ref: curl -s localhost:8080/reports/981
+- cmd_id: cmd_489
+  detail_ref: curl -s localhost:8080/reports/980
+  read: true
+  reported_at: '2026-04-05T01:52:36'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1074
+  summary: SHT40 HA Discovery val_tpl不整合修正完了(条件付き合格→修正済)。commit 572b2d7
+  worker: ashigaru2
+  karo_review: "git diff確認済。2行変更のみ(temperature→sht40_temperature, humidity→sht40_humidity)。老中承認。フル再監査免除(軍師・お針子合意)。"
+- cmd_id: cmd_489
+  findings: "arduino/rp2350_relay/ 新規作成:\n- rp2350_relay.ino: GPIO17-24直接リレー制御, DI割り込み(GPIO9-16),\n\
+    \  W5500 SPI1 Ethernet, MQTT sub/pub, HA Auto Discovery(switch+binary_sensor),\n\
+    \  duration_sec自動OFF, PCF85063 RTC+NTP, SHT40自動検出, 3段WDT\n- sw_watchdog.h: solar_node.inoから流用\
+    \ (Pico SDK, RP2350対応)\n- sensor_registry.h: センサーレジストリ\n- README.md: ボード設定/ビルド手順/GPIOマップ/実機検証TODO\n\
+    注: SPI1(GPIO33-36)の動作確認は実機到着後が必要(設計書注記あり)\n"
+  reported_at: '2026-04-05T01:37:37'
+  status: done
+  subtask_id: subtask_1074
+  summary: 'RP2350-POE-ETH-8DI-8RO Arduino FW実装完了。
+
+    commit: 9bf57fd (uecs-hardwares v5ブランチ)
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_488
+  detail_ref: curl -s localhost:8080/reports/976
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-02T00:00:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1073
+  summary: "TiDE推論ランタイム tflite→ONNX Runtime 切替完了。commit 832449b / origin/v5 push済み。\n\
+    \n【背景】RPi5 (Python 3.13) では tflite-runtime の aarch64 wheel が存在しないため\nonnxruntime>=1.18\
+    \ (Python 3.13 aarch64対応) に移行。\n\n【変更1】tide_forecaster.py: _get_session() / _run_onnx()\
+    \ 追加\n  - onnx_path.exists() → ONNX Runtime 優先\n  - なければ TFLite fallback (_get_tflite_interpreter)\n\
+    \n【変更2】eval_tide.py: ONNX Runtime 対応\n  - onnx_path 存在時に ort.InferenceSession\
+    \ でロード\n  - 推論・共変量比較ともにONNX対応\n\n【変更3】pyproject.toml: [tide] を onnxruntime>=1.18\
+    \ に変更\n\n【変更4】tools/convert_to_onnx.py 新規作成\n  - デプロイ時に python3 tools/convert_to_onnx.py\
+    \ で TFLite→ONNX変換\n  - models/ は gitignore済みのため変換ユーティリティで対応\n\n【テスト】TestOnnxInference\
+    \ 4件追加 → 421 passed\n"
+  worker: ashigaru1
+- cmd_id: cmd_487
+  detail_ref: curl -s localhost:8080/reports/975
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-04T13:00:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1072
+  summary: "setup.sh デプロイ修正一括完了。commit fca32af / origin/v5 push済み。\n\n【修正1】pyproject.toml:\
+    \ [tide] extras 新設\n  numpy>=1.24 + tflite-runtime (aarch64) / tensorflow (x86_64)\
+    \ platform条件分岐\n  [daemon] に numpy>=1.24 追加\n\n【修正2】setup.sh Step 4: agriha-sensor-logger.service\
+    \ 追加\n  for ループ / systemctl enable / systemctl start (|| true) 追加\n\n【修正3】agriha-nullclaw-proxy.service:\
+    \ __REPO_DIR__ 化\n  WorkingDirectory / EnvironmentFile / ExecStart の /opt/agriha\
+    \ をプレースホルダーに変更\n\n【修正4】setup.sh パーミッション修正\n  pip install を [daemon,tide] に変更\n\
+    \  agri_knowledge.yaml / rule_candidates.yaml をコピー対象に追加\n  /etc/agriha/ ディレクトリ自体の\
+    \ chown + chmod 755\n  .env に chown agriha + chmod 640 追加\n\n【修正5】README.md: cron表に\
+    \ tide_forecaster.py 追加 + 依存インストール手順追記\n\n【テスト】417 passed (0 failed)\n"
+  worker: ashigaru1
+- cmd_id: cmd_486
+  detail_ref: curl -s localhost:8080/reports/974
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-04T12:20:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1071
+  summary: "TiDE Phase3バグ修正完了。commit 0d005b6 / origin/v5 push済み。\n\n【修正1】tide_forecaster.py:\
+    \ om_forecast → past_matrix 反映\n  Open-Meteo予報成功時、om_*列（index 7-11）の全48行に最初の予報値を書き込む\n\
+    \  失敗時はゼロ埋めフォールバック維持（変更なし）\n  テスト: om_forecast反映確認2件追加\n\n【修正2】rule_engine.py:\
+    \ fromisoformat Python 3.10互換\n  +09:00付きISO文字列がfromisoformatで失敗した場合のfallback追加\n\
+    \  ts[:19] + ZoneInfo(\"Asia/Tokyo\") 手動付与\n  テスト: fromisoformat互換確認1件追加\n\n【テスト】417\
+    \ passed (0 failed)\n"
+  worker: ashigaru1
+- cmd_id: cmd_483
+  detail_ref: curl -s localhost:8080/reports/973
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-04T11:30:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1070
+  summary: "TiDE Phase3完了。commit 1bf93b8 / origin/v5 push済み。\n\n【成果物】\n- src/agriha/control/tide_forecaster.py\
+    \ (新規)\n  sensor_log.db 直近48h → TFLite推論 → tide_forecast.json 出力\n  Open-Meteo予報共変量取得（失敗時スキップ）\n\
+    \  humidity_high(>80%) / temp_high(>27℃) アラート生成\n- src/agriha/control/rule_engine.py\
+    \ (改修)\n  load_tide_forecast() 追加（30分以上古い予測はNone返却）\n  evaluate_rules() tide_forecast=None\
+    \ 引数追加（既存テスト影響なし）\n  Priority 3.5: 1h後湿度予測>80%なら先行換気(開度≥30%)\n- systemd/agriha-cron:\
+    \ tide_forecaster 10分毎 cron追加\n- tests/control/test_tide_forecaster.py (新規, 12テスト)\n\
+    - tests/control/test_rule_engine.py (7テスト追加)\n\n【テスト】414 passed (0 failed)\n【Layer\
+    \ 1影響】なし（三層原則遵守）\n"
+  worker: ashigaru1
+- cmd_id: cmd_482
+  needs_audit: false
+  read: true
+  reported_at: '2026-04-04T01:05:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1069
+  summary: 'Financeトリガー体系分類完了。5カテゴリ・40+指標を網羅。
+
+    既存daily_risk.py(20指標)に対し、未カバーの優先追加候補12件を順位付け。
+
+    即着手Wave 1: USDJPY/Sahm Rule/Copper-Gold比/SKEW(数行追加・半日)。
+
+    冒険案: 殿の農業センサーデータがオルタナティブ投資シグナルになる可能性。
+
+    設計書: context/finance-triggers.md
+
+    '
+  worker: gunshi
+- cmd_id: cmd_479
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-03T02:00:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1060
+  summary: 'FKP計算エンジン+rtk2go実証基盤完了。Phase1:msm7.zig(BitReader+MSM7搬送波位相抽出+1005座標+ECEF→WGS84)。Phase2:engine.zig(一重位相差+GF/IF分離+2x2逆行列+computeFkp、田中2003§4.3.3-4.3.4準拠)。Phase3:type59.zig(RTCM
+    Type59エンコード/デコード)。Phase4:demo.zig(rtk2go北海道3局並列接続)+rtk2go_fkp.sh。118/118 PASS。commit:
+    3626a41'
+  worker: ashigaru2
+- cmd_id: cmd_478
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-03T01:00:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1059
+  summary: 'RTCM3フレーム解析完了。rtcm3.zig新規(CRC-24Q+0xD3同期+12bitメッセージタイプ+scanFrames)。Source構造体にrtcm_detected/msg_types/msg_lock追加。sourceLoopでparse_buf経由スキャン→recordMsgType蓄積。SourceEntry(format,format_details)でsourcetable
+    STR行に反映。103/103 PASS。commit: d81807b'
+  worker: ashigaru2
+- audit_triggered: true
+  cmd_id: cmd_477
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-03T00:00:00'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1058
+  summary: 'ntripcaster sourcetable動的生成完了。buildResponse()にdynamic_mounts引数追加、sendSourcetableResponse()でsource_lock下にマウント列挙して渡す実装。conf/sourcetable.datサンプル追加。テスト3件追加。85/85
+    PASS。commit: ce4029a'
+  worker: ashigaru2
+- cmd_id: cmd_476
+  detail_ref: curl -s localhost:8080/reports/972
+  read: true
+  reported_at: '2026-04-02T23:12:19'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1057
+  summary: 'ntripcaster接続数制限エンフォース実装完了。82/82テストPASS。commit: 7216fa9'
+  worker: ashigaru2
+- cmd_id: cmd_475
+  detail_ref: curl -s localhost:8080/reports/971
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-02T09:45:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1056
+  summary: 'TiDE Phase2 PoC完了。tools/export_sensor_csv.py + train_tide.py + eval_tide.py
+    作成。
+
+    commit 6e169c0 / origin/v5 push済み。
+
+
+    【精度評価結果】(テスト399サンプル、lookback=48h、pred_len=6h)
+
+    - InAirTemp:  RMSE=3.240℃,    MAE=2.632℃
+
+    - InAirHumid: RMSE=11.901%,   MAE=8.939%
+
+    - InAirCO2:   RMSE=130.031ppm, MAE=90.151ppm
+
+
+    【27℃超過アラート検知率】
+
+    - 1h先: 81.8%  2h先: 63.6%  3h先: 71.2%
+
+    - 4h先: 57.6%  5h先: 72.7%  6h先: 62.1%
+
+
+    【湿度急変】急変時RMSE=13.980 vs 通常時RMSE=9.552
+
+    【共変量効果】InAirTemp with=3.240 vs without=3.777 (+0.537改善)
+
+    【TFLite変換】成功 (2357.4KB)
+
+    【環境】TF 2.16.2 (2.21はglibc 2.39クラッシュ問題のためダウングレード)
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_474
+  detail_ref: curl -s localhost:8080/reports/970
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-02T09:19:20'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1055
+  summary: TiDE Phase0 sensor_logger.py作成完了。pytest 16/16 PASS。commit e843636、origin/v5
+    push済み
+  worker: ashigaru1
+- cmd_id: cmd_473
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-02T08:30:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1054
+  summary: 'TiDE×agriha予測層設計完了。推奨: 案A(Layer 2補強)。
+
+    TiDE(MLP ~1.3M params)をrule_engineの予測計算として配置。殿裁定の案B・三層原則と完全合致。
+
+    最重要課題: センサーログ基盤(sensor_logger.py)が未整備。Phase 0として即着手すべし。
+
+    設計書: context/agriha-tide.md / 分析: gunshi_analysis.yaml
+
+    '
+  worker: gunshi
+- cmd_id: cmd_471
+  detail_ref: curl -s localhost:8080/reports/969
+  read: true
+  reported_at: '2026-04-02T00:25:03'
+  skill_candidate: null
+  status: completed
+  subtask_id: subtask_1053
+  summary: 'codedb fork: GitignoreFilter実装+ビルド成功+~/.local/bin/codedb配置。6テスト全PASS'
+  worker: ashigaru2
+- audit_triggered: true
+  cmd_id: cmd_467
+  detail_ref: curl -s localhost:8080/reports/968
+  needs_audit: true
+  read: true
+  reported_at: '2026-04-01T23:42:23'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1046
+  summary: Wave3統合テスト実施。インフラ完全実装確認済み。API Quota Exceeded → Go/NoGo=No-Go
+  worker: ashigaru1
+- audit_triggered: true
+  cmd_id: cmd_470
+  completed_at: '2026-04-01T15:00:00'
+  needs_audit: true
+  read: true
+  status: done
+  subtask_id: subtask_1052
+  summary: 'uecs-hardwares 独立リポ作成完了。
+
+    - git clone --no-local /home/yasu/Project/uecs-llm → git filter-repo (10 --path)
+    → 179コミット保持
+
+    - src/agriha/daemon/ → src/uecs_hardwares/ リネーム、import パス一括更新
+
+    - pyproject.toml (setuptools.build_meta, paho-mqtt>=2.0) / requirements.txt /
+    README.md 作成
+
+    - systemd/uecs-hardwares-cron 新規 (Layer 1専用)
+
+    - .gitignore 追加 (egg-info/__pycache__/*.pyc)
+
+    - pytest 209 passed ✅
+
+    - /home/yasu/uecs-hardwares/ に移動完了
+
+    - 元リポ /home/yasu/Project/uecs-llm は無変更確認済み
+
+    '
+  worker: ashigaru1
+- audit_triggered: false
+  cmd_id: cmd_470
+  completed_at: '2026-04-01T12:30:00'
+  needs_audit: true
+  read: true
+  status: done
+  subtask_id: subtask_1051
+  summary: 'uecs-llm HW通信基盤ファイル特定+依存関係整理 完了。
+
+
+    【核心的発見】daemon/←→control/間のPythonインポート依存ゼロ。分離クリーン。
+
+    daemon/唯一のサードパーティ依存はpaho-mqtt。共有境界ファイルは3点のみ。
+
+
+    【分類結果】
+
+    - HW通信基盤(切り出し): daemon/10モジュール + config3点 + docker/ + hardware/ + systemd1点 +
+    tests/daemon/ + scripts2点
+
+    - LLM制御(残留): control/8モジュール + chat/2モジュール + config8点 + systemd2点 + tests/control,chat/
+
+    - 共有境界: channel_map(LLM残留), thresholds(LLM残留), agriha-cron(Layer1行のみ分離)
+
+
+    【git filter-repo --pathリスト】コピペ実行可能な形式でgunshi_analysis.yamlに記載。
+
+    【Phase 2手順案】7ステップ（clone→filter-repo→パッケージ調整→テスト→push）記載。
+
+
+    詳細: gunshi_analysis.yaml
+
+    '
+  worker: gunshi
+- audit_triggered: true
+  cmd_id: cmd_469
+  commit: ccd967b (/home/yasu/ntrip-pico)
+  completed_at: '2026-04-01T02:30:00'
+  needs_audit: true
+  read: true
+  status: done
+  subtask_id: subtask_1050
+  summary: 'Pico W NTRIP v1 Source Server 新規作成。
+
+    F9P UART→リングバッファ→WiFi TCP→ntripcaster バイトパススルー実装。
+
+    状態機械 + 自動再接続 + LED状態表示。
+
+    printf/sprintf不使用(Serial.print/snprintfのみ)。
+
+    arduino-cli compile --fqbn rp2040:rp2040:rpipicow 警告ゼロ確認済み。
+
+    '
+  worker: ashigaru1
+- audit_triggered: true
+  cmd_id: cmd_468
+  commit: Crucix 23a747a (mbp.local ~/Crucix)
+  completed_at: '2026-03-30T22:40:00'
+  findings: '- turbo4/turbo4: openai_moe_iswa(MoE)未対応。llama.cpp本流マージ(Q3 2026)後に再評価
+
+    - f16ベースライン: 起動OK、シンプルプロンプトの応答確認
+
+    - Crucix形式(特殊トークン)はGPU OOM(kIOGPUCommandBufferCallbackErrorOutOfMemory)
+
+    - 切替インフラ(LlamaServerProvider)は完成。GPU OOM解消後にLLM_PROVIDER=llama_serverで即利用可
+
+    - 推奨: より低量子化GGUFへの変換検討(Q5_K_M ~15GB)または-ngl削減
+
+    '
+  needs_audit: true
+  read: true
+  status: done
+  subtask_id: subtask_1049
+  summary: 'turboquant_plus ビルド成功(M4 Pro Metal, cmake 4.3.1インストール済み)。
+
+    llama-server 起動確認(f16ベースライン -c 1024)。基本応答テスト OK。
+
+    turbo4/turbo4: openai_moe_iswaアーキテクチャ未対応→ggml_reshape_3d assertクラッシュ。
+
+    Crucix: LlamaServerProvider新設+index.mjs登録(3行diff)。
+
+    切替: .env LLM_PROVIDER=llama_server に変更するだけ。
+
+    ロールバック確認済み(ollama復帰・cron_ideas.sh cron復元)。
+
+    GPU OOM制約: Crucix形式(<|start|>特殊トークン)は現メモリ設定では不安定。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_468
+  needs_audit: true
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T23:00:00'
+  status: done
+  subtask_id: subtask_1048
+  summary: 'TurboQuant追加偵察 完了。判定見直し: Wait → Go（条件付き）。
+
+    【決定打】ollama統合は不要。llama-server直接実行でCrucix接続可能（改修3行）。
+
+    【turboquant_plus詳細】v1 Complete, 672 stars, M1-M5 Metal, 141 tests pass。
+
+    MoE検証済み(Qwen3.5-35B-A3B): turbo4 PPL+0.23%, turbo3 PPL+1.06%。
+
+    【K/V対称問題解消】Q8_0重みモデルでは対称turbo4/turbo4がPPL+0.23%で安全。
+
+    前回懸念の壊滅PPLはQ4_K_M（低bit）固有の問題。
+
+    【Crucix接続】ollama /api/generate → llama-server /completion。
+
+    URL+JSONフィールド名変更のみ。<|channel|>final形式のrawプロンプトそのまま使用可。
+
+    【MBP即時実験手順】§9.6に15分コピペ手順を記載。
+
+    ビルド(5分)→ollama停止→llama-server起動→テスト(10分)。
+
+    ロールバック: ollama serve再起動のみ。
+
+    【推奨設定】turbo4/turbo4（金融LLM精度重視、+0.23%劣化）
+
+    【成果物】docs/shogun/turboquant_recon.md §9(9.1-9.11追記)
+
+    '
+  worker: gunshi
+- cmd_id: cmd_468
+  needs_audit: true
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T22:00:00'
+  status: done
+  subtask_id: subtask_1047
+  summary: "TurboQuant MBP ollama高速化 偵察完了。判定: Wait。\n【致命的訂正】TurboQuantはKVキャッシュ圧縮であり、モデル重み量子化ではない。\n\
+    「22GB→4GB」は誤り。GGUFファイルサイズは変わらない。\n恩恵は長コンテキスト時のVRAM節約（128Kコンテキストが48GB MBPで実用化）。\n\
+    【Wait理由】llama.cpp本流未マージ(Q3 2026ロードマップ)、ollama未対応。\nforkビルド(turboquant_plus)は技術的に可能だがCrucix\
+    \ cron破壊リスクあり。\n【critical findings】\n  1. KVキャッシュ圧縮≠重み量子化（22GB→4GBは誤解）\n  2. K/V非対称問題:\
+    \ 対称turbo3/turbo3はMoEモデルで破綻リスク。q8_0-K+turbo-V必須\n  3. 真の恩恵は128Kコンテキスト実用化（EDINET有報全文解析等と連動）\n\
+    【Wait解除条件】A: llama.cpp本流マージ→ollama統合(Q3 2026) / B: 長コンテキストニーズ発生\n【成果物】docs/shogun/turboquant_recon.md\
+    \ (§1-§8)\n【監視URL】ggml-org/llama.cpp#20977, #20969, ollama/ollama#15051\n"
+  worker: gunshi
+- cmd_id: cmd_467
+  commit: 13e7b60
+  completed_at: '2026-03-30T17:30:00'
+  read: true
+  status: done
+  subtask_id: subtask_1045
+  summary: 'scripts/codex_worker.sh作成(flock二重起動防止+BBS POST報告フロー実装)。
+
+    AGENTS.md作成(§9.5設計: 行動規範・制約・報告方式)。
+
+    手動テストでフロー確認済み(着手#40・エラー報告#41 POST成功、quota exceededは期待通り)。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_467
+  commit: 955ed1e
+  completed_at: '2026-03-30T17:00:00'
+  read: true
+  status: done
+  subtask_id: subtask_1044
+  summary: 'notify.py exec_notify拡張 + swarm.yaml codex_ashigaru登録完了。
+
+    NOTIFY_EXEC dict追加・load_config()拡張・exec_notify()実装・_extract_mentions()をNAMESベースに修正。
+
+    tests/test_notify_exec.py 9件全通過。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_467
+  needs_audit: true
+  project: shogun
+  read: true
+  reported_at: '2026-03-30T16:00:00'
+  status: done
+  subtask_id: subtask_1043
+  summary: "Codex足軽 × agent-swarm BBS通信設計 完了。殿裁定「tmuxペイン不使用」対応。\n【核心設計】notify.pyにexec_notify()フック追加。bbs.cgi\
+    \ POST時にcodex_worker.shを\nsubprocess.Popen(start_new_session=True)で非同期起動。F004(ポーリング禁止)完全遵守。\n\
+    【起動方式】案A notify_execフック 推奨（スコア9）。案B cron却下(F004違反)。案C/D inotify次点。\n【sandbox問題回避】codex\
+    \ exec(sandbox内)はコード作業のみ。BBS POSTはcodex_worker.sh(sandbox外)が担当。\n【critical findings】\n\
+    \  1. codex exec sandbox内からBBS POST不可 → ラッパーが責務分離で解決\n  2. AGENTS.md(Codex用)とCLAUDE.md(Claude用)は同一リポで干渉なし\n\
+    \  3. Codex足軽はgit push禁止。専用ブランチ→老中merge運用\n【Wave改訂】Wave2改(手動テスト)→Wave3改(全自動フロー)→Wave4(実戦+Go/NoGo)\n\
+    【成果物】docs/shogun/openai_agent_recon.md §9(9.1-9.10追記)\n【分析YAML】gunshi_analysis.yaml\
+    \ (subtask_1043a-c分解済み)\n"
+  worker: gunshi
+- blocking: true
+  cmd_id: cmd_467
+  needs_audit: false
+  project: shogun
+  read: true
+  reported_at: '2026-03-30T14:30:00'
+  status: blocked
+  subtask_id: subtask_1041
+  summary: "Wave 2 BLOCKED。「チャージ完了」後も insufficient_quota が継続。\n診断により根本原因を特定した。殿裁定要。\n\
+    \n【診断結果】\n- /v1/models: HTTP 200 → キー有効 ✅\n- /v1/usage (今日): completions 0件 →\
+    \ 過去1度も成功していない ✅\n- /v1/chat/completions: insufficient_quota ❌\n- /v1/organization/projects:\
+    \ 403 (管理スコープなし)\n\n【根本原因: ChatGPT Plus ≠ API Credits】\nChatGPT Plus ($20/月) はchatgpt.com\
+    \ UIの利用枠。\nAPI利用には別途 platform.openai.com での「API credits」チャージが必要。\nPlus加入者でもAPI残高は独立している。\n\
+    \n【殿への確認手順（2分で解決）】\n1. https://platform.openai.com/account/billing/overview を開く\n\
+    2. \"Available credit balance\" が $0.00 → これが原因\n3. \"Add to credit balance\"\
+    \ で $5〜$10 チャージ\n4. 完了後、足軽1に再指示をくれ → 即座にWave 2/3を実施\n\n【別原因の可能性（確率低）】\nプロジェクト予算上限が\
+    \ $0 の場合:\n  platform.openai.com → Settings → Projects → 該当PJ → Budget → $0 でないか確認\n\
+    \n【現在の状態】\nAGENTS.md, queue/inbox/codex_test.yaml は配置済み（チャージ後に即実行可能）\nWave 2 再開時に追加設定不要。\n"
+  worker: ashigaru1
+- blocking: true
+  cmd_id: cmd_467
+  needs_audit: false
+  project: shogun
+  read: true
+  reported_at: '2026-03-30T14:00:00'
+  status: done
+  subtask_id: subtask_1040
+  summary: "Wave 1 完了。Codex CLIインストール成功、APIキー有効確認。\nただし completion API で Quota exceeded\
+    \ が発生。Wave 2/3 ブロック中。\n\n【実行ログ】\n1. npm i -g @openai/codex → codex-cli 0.117.0\
+    \ インストール成功 (1s, 2 packages)\n2. APIキー取得: grep OPEN_AI ~/.config/env/openai.env\
+    \ | cut -d'\"' -f2 → sk-proj-BWe5... 確認OK\n3. curl /v1/models → HTTP 200, 109モデル取得\
+    \ (gpt-5.4, gpt-5.4-mini, gpt-4.1 etc)\n4. codex exec --model gpt-4.1 \"list Python\
+    \ files...\" →\n     セッション生成OK (session id: 019d3caf-e2ae-7f20-a3c5-9ccf8416a36f)\n\
+    \     ERROR: Quota exceeded. Check your plan and billing details.\n5. codex exec\
+    \ --model o4-mini \"say hello\" → 同様のQuota exceeded\n6. CLI help確認: exec/review/login/mcp/sandbox/apply/resume/fork/cloud/features\n\
+    \n【診断】\n- API key は有効 (/v1/models 200、109モデル確認)\n- completion API のみ Quota exceeded\
+    \ → プロジェクト課金設定の問題\n- CLIと認証機構は完全動作\n\n【殿裁定待ち事項】\nOpenAI APIダッシュボードで「Billing →\
+    \ Add credits」でクレジット追加要。\nまたは新規プロジェクト作成+キー発行。\nWave 2/3 はクレジット確認後に再開可能。\naider\
+    \ フォールバックも同一APIキーのため同様のQuota exceeded になる見込み。\n"
+  worker: ashigaru1
+- cmd_id: cmd_467
+  needs_audit: true
+  project: shogun
+  read: true
+  reported_at: '2026-03-30T14:00:00'
+  status: done
+  subtask_id: subtask_1039
+  summary: "OpenAI API足軽 偵察+実験計画策定 完了。\n【結論】Codex CLI = Go（条件付き）。codex exec --full-auto\
+    \ がshogun足軽に完全合致。\n【cmd_080差分】TypeScript→Rust全面リライト。exec非対話モード正式追加が決定打。\n【最有力】Codex\
+    \ CLI > aider > open-interpreter\n【コスト】GPT-4.1($2/$8)で足軽1タスク~$0.04(最小)。殿Plus枠で一定量無料。\n\
+    【Go/NoGo基準】Must 4項目全Go: tmux常駐/exec通信/ファイルR・W/bash実行\n【実験計画】3Wave(インストール→YAML通信テスト→Go/NoGo判定)、予算$5、期間3日\n\
+    【critical findings】\n  1. AGENTS.md ≒ CLAUDE.md（指示注入機構が同等）\n  2. --model gpt-4.1\
+    \ 明示必須（デフォルトGPT-5.4は高い）\n  3. openai.envのOPEN_AI変数→CODEX_API_KEYへの変換が必要\n【成果物】docs/shogun/openai_agent_recon.md\
+    \ (§1-§8)\n【分析YAML】queue/inbox/gunshi_analysis.yaml (subtask_1039a-c分解済み)\n"
+  worker: gunshi
+- audit_triggered: true
+  cmd_id: cmd_466
+  commit: a8b7ce0
+  needs_audit: true
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T13:15:00'
+  status: done
+  subtask_id: subtask_1038
+  summary: "MBP支店 Wave 4/4（最終）完了。cmd_466 全Wave完成。\n- config/mbp_crontab.txt: crontab\
+    \ -e 貼り付け専用テンプレート\n  daily_risk(08:00)/edinet(平日18:00+18:30)/investment_report(20:00)/flush(毎時)/log_rotate(日曜03:00)\n\
+    \  caffeinate plist不要（殿裁定準拠）、WireGuard未設定（LAN運用明記）\n- scripts/log_rotate.sh: 30日超削除+10MB超truncate(末尾5MB保持)\n\
+    - docs/shogun/mbp_investment_branch.md §9: 運用開始後チェックリスト追記\n  （gitignore対象のためローカル更新のみ）\n\
+    テスト: 175 passed, 1 skipped (全件合格、リグレッションなし)\nneeds_audit: true → お針子監査待ち。\n【cmd_466\
+    \ Wave全体完成物】\n  Wave1: mbp_setup.sh + env.example + agent-swarm mbp_branch登録\n\
+    \  Wave2: swarm_post.py + flush_pending.py (SSH exec + pending蓄積)\n  Wave3: investment_report.py\
+    \ (Crucix+EDINET+daily_risk+ollama graceful)\n  Wave4: mbp_crontab.txt + log_rotate.sh\
+    \ + 運用チェックリスト\n"
+  worker: ashigaru1
+- cmd_id: cmd_466
+  commit: a024e21
+  needs_audit: false
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T12:30:00'
+  status: done
+  subtask_id: subtask_1037
+  summary: 'MBP支店 Wave 3/4 完了。investment_report.py 実装済み。
+
+    - _load_risk_summary(): daily_risk_latest.txt テキストパース (graceful)
+
+    - _load_edinet_signals(): signals DB当日分 (DB無し→空リスト)
+
+    - _load_crucix_ideas(): 最新N件 柔軟3構造パース (dir無し→空リスト)
+
+    - _query_ollama(): gpt-oss-fin-thinking分析 (URLError/timeout→None graceful)
+
+    - build_report(): Markdown整形, データある分だけ各セクション表示
+
+    - swarm_post.post_reply() → finance板 investment_daily_{YYYYMMDD}
+
+    - config/mbp_config.yaml に crucix/ollama セクション追加
+
+    テスト: 175 passed, 1 skipped (全件合格)
+
+    次波: subtask_1038(cron設定+スリープ対策) blocked_by解除。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_466
+  commit: 9398f48
+  needs_audit: false
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T11:45:00'
+  status: done
+  subtask_id: subtask_1036
+  summary: "MBP支店 Wave 2/4 完了。SSH exec投稿ヘルパー実装。\n- swarm_post.py: ssh BatchMode=yes\
+    \ + shlex.quote()でcli.py reply addを呼び出し\n  SSH失敗(returncode!=0/TimeoutExpired/OSError)\
+    \ → pending_posts.jsonl蓄積\n- flush_pending.py: pending一括投稿, 部分成功時atomic write,\
+    \ dry-run対応\n- config/mbp_config.yaml: 接続設定テンプレート\n- 特記: cli.pyにthread createコマンドなし確認済\
+    \ → reply addで新規thread_id渡しでスレ立て相当\nテスト: 154 passed, 1 skipped (全件合格)\n次波: subtask_1037(investment_report.py)\
+    \ blocked_by解除。\n"
+  worker: ashigaru1
+- cmd_id: cmd_466
+  commits:
+    agent-swarm: 8267e7b
+    systrade: d294abd
+  needs_audit: false
+  read: true
+  reported_at: '2026-03-30T11:00:00'
+  status: done
+  subtask_id: subtask_1035
+  summary: "MBP投資支店 Wave 1/4 完了。\n- scripts/mbp_setup.sh: Step 0-8の完全自動セットアップスクリプト\n\
+    \  (homebrew確認/Python3.12/git clone/venv/autossh/SSH鍵確認/スリープ対策案内)\n- config/env.example:\
+    \ EDINET_API_KEY/EDINET_DB_TOKEN テンプレート\n- agent-swarm config/swarm.yaml: mbp_branch(MBP支店長\
+    \ ◆MBP1)登録+finance板writers追加\nsystrade remoteなし→localコミットのみ。agent-swarmはlocalコミット。\n\
+    次波: subtask_1036(swarm_post.py) blocked_by本タスク解除。\n"
+  worker: ashigaru1
+- cmd_id: cmd_466
+  read: true
+  reported_at: '2026-03-30T11:15:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1034
+  summary: 'MBP投資支店偵察+実行計画策定完了（decompose付き）。
+
+    §1: MBP棚卸し（M4 Pro 48GB, Python 3.9.6, Crucix 30分cron稼働, ollama gpt-oss-fin-thinking
+    22GB）
+
+    §2: systrade依存マップ（pyproject.toml, 全スクリプト+env変数+ファイル依存）
+
+    §3: baku.py切り出し → baku.py改修せず、systrade側にinvestment_report.py新規作成を推奨
+
+    §4: agent-swarm通信 → SSH exec方式推奨（dat_server.pyが127.0.0.1バインドのため）
+
+    §5: 7600x依存ゼロ検証 → 投資パイプラインは完全自律、投稿のみ7600x依存（pending蓄積で解消）
+
+    §6: 4 subtask(環境構築→投稿ヘルパー→投資日報→cron設定) Wave 1-4。1足軽1-2日。
+
+    重大発見: WG未起動(LAN代替OK), Python 3.9.6(要upgrade), ollamaモデル変更済み
+
+    設計書: docs/shogun/mbp_investment_branch.md
+
+    分解案: queue/inbox/gunshi_analysis.yaml
+
+    '
+  worker: gunshi
+- audit_triggered: true
+  cmd_id: cmd_465
+  commit: 2edb935
+  needs_audit: true
+  project: systrade
+  read: true
+  reported_at: '2026-03-30T03:15:00'
+  status: done
+  subtask_id: subtask_1033
+  summary: 'EDINET棍棒パイプライン Wave 3/3 完了。
+
+    - detect_spikes(): delta_ratio閾値検出(medium≥2%/high≥5%), signals DB格納
+
+    - crossref_drill(): 財務クロス照合(売上/CF 15%減 → WARNING)
+
+    - inject_dream(): baku.py互換 dreams.jsonl 書き込み
+
+    - post_signal(): agent-swarm BBS ベストエフォートPOST(finance板)
+
+    - _get_api_key(): EDINET_API_KEY→EDINET_API→~/.config/env/edinet.env 探索順対応
+
+    テスト: 25 passed, 1 skipped (systrade/tests/test_edinet_pipeline.py)
+
+    systrade remote未設定のためlocalコミットのみ。pushは環境整備後。
+
+    '
+  worker: ashigaru1
+- cmd_id: cmd_465
+  detail_ref: curl -s localhost:8080/reports/960
+  read: true
+  reported_at: '2026-03-30T02:33:19'
+  status: completed
+  subtask_id: subtask_1032
+  summary: edinet-tools パーサー統合 Wave 2 完了。pytest 11 PASS, 1 SKIP。
+  worker: ashigaru1
+- cmd_id: cmd_465
+  detail: "作成ファイル:\n  /home/yasu/systrade/scripts/edinet_pipeline.py (313行)\n    -\
+    \ fetch_daily_filings(): 書類一覧API (docTypeCode=350/120フィルタ)\n    - download_xbrl():\
+    \ 書類取得API type=1 + ZIP展開 + 指数バックオフ\n    - init_db(): holdings/financials_raw/signals\
+    \ 3テーブル + INDEX自動作成\n    - load_config(): config/edinet_watch.yaml 読み込み（PyYAML不使用）\n\
+    \    - Wave2/3スタブ: parse_large_holding, parse_securities_report, detect_spikes,\
+    \ inject_dream\n    - --test: 2PASS (SQLiteスキーマ作成PASS, config読み込みPASS, API接続SKIP)\n\
+    \  /home/yasu/systrade/config/edinet_watch.yaml (監視15社, delta_threshold=2.0)\n\
+    \  /home/yasu/systrade/pyproject.toml (edinet-tools==0.4.3追加)\ncommit: 3952aa5\
+    \ (systrade main)\n注意: systrade に private リモート未設定のためpush不可。push先の設定要確認。\n"
+  read: true
+  reported_at: '2026-03-30T02:55:00'
+  status: completed
+  subtask_id: subtask_1031
+  summary: EDINET棍棒パイプライン基盤 Wave 1 完了。--test 2PASS。
+  worker: ashigaru1
+- cmd_id: cmd_465
+  read: true
+  reported_at: '2026-03-30T02:40:00'
+  skill_candidate: null
+  status: done
+  subtask_id: subtask_1030
+  summary: 'EDINET棍棒パイプライン偵察+設計完了（decompose付き）。
+
+    §1-§6: EDINET API v2仕様、大量保有報告書XBRL構造、OSSライブラリ比較、
+
+    Crucix/獏接続設計、全体アーキテクチャ。
+
+    推奨: edinet-tools(0.4.3) + 独立スクリプト(edinet_pipeline.py) + 専用SQLite。
+
+    subtask 3件(Wave 1-3): 基盤→パーサー→シグナル連携。1足軽1-2日。
+
+    設計書: docs/shogun/edinet_pipeline_recon.md
+
+    分解案: queue/inbox/gunshi_analysis.yaml
+
+    '
+  worker: gunshi
+- cmd_id: cmd_464
+  detail_ref: curl -s localhost:8080/reports/959
+  read: true
+  reported_at: '2026-03-30T01:02:15'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1029
+  summary: shutsujin_departure.sh 全9箇所に --effort max 追加完了
+  worker: ashigaru1
+- cmd_id: cmd_463
+  commit: 5570989
+  completed_at: '2026-03-28T17:00:00'
+  read: true
+  status: completed
+  subtask_id: subtask_1027
+  summary: 'Phase 3完了。packaging/(deb/rpm/opkg)+.github/workflows/(ci.yml+release.yml)+Makefile。
+
     タグpush→4アーキ静的バイナリ+deb/rpm/ipkがGitHub Releasesに並ぶ設計。
+
     make package-deb/opkgローカル動作確認済み(amd64 684KB、mipsel_24kc 858KB)。
+
     zig build test 79/79 PASS。push済み(5570989)。
+
+    '
+  worker: ashigaru1
 - audit_triggered: true
   cmd_id: cmd_463
   detail_ref: python3 scripts/botsunichiroku.py search report#958
@@ -1768,3 +2628,101 @@ reports:
   summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
   type: report_completed
   worker: ashigaru2
+- read: true
+  reported_at: '2026-03-30T01:02:52'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-03-30T12:39:27'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-03-30T12:42:12'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru1、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru1
+- read: true
+  reported_at: '2026-04-02T00:26:48'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- read: true
+  reported_at: '2026-04-02T23:13:14'
+  status: notification
+  subtask_id: stophook_notification
+  summary: ashigaru2、タスク完了検出。roju_reports確認されたし。
+  type: report_completed
+  worker: ashigaru2
+- agent: ashigaru2
+  cmd_id: cmd_480
+  read: true
+  status: completed
+  subtask_id: subtask_1061
+  summary: "FKPデモ バグ修正 完了。\n\nStep 0（将軍ビルド修正コミット）: 7cfc023\nBug 1（ECEF→WGS84 緯度18°ずれ）:\
+    \ 修正完了\n  - 旧Bowring式はreduced latitude更新漏れで18°誤差\n  - 単純直接反復法 lat_{n+1}=atan2(Z+e²·N(lat_n)·sin(lat_n),\
+    \ p) に置き換え\n  - 15回反復で 1e-12 rad 精度に収束\nBug 2（FKPスケール10^9異常）: 修正完了\n  - 原因: テストデータのe-3誤記（obs_bのL1=20000005.5e-3≒20km\
+    \ vs obs_a=20,000km）\n  - engine.zig自体は正しく、テストデータを修正\nコミット: 4052659 (Bug1+Bug2+新規テスト5件)\n\
+    テスト: 123/123 全PASS\n新規テスト: 北海道3局+東京 往復精度テスト4件(精度1e-8 rad) + FKPスケール合理性テスト1件\n"
+  timestamp: '2026-04-03'
+  type: report_completed
+- agent: ashigaru2
+  cmd_id: cmd_481
+  read: true
+  status: completed
+  subtask_id: subtask_1062
+  summary: "FKP設定パース 完了。追加要件(fkp_enable)も含めて実装。\n\n変更ファイル:\n- src/config/parser.zig:\
+    \ FkpSource構造体、Config fkp_enable/fkp_sources/fkp_mountpoint/fkp_interval\n  parseFkpSource\
+    \ (\"host/mount\", \"host:port/mount\", \"host/mount user:pass\" 対応)\n- conf/ntripcaster.conf:\
+    \ FKPセクション追記（コメントアウトサンプル）\n- tests/test_config.zig: FKPテスト12件追加\n\nコミット: 0c83d97\n\
+    テスト: 135/135 全PASS（既存テスト維持）\n"
+  timestamp: '2026-04-03'
+  type: report_completed
+- agent: ashigaru2
+  cmd_id: cmd_481
+  status: completed
+  subtask_id: subtask_1062
+  summary: 'お針子監査(-1点)対応完了。
+
+    fkp_enable true + fkp_sources < 3 の場合に std.log.warn を出力するよう修正。
+
+    テストも2局不足ケースにfkp_enable trueを追加し警告発出を明記。
+
+    commit: 54f8a2f
+
+    テスト: 135/135 全PASS
+
+    '
+  timestamp: '2026-04-03'
+  type: report_followup
+- cmd_id: cmd_489
+  commit: 929f7f1
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_1071
+  read: true
+  reported_at: '2026-04-05T00:58:13'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1071
+  summary: Waveshare 8ch Relay (ESP32-S3-ETH-8DI-8RO) 仕様調査+FW設計書完了。TCA9554 I2C制御、MQTTトピック互換設計を文書化
+  worker: ashigaru6
+- cmd_id: cmd_489
+  commit: b88c0a3
+  detail_ref: python3 scripts/botsunichiroku.py report list subtask_1073
+  read: true
+  reported_at: '2026-04-05T01:28:00'
+  skill_candidate:
+    name: null
+  status: completed
+  subtask_id: subtask_1073
+  summary: RP2350版Waveshare 8ch Relay全GPIOピンマップ確定。公式デモコード+ボード定義ヘッダから裏取り。設計書全面書換え
+  worker: ashigaru6

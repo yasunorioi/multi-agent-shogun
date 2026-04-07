@@ -68,12 +68,14 @@ status/
 claude-shogun-orders.md
 docs/*
 !docs/philosophy.md
+!docs/shogun/
 
 # トークン・認証情報（絶対にpushするな）
 **/hf-token.sh
 **/*token*.sh
 **/*secret*.sh
 config/notify_auth.env
+.env
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Generated / Build artifacts

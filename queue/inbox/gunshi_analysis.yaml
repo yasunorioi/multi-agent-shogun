@@ -1,328 +1,187 @@
 # queue/inbox/gunshi_analysis.yaml
 # 軍師（gunshi）の分析出力。家老が読む一方向通信。
 # ─────────────────────────────────────────────────────────────
-# ntripcaster Zigリライト Phase 2以降 分解案 (cmd_463 / subtask_1022)
+# agent-swarm まとめwiki アーキテクチャ設計 (cmd_490 / subtask_1080)
 # ─────────────────────────────────────────────────────────────
-task_id: subtask_1022
-cmd_id: cmd_463
-timestamp: "2026-03-28T12:30:00"
+task_id: subtask_1080
+cmd_id: cmd_490
+timestamp: "2026-04-06T18:35:00"
 
 analysis:
 
-  # ─── Bloom ルーティング（必須） ─────────────────────────────
   bloom_level: 6
   bloom_reasoning: |
-    BKG原典Cソース(10,464行)の全機能読解+NTRIPプロトコル仕様整理+Zig設計書作成。
-    20年前のCコードを別言語でフルリライトする設計は、新規アーキテクチャ創造に該当。
-    L5ではない理由: 既存パターンの評価ではなく、新言語での再設計。
-    L4ではない理由: 複数設計案の比較+アーキテクチャ策定が核。
-  recommended_model: claude-sonnet-4-6
-  confidence: 0.85
+    タスクはKarpathy LLM Wikiパターンをagent-swarmに適用する新規アーキテクチャ設計。
+    既存資産（没日録DB/baku/Memory MCP/context/*.md）の全面的な移行パス策定を含む。
+    ゼロからのスキーマ設計(wiki_pages/wiki_links/wiki_sources)+パイプライン設計+
+    Phase分割が必要。単純な「応用」ではなく「創造」のレベル。
+    L5ではない理由: 既存選択肢の比較ではなく、新規アーキテクチャの創出が主眼。
+  recommended_model: claude-opus-4-6
+  confidence: 0.82
 
-  # ─── 品質基準（お針子がrubricsに使う） ─────────────────────
   quality_criteria:
-    - "設計書(docs/shogun/ntripcaster_zig_design.md)が§1-§9の全セクションを含むこと"
-    - "14ソースファイルの全機能がリスト化され、各機能に「何を」「なぜ」が記述されていること"
-    - "NTRIP v1/v2のリクエスト/レスポンス形式が完全に記載されていること"
-    - "BKG仕様書と実装の差異が指摘されていること"
-    - "Zigモジュール構成とCソースの対応表があること"
-    - "build.zigのクロスコンパイルターゲット一覧があること"
-    - "トレードオフ比較表にスコアリングが含まれること"
-    - "North Star Alignment が記載されていること"
-    - "Phase 2以降の分解案がgunshi_analysis.yamlに出力されていること"
-    - "各subtask実装後、RTKLIB str2strとの相互運用テストが可能なこと"
+    - "Karpathyパターンの3層(Raw Sources/Wiki/Schema)がagent-swarm資産に正しくマッピングされていること"
+    - "SQLiteスキーマ(wiki_pages/wiki_links/wiki_sources/wiki_log)のDDLが提示されていること"
+    - "パイプライン(ingest/compile/lint/render)の各フローが具体的コマンド例付きで示されていること"
+    - "没日録DB→wiki移行スクリプト設計が提示されていること(冪等性保証)"
+    - "JDim互換性が維持されていること(まとめ板設計)"
+    - "lint/health-check仕様が7項目以上列挙され重要度付きであること"
+    - "Phase 0-3の実装ロードマップが足軽配分案付きで提示されていること"
+    - "殿の制約(SQLite完結/マクガイバー精神/月額忌避)との整合性が論証されていること"
+    - "冒険的な案が1つ以上提示されていること"
+    - "見落としの可能性セクションが含まれていること"
   qc_method: ohariko
 
-  # ─── PDCA 判定 ───────────────────────────────────────────
-  pdca_needed: true
-  pdca_reason: |
-    Phase 2(Zig実装)は段階的統合テストが必要。
-    各モジュール実装後にRTKLIBとの相互運用テストを実施し、
-    互換性問題があればPhase 2内で修正サイクルを回す。
+  pdca_needed: false
 
-  # ─── North Star 整合 ─────────────────────────────────────
   north_star_alignment:
     status: aligned
     reason: |
-      殿の方針に完全合致:
-      - 外部依存ゼロ（Zig std libのみ）
-      - クロスコンパイル一発（RPi/VPS/MBP全対応）
-      - NTRIP互換性最優先（RTKLIB動作保証）
-      - 設定ファイル後方互換（既存confそのまま使用）
-      - 原典Cソースは/legacy/に保存（削除しない）
+      スレ横断知識のコンパイルにより、shogunシステムの暗黙知を構造化して
+      agent-swarmに移植する。2ch文化（まとめサイト）メタファーでJDim互換を
+      維持し、殿がJDimだけで全てを把握できる世界に一歩近づく。
     risks_to_north_star:
-      - "RTKLIB互換性の破壊（NTRIP v1の非標準動作に依存する機器が存在する可能性）"
-      - "RTCM3フレーム同期修正による既存クライアントへの影響"
-      - "Phase 2-5が長期化しC版の保守と二重管理になるリスク"
+      - "LLMコスト: ingest/compile時のAPI呼び出しが月額忌避ポリシーに抵触しないか"
+      - "wiki肥大化: 没日録全件変換でページ数が爆発し、index.mdが読めなくなるリスク"
+      - "移行の非可逆性: wikiに依存した運用を始めると後戻りしにくい"
 
-  # ─── predicted_outcome（Foreman方式） ────────────────────
   predicted_outcome:
     expected_files:
-      - path: "docs/shogun/ntripcaster_zig_design.md"
+      - path: "agent-swarm/wiki.py"
         change_type: "new"
-        description: "Zigリライト設計書（§1-§9、原典全機能リスト、プロトコル仕様、モジュール構成）"
-      - path: "/home/yasu/ntripcaster/src/main.zig"
-        change_type: "new"
-        description: "エントリポイント（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/src/server.zig"
-        change_type: "new"
-        description: "TCPリスナー+接続振り分け（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/src/ntrip/protocol.zig"
-        change_type: "new"
-        description: "NTRIPプロトコルパーサー（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/src/ntrip/source.zig"
-        change_type: "new"
-        description: "ソースハンドラ（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/src/ntrip/client.zig"
-        change_type: "new"
-        description: "クライアントハンドラ（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/src/relay/engine.zig"
-        change_type: "new"
-        description: "RTCMリレーエンジン（Phase 2で実装）"
-      - path: "/home/yasu/ntripcaster/build.zig"
-        change_type: "new"
-        description: "ビルド定義（Phase 2で実装）"
+        description: "wiki CLI（ingest/compile/lint/render/query/migrate/stats/show）"
+      - path: "agent-swarm/scripts/init_db.py"
+        change_type: "modify"
+        description: "wiki_pages/wiki_links/wiki_sources/wiki_logテーブル追加"
+      - path: "agent-swarm/config/swarm.yaml"
+        change_type: "modify"
+        description: "matome板追加"
+      - path: "agent-swarm/server/dat_server.py"
+        change_type: "modify"
+        description: "matome板レンダリング + スレ完走フック追加"
     expected_tests:
-      pass_count: 0
-      note: "Phase 1は設計書のみ。テストはPhase 2で新規作成"
+      pass_count: 8
       key_assertions:
-        - "Sourcetableリクエストに正しくSourcetable応答を返すこと"
-        - "SOURCE接続でRTCMデータを受信しリングバッファに格納すること"
-        - "GET /mount でクライアントにICY 200 OK + RTCMデータを配信すること"
-        - "Basic認証が正しく動作すること"
-        - "confファイルのパースが現行形式と後方互換であること"
-        - "RTKLIB str2strとの相互運用テストがPASSすること"
+        - "wiki_pagesへのINSERT/UPDATE/SELECTが正しく動作すること"
+        - "wiki_linksのcross-referenceが双方向で検索可能なこと"
+        - "migrateが冪等であること（2回実行しても重複なし）"
+        - "lintが7項目全てチェックし結果を正しく報告すること"
+        - "renderがSQLiteからmarkdownを正しく生成すること"
+        - "matome板がdat_serverでJDim互換DATを返すこと"
+        - "スレ完走フックがingestを正しくトリガーすること"
+        - "wiki_sourcesがRaw Sourceへの逆参照を正しく保持すること"
     expected_behavior: |
-      Phase 2完了時:
-      1. zig build でシングルバイナリが生成される
-      2. ./ntripcaster -c conf/ntripcaster.conf でサーバー起動
-      3. str2str -in ntrip://:pass@localhost:2101/MOUNT でRTCMストリーム受信可能
-      4. 複数クライアント同時接続でRTCMリレーが正常動作
-      5. クロスコンパイルでaarch64-linux(RPi)バイナリが生成される
+      Phase 1完了後:
+      1. `python3 wiki.py migrate --source botsunichiroku` で没日録443cmd → PJ別entityページ生成
+      2. `python3 wiki.py ingest --source thread --id 3` でzatsudan/3 → synthesis+entity更新
+      3. `python3 wiki.py lint` で孤立ページ・壊れたリンクを検出
+      4. `python3 wiki.py render` でwiki/ディレクトリにmarkdown出力
+      5. JDimでまとめ板を開くとwikiページがスレ一覧として閲覧可能
     verification_method: |
-      1. zig build test → 全テストPASS
-      2. str2str接続テスト → RTCMデータ受信確認
-      3. zig build -Dtarget=aarch64-linux → クロスコンパイル成功
-      4. systemctl start ntripcaster → サービス起動確認（RPi実機）
+      Phase 0: init_db.py実行 → sqlite3でテーブル存在確認
+      Phase 1: migrate + ingest実行 → wiki_pages行数確認 + render出力確認
+      Phase 2: lint実行 → チェック結果の妥当性を手動確認
+      Phase 3: JDimでまとめ板閲覧 → DAT表示確認
 
-# ─── decomposition（Phase 2以降） ─────────────────────────────
-decomposition:
-  five_questions:
-    purpose: |
-      BKG ntripcaster 0.1.5のCソースをZig 0.14でフルリライトし、
-      RPi/VPSでのシングルバイナリデプロイを実現する。
-    breakdown: |
-      Phase 2(v1最小実装)は4モジュールグループに分解可能:
-      (A)プロトコル+設定、(B)リレーエンジン、(C)サーバー統合、(D)相互運用テスト。
-      A→B→Cはシリアル依存、Dは並列可能。
-    headcount: |
-      1-2足軽。Phase 2全体は1人で3-5日相当。
-      モジュール分割が明確なため2人並列も可能（A+BとCを分担）。
-    perspective: |
-      Bloom L4-L5（分析+評価）。既存プロトコル仕様の忠実な再実装。
-      ただしI/Oモデル選択やリングバッファ設計はL5の判断が必要。
-    risk: |
-      中リスク。RTKLIB互換性が最大のリスク。
-      Phase 2完了条件にstr2str相互運用テストを含めることで管理。
-      C版との並行稼働期間を設けて段階的に移行。
+  strategy_analysis:
+    alternatives:
+      - name: "案A: SQLite + DAT rendering（推奨）"
+        pros:
+          - "殿のマクガイバー精神に合致（SQLite完結）"
+          - "既存dat_server.pyパターン踏襲（JDim互換）"
+          - "FTS5拡張が容易"
+          - "まとめ板でJDim閲覧可能（新UI不要）"
+        cons:
+          - "dat_server.py改修が必要（matome板レンダリング）"
+        score: 9
+      - name: "案B: ファイルシステムwiki（Karpathyオリジナル）"
+        pros:
+          - "Karpathyパターンに忠実"
+          - "Obsidian互換"
+          - "git trackable"
+        cons:
+          - "SQLiteエコシステムから外れる"
+          - "FTS5非対応（別途検索エンジン必要）"
+          - "JDim非互換（別UI必要）"
+        score: 5
+      - name: "案C: Notion/外部wiki"
+        pros:
+          - "UIが美しい"
+        cons:
+          - "月額課金（殿の忌避）"
+          - "外部依存"
+          - "エージェント連携困難"
+        score: 2
+    recommendation: "案A: SQLite + DAT rendering"
+    recommendation_reason: |
+      殿の全てのシステムがSQLite上にある。新たなストレージ層を導入する理由がない。
+      dat_server.pyの拡張でJDim閲覧を維持し、wiki.py CLIで全操作を完結させる。
+      Karpathyパターンの本質（compile once, maintain）はストレージ形式に依存しない。
 
-  subtasks:
-    - id_hint: subtask_1022a
-      title: "build.zig + config/parser.zig + auth/basic.zig"
-      description: |
-        Phase 2の基盤モジュール群を実装:
+phases:
+  - phase: 0
+    title: "基盤（DDL + CLI骨格）"
+    worker: "足軽1名"
+    effort: "半日"
+    description: "swarm.dbにwiki_*テーブル追加、wiki.py CLI骨格、matome板定義"
+    blocked_by: null
+    deliverables:
+      - "agent-swarm/scripts/init_db.py（wiki_*テーブル追加）"
+      - "agent-swarm/wiki.py（CLI骨格: show/stats）"
+      - "agent-swarm/config/swarm.yaml（matome板追加）"
 
-        1. build.zig:
-           - Zigプロジェクト初期化
-           - クロスコンパイルターゲット（x86_64/aarch64-linux, aarch64-macos）
-           - テストステップ定義
+  - phase: 1
+    title: "Ingest + Migrate"
+    worker: "足軽1-2名"
+    effort: "2-3日"
+    description: "没日録→wiki変換、context/*.md→wiki変換、スレ→wiki変換、cross-ref、render"
+    blocked_by: "Phase 0"
+    deliverables:
+      - "wiki.py migrate（没日録/context/docs）"
+      - "wiki.py ingest（スレ→wiki）"
+      - "wiki.py render（SQLite→markdown）"
+      - "wiki_links自動検出"
 
-        2. config/parser.zig:
-           - ntripcaster.conf パーサー（現行形式100%後方互換）
-           - port, max_clients, max_sources, encoder_password, server_name, logdir, logfile
-           - マウント認証行（/<MOUNT>:user:pass,...）のパース
-           - Config構造体定義
+  - phase: 2
+    title: "Lint + 自動化"
+    worker: "足軽1名"
+    effort: "1-2日"
+    description: "lint実装、スレ完走フック、wiki_versions履歴、compile"
+    blocked_by: "Phase 1"
+    deliverables:
+      - "wiki.py lint（L1-L7）"
+      - "dat_server.py スレ完走フック"
+      - "wiki_versionsテーブル + 履歴保存"
 
-        3. auth/basic.zig:
-           - Base64デコード（std.base64使用）
-           - Authorization ヘッダーからuser:pass抽出
-           - マウント別認証判定
+  - phase: 3
+    title: "JDim統合 + Query"
+    worker: "足軽1-2名"
+    effort: "2-3日"
+    description: "matome板DAT rendering、query、baku夢ingest、Memory MCP変換"
+    blocked_by: "Phase 2"
+    deliverables:
+      - "dat_server.py matome板レンダリング"
+      - "wiki.py query"
+      - "baku夢/Memory MCP ingest"
 
-        テスト:
-        - 既存ntripcaster.confのパーステスト
-        - Base64デコードテスト
-        - 認証判定テスト（許可/拒否/マウント不一致）
-      bloom_level: 3
-      recommended_model: claude-sonnet-4-6
-      estimated_effort: "2h"
-      blocked_by: []
-      worktree: false
-      worker_hint: "executor (sonnet)"
-      files_touched:
-        - "/home/yasu/ntripcaster/build.zig (new)"
-        - "/home/yasu/ntripcaster/src/config/parser.zig (new)"
-        - "/home/yasu/ntripcaster/src/auth/basic.zig (new)"
-        - "/home/yasu/ntripcaster/tests/test_config.zig (new)"
-        - "/home/yasu/ntripcaster/tests/test_auth.zig (new)"
+immediate_actionable:
+  - task: "Phase 0: wiki_*テーブルDDL + init_db.py拡張"
+    bloom_level: 2
+    recommended_model: claude-haiku-4-5
+    estimated_effort: "2時間"
+    description: |
+      §2のDDL（wiki_pages, wiki_links, wiki_sources, wiki_log）を
+      agent-swarm/scripts/init_db.py に追加。
+      既存のthread_repliesテーブルには一切触れないこと。
+    worktree_needed: false
 
-    - id_hint: subtask_1022b
-      title: "ntrip/protocol.zig + ntrip/sourcetable.zig + relay/engine.zig"
-      description: |
-        プロトコル層+リレーエンジンを実装:
-
-        1. ntrip/protocol.zig:
-           - NtripRequest union型（source_login / client_get / sourcetable_get / invalid）
-           - HTTPヘッダーパーサー（\r\n\r\n終端検出）
-           - User-Agent NTRIP検証
-           - v1/v2判定（Ntrip-Versionヘッダー有無）
-
-        2. ntrip/sourcetable.zig:
-           - sourcetable.datファイル読み込み
-           - "SOURCETABLE 200 OK" レスポンス生成
-           - "ENDSOURCETABLE" フッター
-
-        3. relay/engine.zig:
-           - RingBuffer構造体（CHUNK_SIZE=4096, NUM_CHUNKS=64）
-           - writeChunk(): ソースからのデータ格納
-           - readChunk(): クライアント別読み取り位置管理
-           - RTCM3フレーム同期（0xD3プリアンブル検出）※Phase 2では0xFF 0xF0を維持
-           - ログ出力: log.zig
-
-        テスト:
-        - プロトコルパーステスト（v1 GET, SOURCE, invalid）
-        - Sourcetable応答形式テスト
-        - リングバッファ読み書きテスト
-        - バッファオーバーラン時の挙動テスト
-      bloom_level: 4
-      recommended_model: claude-sonnet-4-6
-      estimated_effort: "3h"
-      blocked_by: ["subtask_1022a"]
-      worktree: false
-      worker_hint: "executor (sonnet)"
-      files_touched:
-        - "/home/yasu/ntripcaster/src/ntrip/protocol.zig (new)"
-        - "/home/yasu/ntripcaster/src/ntrip/sourcetable.zig (new)"
-        - "/home/yasu/ntripcaster/src/relay/engine.zig (new)"
-        - "/home/yasu/ntripcaster/src/log.zig (new)"
-        - "/home/yasu/ntripcaster/tests/test_protocol.zig (new)"
-        - "/home/yasu/ntripcaster/tests/test_relay.zig (new)"
-
-    - id_hint: subtask_1022c
-      title: "server.zig + ntrip/source.zig + ntrip/client.zig + main.zig"
-      description: |
-        サーバー本体を実装し全モジュールを統合:
-
-        1. server.zig:
-           - std.net.Address.listen()でTCPリスナー起動
-           - accept()ループ + スレッドプールで接続処理
-           - handle_connection(): ヘッダー読み取り→protocol.parseRequest()で振り分け
-
-        2. ntrip/source.zig:
-           - source_login(): パスワード検証→マウント登録→Source構造体作成
-           - source_loop(): recv()ループ→relay/engine.writeChunk()
-           - タイムアウト処理（client_timeout秒待機）
-
-        3. ntrip/client.zig:
-           - client_login(): 認証→マウント探索→"ICY 200 OK"送信
-           - データ配信: relay/engine.readChunk()→send()
-           - クライアント遅延検出+キック
-
-        4. main.zig:
-           - CLIオプション（-c configfile）
-           - config読み込み→ServerState初期化→server.listen()
-           - SIGHUP対応（設定リロード）
-           - clean_shutdown()
-
-        テスト:
-        - 統合テスト: ソース接続→クライアント接続→RTCMリレー
-        - 複数クライアント同時接続テスト
-        - ソース切断時のクライアント切断テスト
-        - confリロードテスト
-      bloom_level: 4
-      recommended_model: claude-sonnet-4-6
-      estimated_effort: "4h"
-      blocked_by: ["subtask_1022b"]
-      worktree: false
-      worker_hint: "executor (sonnet, model=opus for complex integration)"
-      files_touched:
-        - "/home/yasu/ntripcaster/src/server.zig (new)"
-        - "/home/yasu/ntripcaster/src/ntrip/source.zig (new)"
-        - "/home/yasu/ntripcaster/src/ntrip/client.zig (new)"
-        - "/home/yasu/ntripcaster/src/main.zig (new)"
-        - "/home/yasu/ntripcaster/tests/test_integration.zig (new)"
-
-    - id_hint: subtask_1022d
-      title: "RTKLIB str2str 相互運用テスト + systemd統合"
-      description: |
-        Phase 2の完了検証:
-
-        1. RTKLIB str2strとの相互運用テスト:
-           - Zig版ntripcaster起動
-           - str2str -in ntrip://:pass@localhost:2101/MOUNT で接続
-           - RTCMストリーム受信確認（バイナリデータが正しくリレーされること）
-           - 複数str2strクライアント同時接続テスト
-           - ソース切断→再接続テスト
-
-        2. systemd統合:
-           - cmd_461のntripcaster.serviceファイルのExecStartパスを変更
-           - systemctl start/stop/restart テスト
-           - journalctlでログ出力確認
-
-        3. クロスコンパイル検証:
-           - zig build -Dtarget=aarch64-linux でRPiバイナリ生成
-           - RPi実機でのバイナリ実行テスト（可能であれば）
-
-        4. C版との並行比較:
-           - 同一confファイルでC版/Zig版を別ポートで起動
-           - 同一ソースに対する同一クライアントの応答比較
-      bloom_level: 3
-      recommended_model: claude-sonnet-4-6
-      estimated_effort: "2h"
-      blocked_by: ["subtask_1022c"]
-      worktree: false
-      worker_hint: "qa-tester or executor"
-      files_touched:
-        - "/home/yasu/ntripcaster/ntripcaster.service (modify: ExecStart)"
-        - "/home/yasu/ntripcaster/tests/test_interop.sh (new)"
-
-  wave_design:
-    wave_1:
-      description: "基盤モジュール（build.zig + config + auth）"
-      subtasks: ["subtask_1022a"]
-      rationale: |
-        全モジュールの前提となるビルドシステムと設定パーサー。
-        これがないと他のモジュールがコンパイルできない。
-    wave_2:
-      description: "プロトコル層 + リレーエンジン"
-      subtasks: ["subtask_1022b"]
-      rationale: |
-        Wave 1の型定義（Config等）に依存。
-        サーバー統合（Wave 3）の前にプロトコルパーサーとリレーエンジンを単体テスト。
-    wave_3:
-      description: "サーバー統合"
-      subtasks: ["subtask_1022c"]
-      rationale: |
-        Wave 1+2の全モジュールを統合して動作するサーバーを構築。
-        最も複雑なsubtask。必要に応じてOpusモデルを使用。
-    wave_4:
-      description: "相互運用テスト + systemd統合"
-      subtasks: ["subtask_1022d"]
-      rationale: |
-        Wave 3完了後、実環境での検証。
-        RTKLIB str2strとの互換性がPhase 2の最終合否判定。
-    wave_5:
-      description: "お針子検品"
-      subtasks: ["audit"]
-      rationale: |
-        全Wave完了後、お針子が以下を検品:
-        - zig build test → 全テストPASS
-        - str2str相互運用テストPASS
-        - クロスコンパイル成功（aarch64-linux）
-        - 設定ファイル後方互換確認
-        - PDCA: 互換性問題があればPhase 2内で修正サイクル
-
-  race_001_check: |
-    RACE-001違反なし。4 subtaskは全てシリアル依存（wave_design準拠）。
-    同一ファイルへの二重割当なし。各waveは前waveの成果物に依存。
+  - task: "Phase 0: wiki.py CLI骨格"
+    bloom_level: 3
+    recommended_model: claude-sonnet-4-6
+    estimated_effort: "半日"
+    description: |
+      argparseでサブコマンド（show/stats/ingest/compile/lint/render/query/migrate）を定義。
+      show/statsを先行実装。DB接続はbotsu/__init__.pyのget_connectionを流用。
+    worktree_needed: false
 
 skill_candidate: null

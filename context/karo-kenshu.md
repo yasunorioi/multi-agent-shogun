@@ -134,8 +134,53 @@ git branch -d worktree-subtask-XXXX
 
 ---
 
+## デュアルモード監視手順（Phase 2.5）
+
+Phase 2.5では老中が **YAML inbox** と **BBS板** の両方を監視する。
+
+### 老中の監視役割
+
+| チャネル | 監視内容 | アクション |
+|---------|---------|-----------|
+| YAML inbox (`roju_reports.yaml`) | 足軽の完了報告 (`status: completed`) | `read: false` エントリを確認 |
+| BBS kenshu板 | 新着スレ（足軽の納品POST） | step 9.5〜9.9 の検収フロー起動 |
+| kenshu_gate板 | 合議結果の判定投稿 | PASS→マージ / FAIL→herald |
+
+### kenshu板の新着確認（定期実施）
+
+```bash
+# kenshu板スレ一覧 — 未処理のスレを探す
+curl -s http://localhost:8824/bbs/kenshu/subject.txt
+```
+
+未処理スレの判定基準:
+- kenshu_gate板に対応するsubtask_idの判定投稿がない
+- roju_reports.yaml に対応する `read: true` エントリがない
+
+### 突合確認（YAML vs BBS）
+
+移行期は足軽がYAML報告とBBS POSTの**両方**を実施しているかを確認せよ。
+
+```bash
+# BBS確認: kenshuに納品スレがあるか
+curl -s http://localhost:8824/bbs/kenshu/subject.txt | grep "subtask_XXXX"
+
+# YAML確認: roju_reports.yamlに報告エントリがあるか
+grep "subtask_XXXX" queue/inbox/roju_reports.yaml
+```
+
+| 状態 | 対処 |
+|------|------|
+| YAML◯ + BBS◯ | 正常。step 9.5〜9.9 を進める |
+| YAML◯ + BBS✕ | 足軽にkenshu POST再実行を指示（BBS不通時は例外） |
+| YAML✕ + BBS◯ | 足軽にroju_reports.yaml報告を指示 |
+| YAML✕ + BBS✕ | 足軽にsend-keys通知して確認 |
+
+---
+
 ## 関連ドキュメント
 
 - `docs/shogun/delivery_interface_schema.md` — Format A/B仕様
 - `docs/shogun/v4_three_story_architecture.md §2.1` — 合議フロー
+- `docs/shogun/v4_three_story_architecture.md §6` — Phase 2.5デュアルモード
 - `scripts/kanjou_ginmiyaku.py` — review/scribe/herald/search

@@ -1,4 +1,89 @@
 reports:
+- subtask_id: subtask_1110
+  cmd_id: cmd_507
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-10T01:10:00'
+  commit: 'd121204'
+  summary: "cmd_507 Wave2完了。CCM InRadiation日射比例値をダッシュボードに表示。CcmSolarInfoキャッシュ+age_sec stale判定(>60s)"
+  detail_ref: "curl -s localhost:8080/reports/1003"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1109
+  cmd_id: cmd_507
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-10T00:20:00'
+  commit: 'bac6333'
+  summary: "cmd_507 Wave1完了。開度管理(ApertureCtrl×4slot)+温度カーブ選択(linear/table/sigmoid/exp)実装。arduino-cliビルド成功"
+  detail_ref: "curl -s localhost:8080/reports/1002"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1108
+  cmd_id: cmd_506
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-09T21:40:00'
+  commit: 'a759721'
+  summary: "WebUIヘッダファイル分割完了。.ino 3559行→2232行+.h×9。arduino-cliビルド成功。commit a759721"
+  detail_ref: "curl -s localhost:8080/reports/1001"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1107
+  cmd_id: cmd_505
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-09T21:09:09'
+  commit: 'f0895db'
+  summary: "Wave3ダッシュボード強化+アクセシビリティ6項目完了。badge CSS/last_updated/devstatバッジ/Config confirm/aria-label/all-disabled confirm/✓✗表示。commit f0895db"
+  detail_ref: "curl -s localhost:8080/reports/1000"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1106
+  cmd_id: cmd_505
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-09T21:00:27'
+  commit: '8c38110'
+  summary: "フォームUX改善完了。FORM_JS+fetchベース+バリデーション3種(GH/Irri/Prot)。commit 8c38110"
+  detail_ref: "curl -s localhost:8080/reports/999"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1105
+  cmd_id: cmd_505
+  worker: ashigaru1
+  status: completed
+  reported_at: '2026-04-09T20:51:55'
+  commit: '21d1f56'
+  summary: "agri-relay WebUI CSS共通化+モバイルレスポンシブ完了。6ページsendCommonHead()置換+Dashboard @media追加。commit 21d1f56"
+  detail_ref: "curl -s localhost:8080/reports/998"
+  skill_candidate: ~
+  read: true
+- subtask_id: subtask_1104
+  cmd_id: cmd_504
+  commit: '4349866'
+  kenshu_thread: '110423503'
+  read: true
+  reported_at: '2026-04-08T00:30:00'
+  status: completed
+  summary: "RP2350 USB-UARTデバッグ出力追加。3バリアント全て[BOOT]/[NET]/[STATUS]/[ERR]実装。§8.6準拠。BBS POSTしました(thread:110423503)"
+  worker: ashigaru1
+- subtask_id: subtask_1103
+  cmd_id: cmd_503
+  worker: ashigaru2
+  status: completed
+  reported_at: '2026-04-08T09:35:48'
+  read: true
+  summary: "BBS POSTしました(thread:11031)"
+- subtask_id: subtask_1102
+  cmd_id: cmd_503
+  commit: '2951985'
+  kenshu_thread: '11020'
+  read: true
+  reported_at: '2026-04-08T00:10:00'
+  status: completed
+  summary: "agent-swarm wiki Phase 0完了。wiki_*テーブル4つ+wiki.py CLI(stats/show)+matome板。完了定義4項目全確認済み。BBS POSTしました(thread:11020)"
+  worker: ashigaru1
 - subtask_id: subtask_1101
   cmd_id: cmd_500
   commit: 6f6ddd2
@@ -3269,4 +3354,25 @@ reports:
   subtask_id: subtask_1101
   worker: gunshi
   summary: "subtask_1101 勘定吟味役ベンチマーク設計メモ 戦略適合性チェック PASS。Crucix同居制約下の現実的設計。S4懸念: bench_*.diffテストデータ未作成がクリティカルパス"
+  read: true
+- cmd_id: cmd_503
+  reported_at: '2026-04-08T00:35:00'
+  status: kenshu_review
+  subtask_id: subtask_1102
+  worker: gunshi
+  summary: "subtask_1102 agent-swarm wiki Phase 0基盤構築 戦略適合性チェック PASS。wiki_*4テーブル+CLI+matome板。出典追跡wiki_sourcesが正データ原則に合致。S3懸念: branch:main(worktree未導入)・FOREIGN KEY未強制"
+  read: true
+- cmd_id: cmd_503
+  reported_at: '2026-04-08T00:40:00'
+  status: kenshu_review
+  subtask_id: subtask_1103
+  worker: gunshi
+  summary: "subtask_1103 wiki.py Phase1 migrate+ingest+render+cross-ref 戦略適合性チェック PASS。没日録DB→context→BBS→wiki→renderの完全パイプライン。冪等設計・WAL・出典追跡。S4懸念: body[:3000]切り詰め・O(n^2) cross-ref"
+  read: true
+- cmd_id: cmd_504
+  reported_at: '2026-04-08T01:00:00'
+  status: kenshu_review
+  subtask_id: subtask_1104
+  worker: gunshi
+  summary: "subtask_1104 RP2350 USB-UARTデバッグ出力 戦略適合性チェック CONDITIONAL。デバッグ出力自体は良質([BOOT]/[NET]/[STATUS]/[ERR]一貫)。S2懸念: diff_summary重大不一致(POST:3/57/6 vs 実際:9/2956/53)。standalone全ファイルgit addがバンドルされた計算ミス"
   read: true

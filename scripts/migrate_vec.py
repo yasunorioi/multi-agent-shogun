@@ -91,7 +91,7 @@ def main():
     done = 0
     for i in range(0, len(pending), BATCH_SIZE):
         batch = pending[i:i + BATCH_SIZE]
-        texts = [r[4] for r in batch]  # content
+        texts = ["文章: " + r[4] for r in batch]  # Ruri v3 passage prefix
         embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
 
         for row, emb in zip(batch, embeddings):

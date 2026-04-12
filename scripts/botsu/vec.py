@@ -38,14 +38,19 @@ def _load_vec(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def _get_embedding(text: str) -> bytes | None:
-    """テキストをRuri v3でベクトル化。モデルは遅延ロード。"""
+def _get_embedding(text: str, mode: str = "passage") -> bytes | None:
+    """テキストをRuri v3でベクトル化。モデルは遅延ロード。
+
+    mode="passage" → "文章: " プレフィックス（upsert時）
+    mode="query"   → "クエリ: " プレフィックス（検索時）
+    """
     global _embed_model
     try:
         if _embed_model is None:
             from sentence_transformers import SentenceTransformer
             _embed_model = SentenceTransformer(MODEL_NAME, device="cpu")
-        vec = _embed_model.encode(text, normalize_embeddings=True)
+        prefix = "クエリ: " if mode == "query" else "文章: "
+        vec = _embed_model.encode(prefix + text, normalize_embeddings=True)
         return struct.pack(f"{len(vec)}f", *vec)
     except Exception:
         return None
@@ -94,7 +99,7 @@ def vec_upsert(
     if not exists:
         return False
 
-    embedding = _get_embedding(raw_text)
+    embedding = _get_embedding(raw_text, mode="passage")
     if embedding is None:
         return False
 
@@ -126,7 +131,7 @@ def vec_search(
     top_n: int = 20,
 ) -> list[tuple[str, float]]:
     """ベクトル検索。[(source_id, distance), ...] を返す。"""
-    query_vec = _get_embedding(query)
+    query_vec = _get_embedding(query, mode="query")
     if query_vec is None:
         return []
     rows = conn.execute(
@@ -219,13 +224,18 @@ class VecSearch:
         self.model_name = model_name
         self._model = None  # 遅延ロード
 
-    def _embed(self, text: str) -> bytes | None:
-        """テキストをベクトル化。モデルは初回呼び出し時にロード。"""
+    def _embed(self, text: str, mode: str = "passage") -> bytes | None:
+        """テキストをベクトル化。モデルは初回呼び出し時にロード。
+
+        mode="passage" → "文章: " プレフィックス（upsert時）
+        mode="query"   → "クエリ: " プレフィックス（検索時）
+        """
         try:
             if self._model is None:
                 from sentence_transformers import SentenceTransformer
                 self._model = SentenceTransformer(self.model_name)
-            vec = self._model.encode(text, normalize_embeddings=True)
+            prefix = "クエリ: " if mode == "query" else "文章: "
+            vec = self._model.encode(prefix + text, normalize_embeddings=True)
             return struct.pack(f"{len(vec)}f", *vec)
         except Exception:
             return None
@@ -251,7 +261,7 @@ class VecSearch:
         ).fetchone():
             return False
 
-        embedding = self._embed(text)
+        embedding = self._embed(text, mode="passage")
         if embedding is None:
             return False
 
@@ -276,7 +286,7 @@ class VecSearch:
         top_n: int = 20,
     ) -> list[tuple[str, float]]:
         """ベクトル類似検索。[(source_id, distance), ...] を返す。"""
-        query_vec = self._embed(query)
+        query_vec = self._embed(query, mode="query")
         if query_vec is None:
             return []
         rows = conn.execute(

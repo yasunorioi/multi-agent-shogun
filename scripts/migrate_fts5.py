@@ -152,6 +152,7 @@ def migrate(db_path: str) -> None:
         "reports": 0,
         "dashboard_entries": 0,
         "diary_entries": 0,
+        "thread_replies": 0,
     }
 
     # ── commands ────────────────────────────────────────────
@@ -295,6 +296,35 @@ def migrate(db_path: str) -> None:
         )
         counts["diary_entries"] += 1
 
+    # ── thread_replies ───────────────────────────────────────
+    try:
+        reply_rows = conn.execute(
+            "SELECT id, thread_id, board, author, body"
+            " FROM thread_replies"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        reply_rows = []
+        print("WARNING: thread_replies テーブル不在、スキップ")
+
+    for row in reply_rows:
+        raw_text = safe_str(row["body"])
+        content = tokenize(tagger, raw_text)
+        conn.execute(
+            "INSERT INTO search_index"
+            " (source_type, source_id, parent_id, project, worker_id, status, content)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "reply",
+                str(row["id"]),
+                safe_str(row["thread_id"]),
+                safe_str(row["board"]),
+                safe_str(row["author"]),
+                "",
+                content,
+            ),
+        )
+        counts["thread_replies"] += 1
+
     conn.commit()
     conn.close()
 
@@ -302,7 +332,7 @@ def migrate(db_path: str) -> None:
     print(
         f"Indexed: {counts['commands']} commands, {counts['subtasks']} subtasks, "
         f"{counts['reports']} reports, {counts['dashboard_entries']} dashboard entries, "
-        f"{counts['diary_entries']} diary entries"
+        f"{counts['diary_entries']} diary entries, {counts['thread_replies']} thread replies"
     )
 
 

@@ -2,7 +2,7 @@
 
 import sys
 
-from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert
+from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert, vec_upsert_if_available
 
 
 def cmd_list(args) -> None:
@@ -66,6 +66,7 @@ def cmd_add(args) -> None:
     conn.commit()
     raw_text = f"{args.description} {details or ''}".strip()
     fts5_upsert(conn, "command", cmd_id, "", args.project or "", args.karo or "", "pending", raw_text)
+    vec_upsert_if_available(conn, cmd_id, "command", raw_text, "", args.project or "", ts)
     conn.commit()
     conn.close()
     print(f"Created: {cmd_id}")
@@ -102,6 +103,7 @@ def cmd_update(args) -> None:
         if row:
             raw_text = f"{row['command'] or ''} {row['details'] or ''}".strip()
             fts5_upsert(conn, "command", args.cmd_id, "", row["project"] or "", row["assigned_karo"] or "", args.status, raw_text)
+            vec_upsert_if_available(conn, args.cmd_id, "command", raw_text, "", row["project"] or "")
             conn.commit()
 
     conn.close()

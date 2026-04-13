@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from collections import deque
 
-from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, fts5_upsert
+from . import get_connection, next_counter, now_iso, print_table, print_json, row_to_dict, fts5_upsert, vec_upsert_if_available
 
 
 def _parse_blocked_by(blocked_by_str: str | None) -> list[str]:
@@ -171,6 +171,7 @@ def subtask_add(args) -> None:
     conn.commit()
     raw_text = f"{args.description or ''}".strip()
     fts5_upsert(conn, "subtask", subtask_id, args.cmd_id, args.project or "", args.worker or "", status, raw_text)
+    vec_upsert_if_available(conn, subtask_id, "subtask", raw_text, args.cmd_id, args.project or "", ts)
     conn.commit()
     conn.close()
     blocked_info = f", blocked_by={blocked_by_str}" if blocked_by_str else ""
@@ -248,6 +249,7 @@ def subtask_update(args) -> None:
     if row:
         raw_text = f"{row['description'] or ''} {row['notes'] or ''}".strip()
         fts5_upsert(conn, "subtask", args.subtask_id, row["parent_cmd"] or "", row["project"] or "", row["worker_id"] or "", row["status"] or "", raw_text)
+        vec_upsert_if_available(conn, args.subtask_id, "subtask", raw_text, row["parent_cmd"] or "", row["project"] or "")
         conn.commit()
 
     conn.close()

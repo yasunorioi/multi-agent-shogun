@@ -178,3 +178,26 @@ def fts5_upsert(
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
         (source_type, source_id, parent_id, project, worker_id, status, content),
     )
+
+
+def vec_upsert_if_available(
+    conn: sqlite3.Connection,
+    source_id: str,
+    source_type: str,
+    raw_text: str,
+    parent_id: str = "",
+    project: str = "",
+    created_at: str = "",
+) -> bool:
+    """ベクトルupsert。sentence-transformers未インストール時はスキップ。
+
+    fts5_upsert()と対で呼ぶ。graceful degradation設計:
+    sqlite-vec / sentence-transformers が未インストールでもエラーにならない。
+    呼び出し元でconn.commit()が必要。
+    """
+    try:
+        from botsu.vec import vec_upsert
+        return vec_upsert(conn, source_id, source_type, raw_text,
+                          parent_id, project, created_at)
+    except (ImportError, Exception):
+        return False

@@ -5,7 +5,7 @@ Phase 0 CLI拡張: list-for / list-unread (cmd_441 subtask_979)
 
 from datetime import datetime
 
-from . import get_connection, now_iso
+from . import get_connection, now_iso, fts5_upsert, vec_upsert_if_available
 from .notify import notify_post
 
 
@@ -65,6 +65,8 @@ def do_reply_add(thread_id: str, board: str, agent: str, body: str,
     )
     row = conn.execute("SELECT last_insert_rowid()").fetchone()
     reply_id = row[0]
+    fts5_upsert(conn, "reply", str(reply_id), thread_id, board, agent, "", body or "")
+    vec_upsert_if_available(conn, str(reply_id), "reply", body or "", thread_id, board)
     conn.commit()
     conn.close()
 

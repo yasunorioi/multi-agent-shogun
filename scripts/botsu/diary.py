@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from datetime import datetime
 
-from . import get_connection, now_iso, print_table, print_json, row_to_dict, fts5_upsert
+from . import get_connection, now_iso, print_table, print_json, row_to_dict, fts5_upsert, vec_upsert_if_available
 
 
 DIARY_TABLE_SQL = """
@@ -56,6 +56,7 @@ def diary_add(args) -> None:
         status="",
         raw_text=raw_text,
     )
+    vec_upsert_if_available(conn, str(diary_id), "diary", raw_text, args.cmd or args.subtask or "")
     conn.commit()
     conn.close()
     print(f"Created: diary entry #{diary_id}")

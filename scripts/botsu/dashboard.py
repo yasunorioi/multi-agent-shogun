@@ -1,6 +1,6 @@
 """dashboard サブコマンド — ダッシュボードエントリ管理。"""
 
-from . import get_connection, now_iso, print_table, fts5_upsert
+from . import get_connection, now_iso, print_table, fts5_upsert, vec_upsert_if_available
 
 
 def dashboard_add(args) -> None:
@@ -22,6 +22,7 @@ def dashboard_add(args) -> None:
         status=args.status or "",
         raw_text=raw_text,
     )
+    vec_upsert_if_available(conn, str(entry_id), "dashboard", raw_text, args.cmd or "")
     conn.commit()
     conn.close()
     print(f"Created: dashboard entry #{entry_id}")

@@ -2,7 +2,7 @@
 
 import sys
 
-from . import get_connection, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert
+from . import get_connection, now_iso, print_table, print_json, row_to_dict, _try_notify, fts5_upsert, vec_upsert_if_available
 
 
 def report_add(args) -> None:
@@ -34,6 +34,7 @@ def report_add(args) -> None:
     report_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     raw_text = f"{args.summary or ''} {args.findings or ''}".strip()
     fts5_upsert(conn, "report", str(report_id), args.task_id, "", args.worker_id or "", args.status or "", raw_text)
+    vec_upsert_if_available(conn, str(report_id), "report", raw_text, args.task_id, "")
     conn.commit()
     conn.close()
     print(f"Created: report #{report_id} (task={args.task_id}, worker={args.worker_id})")

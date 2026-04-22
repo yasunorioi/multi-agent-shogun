@@ -368,6 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--similar", metavar="SUBTASK_ID", help="指定subtaskのdescriptionで類似タスクを検索")
     p.add_argument("--enrich", metavar="CMD_ID", help="cmd_idに対してenrich（関連知見・pitfalls・成功パターン）を表示")
     p.add_argument("--hybrid", action="store_true", help="FTS5+ベクトル検索のRRFハイブリッド検索")
+    p.add_argument("--fresh", action="store_true", help="時間鮮度スコアで新しい文書を優先（--hybrid と組み合わせて使用）")
     p.set_defaults(func=lambda args: enrich_cmd(args) if getattr(args, "enrich", None) else search(args))
 
     # === reply ===

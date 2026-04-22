@@ -274,9 +274,11 @@ def _search_hybrid(args) -> None:
                   file=sys.stderr)
             sys.exit(1)
 
+        use_fresh = getattr(args, "fresh", False)
         results = hybrid_search(
             conn, query, top_n=limit,
             source_type=None, project=project,
+            freshness_weight=0.7 if use_fresh else 0.0,
         )
     except Exception as exc:
         print(f"Error: ハイブリッド検索失敗: {exc}", file=sys.stderr)
@@ -285,7 +287,8 @@ def _search_hybrid(args) -> None:
         conn.close()
 
     # 表示
-    print(f"Query: {query} [hybrid]")
+    _mode = "hybrid+fresh" if getattr(args, "fresh", False) else "hybrid"
+    print(f"Query: {query} [{_mode}]")
     if project:
         print(f"Project: {project}")
     print(f"Results: {len(results)}")

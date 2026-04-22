@@ -14,6 +14,7 @@ sqlite-vec / sentence-transformers が未インストールの場合は graceful
 
 from __future__ import annotations
 
+import math
 import sqlite3
 import struct
 from datetime import datetime
@@ -54,6 +55,18 @@ def _get_embedding(text: str, mode: str = "passage") -> bytes | None:
         return struct.pack(f"{len(vec)}f", *vec)
     except Exception:
         return None
+
+
+def freshness_score(created_at: str, half_life_days: float = 90.0) -> float:
+    """文書の時間鮮度スコア。新しいほど1.0、古いほど0.0に近い。"""
+    if not created_at:
+        return 0.5
+    try:
+        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        age_days = (datetime.now(dt.tzinfo) - dt).days
+        return math.exp(-age_days * math.log(2) / half_life_days)
+    except Exception:
+        return 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +163,13 @@ def hybrid_search(
     fts_table: str = "search_index",
     source_type: str | None = None,
     project: str | None = None,
+    freshness_weight: float = 0.0,
 ) -> list[dict]:
-    """FTS5 + ベクトル検索のRRFハイブリッド検索。"""
+    """FTS5 + ベクトル検索のRRFハイブリッド検索。
+
+    freshness_weight > 0 の場合、時間鮮度スコアをRRFに乗算して新しい文書を優先する。
+    formula: final = rrf * (alpha + (1-alpha) * freshness)  alpha=0.3
+    """
     pool = top_n * 3
 
     # 1. FTS5検索
@@ -185,7 +203,22 @@ def hybrid_search(
             scores = {s: v for s, v in scores.items()
                       if meta.get(s, ("", ""))[1] == project}
 
-    # 5. Top-Nソート & コンテンツ取得
+    # 5. 鮮度スコア適用（freshness_weight > 0 の場合）
+    if freshness_weight > 0.0 and scores:
+        _alpha = 0.3
+        _ids = list(scores.keys())
+        _ph = ",".join("?" * len(_ids))
+        _fresh_rows = conn.execute(
+            f"SELECT source_id, created_at FROM vec_meta WHERE source_id IN ({_ph})",
+            _ids,
+        ).fetchall()
+        _fresh_map = {r[0]: r[1] for r in _fresh_rows}
+        scores = {
+            sid: score * (_alpha + (1 - _alpha) * freshness_score(_fresh_map.get(sid, "")))
+            for sid, score in scores.items()
+        }
+
+    # 6. Top-Nソート & コンテンツ取得
     ranked = sorted(scores.items(), key=lambda x: -x[1])[:top_n]
     results = []
     for sid, score in ranked:
@@ -305,10 +338,12 @@ class VecSearch:
         k: int = 60,
         source_type: str | None = None,
         project: str | None = None,
+        freshness_weight: float = 0.0,
     ) -> list[dict]:
         """FTS5 + ベクトル検索のRRF統合。モジュール関数に委譲。"""
         return hybrid_search(
             conn, query,
             top_n=top_n, k=k, fts_table=fts_table,
             source_type=source_type, project=project,
+            freshness_weight=freshness_weight,
         )

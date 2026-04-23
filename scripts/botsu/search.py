@@ -275,10 +275,14 @@ def _search_hybrid(args) -> None:
             sys.exit(1)
 
         use_fresh = getattr(args, "fresh", False)
+        use_verbose = getattr(args, "verbose", False)
+        boost_proj = getattr(args, "boost_project", None)
         results = hybrid_search(
             conn, query, top_n=limit,
             source_type=None, project=project,
             freshness_weight=0.7 if use_fresh else 0.0,
+            verbose=use_verbose,
+            boost_project=boost_proj,
         )
     except Exception as exc:
         print(f"Error: ハイブリッド検索失敗: {exc}", file=sys.stderr)
@@ -287,10 +291,19 @@ def _search_hybrid(args) -> None:
         conn.close()
 
     # 表示
-    _mode = "hybrid+fresh" if getattr(args, "fresh", False) else "hybrid"
-    print(f"Query: {query} [{_mode}]")
+    use_fresh = getattr(args, "fresh", False)
+    use_verbose = getattr(args, "verbose", False)
+    boost_proj = getattr(args, "boost_project", None)
+    _modes = ["hybrid"]
+    if use_fresh:
+        _modes.append("fresh")
+    if use_verbose:
+        _modes.append("verbose")
+    if boost_proj:
+        _modes.append(f"boost:{boost_proj}")
+    print(f"Query: {query} [{'+'.join(_modes)}]")
     if project:
-        print(f"Project: {project}")
+        print(f"Project filter: {project}")
     print(f"Results: {len(results)}")
     print()
 
@@ -298,26 +311,53 @@ def _search_hybrid(args) -> None:
         print("(結果なし)")
         return
 
-    TYPE_W = 10; ID_W = 16; PROJ_W = 14; SCORE_W = 8; SNIP_W = 60
-    print(
-        f"{'TYPE':<{TYPE_W}}  {'ID':<{ID_W}}  {'PROJECT':<{PROJ_W}}  "
-        f"{'SCORE':<{SCORE_W}}  SNIPPET"
-    )
-    print(
-        f"{'-'*TYPE_W}  {'-'*ID_W}  {'-'*PROJ_W}  "
-        f"{'-'*SCORE_W}  {'-'*SNIP_W}"
-    )
-    for r in results:
-        snip = (r.get("content") or "").replace("\n", " ").strip()
-        if len(snip) > SNIP_W:
-            snip = snip[:SNIP_W - 1] + "…"
-        score = f"{r['hybrid_score']:.4f}"
+    TYPE_W = 10; ID_W = 16; PROJ_W = 14; SCORE_W = 8; SNIP_W = 50
+
+    if use_verbose:
         print(
-            f"{(r['source_type'] or '')[:TYPE_W]:<{TYPE_W}}  "
-            f"{(r['source_id'] or '')[:ID_W]:<{ID_W}}  "
-            f"{(r.get('project') or '')[:PROJ_W]:<{PROJ_W}}  "
-            f"{score:<{SCORE_W}}  {snip}"
+            f"{'TYPE':<{TYPE_W}}  {'ID':<{ID_W}}  {'SCORE':<{SCORE_W}}  "
+            f"{'FTS_RK':>6}  {'VEC_RK':>6}  {'TYP_W':>5}  {'FRESH':>5}  SNIPPET"
         )
+        print(
+            f"{'-'*TYPE_W}  {'-'*ID_W}  {'-'*SCORE_W}  "
+            f"{'------':>6}  {'------':>6}  {'-----':>5}  {'-----':>5}  {'-'*SNIP_W}"
+        )
+        for r in results:
+            snip = (r.get("content") or "").replace("\n", " ").strip()
+            if len(snip) > SNIP_W:
+                snip = snip[:SNIP_W - 1] + "…"
+            fts_r = r.get("fts_rank")
+            vec_r = r.get("vec_rank")
+            print(
+                f"{(r['source_type'] or '')[:TYPE_W]:<{TYPE_W}}  "
+                f"{(r['source_id'] or '')[:ID_W]:<{ID_W}}  "
+                f"{r['hybrid_score']:<{SCORE_W}.4f}  "
+                f"{(str(fts_r) if fts_r is not None else '-'):>6}  "
+                f"{(str(vec_r) if vec_r is not None else '-'):>6}  "
+                f"{r.get('type_weight', 1.0):>5.2f}  "
+                f"{r.get('freshness', 0.0):>5.2f}  "
+                f"{snip}"
+            )
+    else:
+        print(
+            f"{'TYPE':<{TYPE_W}}  {'ID':<{ID_W}}  {'PROJECT':<{PROJ_W}}  "
+            f"{'SCORE':<{SCORE_W}}  SNIPPET"
+        )
+        print(
+            f"{'-'*TYPE_W}  {'-'*ID_W}  {'-'*PROJ_W}  "
+            f"{'-'*SCORE_W}  {'-'*SNIP_W}"
+        )
+        for r in results:
+            snip = (r.get("content") or "").replace("\n", " ").strip()
+            if len(snip) > SNIP_W:
+                snip = snip[:SNIP_W - 1] + "…"
+            score = f"{r['hybrid_score']:.4f}"
+            print(
+                f"{(r['source_type'] or '')[:TYPE_W]:<{TYPE_W}}  "
+                f"{(r['source_id'] or '')[:ID_W]:<{ID_W}}  "
+                f"{(r.get('project') or '')[:PROJ_W]:<{PROJ_W}}  "
+                f"{score:<{SCORE_W}}  {snip}"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -155,6 +155,16 @@ def vec_search(
     return [(r[0], r[1]) for r in rows]
 
 
+TYPE_WEIGHT: dict[str, float] = {
+    "command": 1.2,
+    "subtask": 1.0,
+    "report": 0.9,
+    "dashboard": 0.8,
+    "diary": 1.1,
+    "thread_reply": 0.7,
+}
+
+
 def hybrid_search(
     conn: sqlite3.Connection,
     query: str,
@@ -164,11 +174,15 @@ def hybrid_search(
     source_type: str | None = None,
     project: str | None = None,
     freshness_weight: float = 0.0,
+    verbose: bool = False,
+    boost_project: str | None = None,
 ) -> list[dict]:
     """FTS5 + ベクトル検索のRRFハイブリッド検索。
 
     freshness_weight > 0 の場合、時間鮮度スコアをRRFに乗算して新しい文書を優先する。
     formula: final = rrf * (alpha + (1-alpha) * freshness)  alpha=0.3
+    boost_project 指定時、同PJの結果スコアに+0.1ボーナス（filterとは別）。
+    verbose=True の場合、各結果に fts_rank/vec_rank/type_weight/freshness/final_score を付与する。
     """
     pool = top_n * 3
 
@@ -179,46 +193,61 @@ def hybrid_search(
     # 2. ベクトル検索
     vec_results = vec_search(conn, query, top_n=pool)
 
-    # 3. RRF統合
+    # 3. 全source_idのメタデータを一括取得 (TYPE_WEIGHT計算 + フィルタ + verbose用)
+    all_sids = list({r[0] for r in fts_results} | {r[0] for r in vec_results})
+    meta_map: dict[str, dict] = {}
+    if all_sids:
+        ph = ",".join("?" * len(all_sids))
+        meta_rows = conn.execute(
+            f"SELECT source_id, source_type, project, created_at FROM vec_meta"
+            f" WHERE source_id IN ({ph})",
+            all_sids,
+        ).fetchall()
+        meta_map = {r[0]: {"source_type": r[1], "project": r[2], "created_at": r[3]}
+                    for r in meta_rows}
+
+    # 4. TYPE_WEIGHT付きRRF統合 (rankも記録)
     scores: dict[str, float] = {}
+    fts_ranks: dict[str, int] = {}
+    vec_ranks: dict[str, int] = {}
+
     for rank, row in enumerate(fts_results):
         sid = row[0]
-        scores[sid] = scores.get(sid, 0) + 1 / (k + rank + 1)
+        stype = meta_map.get(sid, {}).get("source_type", "")
+        weight = TYPE_WEIGHT.get(stype, 1.0)
+        scores[sid] = scores.get(sid, 0) + weight / (k + rank + 1)
+        fts_ranks[sid] = rank
+
     for rank, (sid, _dist) in enumerate(vec_results):
-        scores[sid] = scores.get(sid, 0) + 1 / (k + rank + 1)
+        stype = meta_map.get(sid, {}).get("source_type", "")
+        weight = TYPE_WEIGHT.get(stype, 1.0)
+        scores[sid] = scores.get(sid, 0) + weight / (k + rank + 1)
+        vec_ranks[sid] = rank
 
-    # 4. source_type / project フィルタ
-    if source_type or project:
-        placeholders = ",".join("?" * len(scores))
-        meta_rows = conn.execute(
-            f"SELECT source_id, source_type, project FROM vec_meta"
-            f" WHERE source_id IN ({placeholders})",
-            list(scores.keys()),
-        ).fetchall()
-        meta = {r[0]: (r[1], r[2]) for r in meta_rows}
-        if source_type:
-            scores = {s: v for s, v in scores.items()
-                      if meta.get(s, ("", ""))[0] == source_type}
-        if project:
-            scores = {s: v for s, v in scores.items()
-                      if meta.get(s, ("", ""))[1] == project}
+    # 5. source_type / project フィルタ
+    if source_type:
+        scores = {s: v for s, v in scores.items()
+                  if meta_map.get(s, {}).get("source_type", "") == source_type}
+    if project:
+        scores = {s: v for s, v in scores.items()
+                  if meta_map.get(s, {}).get("project", "") == project}
 
-    # 5. 鮮度スコア適用（freshness_weight > 0 の場合）
-    if freshness_weight > 0.0 and scores:
-        _alpha = 0.3
-        _ids = list(scores.keys())
-        _ph = ",".join("?" * len(_ids))
-        _fresh_rows = conn.execute(
-            f"SELECT source_id, created_at FROM vec_meta WHERE source_id IN ({_ph})",
-            _ids,
-        ).fetchall()
-        _fresh_map = {r[0]: r[1] for r in _fresh_rows}
+    # 6. project boosting (+0.1, フィルタとは別)
+    if boost_project and scores:
         scores = {
-            sid: score * (_alpha + (1 - _alpha) * freshness_score(_fresh_map.get(sid, "")))
+            sid: score + (0.1 if meta_map.get(sid, {}).get("project", "") == boost_project else 0.0)
             for sid, score in scores.items()
         }
 
-    # 6. Top-Nソート & コンテンツ取得
+    # 7. 鮮度スコア適用（freshness_weight > 0 の場合）
+    if freshness_weight > 0.0 and scores:
+        _alpha = 0.3
+        scores = {
+            sid: score * (_alpha + (1 - _alpha) * freshness_score(meta_map.get(sid, {}).get("created_at", "")))
+            for sid, score in scores.items()
+        }
+
+    # 8. Top-Nソート & コンテンツ取得
     ranked = sorted(scores.items(), key=lambda x: -x[1])[:top_n]
     results = []
     for sid, score in ranked:
@@ -228,7 +257,7 @@ def hybrid_search(
             (sid,),
         ).fetchone()
         if row:
-            results.append({
+            entry: dict = {
                 "source_type": row[0],
                 "source_id": row[1],
                 "parent_id": row[2],
@@ -237,7 +266,15 @@ def hybrid_search(
                 "status": row[5],
                 "content": row[6],
                 "hybrid_score": score,
-            })
+            }
+            if verbose:
+                stype = meta_map.get(sid, {}).get("source_type", "")
+                entry["fts_rank"] = fts_ranks.get(sid)
+                entry["vec_rank"] = vec_ranks.get(sid)
+                entry["type_weight"] = TYPE_WEIGHT.get(stype, 1.0)
+                entry["freshness"] = freshness_score(meta_map.get(sid, {}).get("created_at", ""))
+                entry["final_score"] = score
+            results.append(entry)
     return results
 
 
@@ -339,6 +376,8 @@ class VecSearch:
         source_type: str | None = None,
         project: str | None = None,
         freshness_weight: float = 0.0,
+        verbose: bool = False,
+        boost_project: str | None = None,
     ) -> list[dict]:
         """FTS5 + ベクトル検索のRRF統合。モジュール関数に委譲。"""
         return hybrid_search(
@@ -346,4 +385,5 @@ class VecSearch:
             top_n=top_n, k=k, fts_table=fts_table,
             source_type=source_type, project=project,
             freshness_weight=freshness_weight,
+            verbose=verbose, boost_project=boost_project,
         )

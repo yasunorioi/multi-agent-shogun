@@ -27,6 +27,111 @@
 
 ![ooku session](assets/screenshot-ooku.png)
 
+## アーキテクチャ
+
+```mermaid
+flowchart TD
+
+subgraph group_orchestration["Orchestration runtime"]
+  node_shogun(("Shogun<br/>entry role<br/>[shogun.md]"))
+  node_karo(("Karo<br/>coordinator<br/>[karo.md]"))
+  node_gunshi(("Gunshi<br/>analysis role<br/>[gunshi.md]"))
+  node_ashigaru(("Ashigaru<br/>worker pool<br/>[ashigaru.md]"))
+  node_tmux_runtime["Tmux runtime<br/>session host"]
+  node_cli_adapter["CLI adapter<br/>runtime adapter<br/>[cli_adapter.sh]"]
+  node_cli_instr["CLI profiles<br/>instruction sets"]
+end
+
+subgraph group_state["State & messaging"]
+  node_queues[("Mailboxes<br/>yaml queues")]
+  node_inbox_io["Inbox I/O<br/>locked writes<br/>[inbox_write.sh]"]
+  node_watcher["Inbox watcher<br/>event loop<br/>[inbox_watcher.sh]"]
+  node_dashboard["Dashboard<br/>live report"]
+  node_settings["Settings<br/>config state"]
+  node_projects["Projects<br/>registry state"]
+  node_memory[("Memory<br/>cross-session state")]
+  node_saytask["Saytask<br/>motivation state"]
+  node_ntfy["ntfy bridge<br/>phone gateway<br/>[ntfy.sh]"]
+end
+
+subgraph group_android["Android client"]
+  node_android_app["Android app<br/>mobile client"]
+  node_ssh_mgr["SSH manager<br/>remote access<br/>[SshManager.kt]"]
+  node_screens["App screens<br/>ui layer"]
+  node_services["App services<br/>foreground services"]
+end
+
+subgraph group_automation["Automation & tests"]
+  node_setup["Bootstrap<br/>launch scripts<br/>[first_setup.sh]"]
+  node_depart["Departure<br/>session launcher"]
+  node_ci["CI tests<br/>validation pipeline<br/>[test.yml]"]
+end
+
+node_shogun -->|"write request"| node_queues
+node_shogun -->|"notify"| node_karo
+node_karo -->|"decompose"| node_queues
+node_karo -->|"assign"| node_ashigaru
+node_karo -->|"escalate"| node_gunshi
+node_gunshi -->|"report"| node_queues
+node_ashigaru -->|"return results"| node_queues
+node_karo -->|"aggregate"| node_dashboard
+node_dashboard -->|"surface status"| node_shogun
+node_tmux_runtime -->|"hosts"| node_shogun
+node_tmux_runtime -->|"hosts"| node_karo
+node_tmux_runtime -->|"hosts"| node_gunshi
+node_tmux_runtime -->|"hosts"| node_ashigaru
+node_cli_adapter -->|"selects profile"| node_cli_instr
+node_cli_adapter -->|"adapts"| node_shogun
+node_cli_adapter -->|"adapts"| node_gunshi
+node_settings -->|"routes models"| node_cli_adapter
+node_settings -->|"configures"| node_karo
+node_projects -->|"context"| node_karo
+node_memory -->|"persists context"| node_karo
+node_saytask -->|"motivate"| node_shogun
+node_ntfy -->|"ingest phone input"| node_shogun
+node_ntfy -->|"send updates"| node_dashboard
+node_android_app -->|"connects via SSH"| node_ssh_mgr
+node_android_app -->|"renders"| node_screens
+node_android_app -->|"runs background"| node_services
+node_ssh_mgr -->|"remote control"| node_tmux_runtime
+node_screens -->|"view status"| node_dashboard
+node_setup -->|"bootstraps"| node_depart
+node_depart -->|"starts"| node_tmux_runtime
+node_ci -.->|"verifies"| node_setup
+node_ci -.->|"verifies"| node_android_app
+
+click node_shogun "https://github.com/yohey-w/multi-agent-shogun/blob/main/instructions/shogun.md"
+click node_karo "https://github.com/yohey-w/multi-agent-shogun/blob/main/instructions/karo.md"
+click node_gunshi "https://github.com/yohey-w/multi-agent-shogun/blob/main/instructions/gunshi.md"
+click node_ashigaru "https://github.com/yohey-w/multi-agent-shogun/blob/main/instructions/ashigaru.md"
+click node_cli_adapter "https://github.com/yohey-w/multi-agent-shogun/blob/main/lib/cli_adapter.sh"
+click node_cli_instr "https://github.com/yohey-w/multi-agent-shogun/tree/main/instructions/cli_specific"
+click node_inbox_io "https://github.com/yohey-w/multi-agent-shogun/blob/main/scripts/inbox_write.sh"
+click node_watcher "https://github.com/yohey-w/multi-agent-shogun/blob/main/scripts/inbox_watcher.sh"
+click node_memory "https://github.com/yohey-w/multi-agent-shogun/tree/main/memory"
+click node_saytask "https://github.com/yohey-w/multi-agent-shogun/tree/main/saytask"
+click node_ntfy "https://github.com/yohey-w/multi-agent-shogun/blob/main/scripts/ntfy.sh"
+click node_android_app "https://github.com/yohey-w/multi-agent-shogun/tree/main/android/app/src/main/java/com/shogun/android"
+click node_ssh_mgr "https://github.com/yohey-w/multi-agent-shogun/blob/main/android/app/src/main/java/com/shogun/android/ssh/SshManager.kt"
+click node_screens "https://github.com/yohey-w/multi-agent-shogun/tree/main/android/app/src/main/java/com/shogun/android/ui"
+click node_services "https://github.com/yohey-w/multi-agent-shogun/tree/main/android/app/src/main/java/com/shogun/android"
+click node_setup "https://github.com/yohey-w/multi-agent-shogun/blob/main/first_setup.sh"
+click node_depart "https://github.com/yohey-w/multi-agent-shogun/blob/main/shutsujin_departure.sh"
+click node_ci "https://github.com/yohey-w/multi-agent-shogun/blob/main/.github/workflows/test.yml"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_shogun,node_karo,node_gunshi,node_ashigaru,node_tmux_runtime,node_cli_adapter,node_cli_instr toneBlue
+class node_queues,node_inbox_io,node_watcher,node_dashboard,node_settings,node_projects,node_memory,node_saytask,node_ntfy toneAmber
+class node_android_app,node_ssh_mgr,node_screens,node_services toneMint
+class node_setup,node_depart,node_ci toneRose
+```
+
 ## 階層構造
 
 ```

@@ -113,6 +113,14 @@ def cmd_update(args) -> None:
         sys.exit(1)
     print(f"Updated: {args.cmd_id} -> status={args.status}")
 
+    if args.status == 'done':
+        try:
+            from botsu.crystallize import crystallize_cmd
+            crystallize_cmd(args.cmd_id)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"crystallize failed: {e}")
+
 
 def cmd_show(args) -> None:
     conn = get_connection()

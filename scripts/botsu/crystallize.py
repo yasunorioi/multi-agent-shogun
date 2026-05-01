@@ -12,6 +12,7 @@ graceful degradation: 失敗時はwarn のみ。cmd完了処理を阻害しな�
 import fcntl
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -232,3 +233,97 @@ def crystallize_cmd(cmd_id: str) -> dict:
         "skipped": False,
         "reason": "ok" if (posted and md_appended) else "partial",
     }
+
+
+# ====== プロジェクトテンプレ機構(cmd_571追加) ======
+
+TEMPLATE_REPLY_DEFINITIONS: dict[int, tuple[str, str]] = {
+    1:  ("project_overview", "プロジェクト概要"),
+    2:  ("architecture",     "アーキテクチャ図"),
+    3:  ("components",       "主要構成要素"),
+    4:  ("data_flow",        "データフロー"),
+    5:  ("gotchas",          "既知の癖・地雷"),
+    6:  ("file_index",       "重要ファイルパス索引"),
+    7:  ("env_vars",         "環境変数・設定値"),
+    8:  ("metrics",          "メトリクス・ヘルスチェック"),
+    9:  ("external_links",   "外部接続点"),
+    10: ("glossary",         "用語集・命名由来"),
+}
+
+
+def _existing_template_nums(thread_id: str, board: str) -> set[int]:
+    """thread_replies から `<!-- TEMPLATE:N -->` を持つレスの N を抽出。"""
+    db_path = _env("SWARM_DB", "/home/yasu/agent-swarm/data/swarm.db")
+    if not os.path.exists(db_path):
+        return set()
+    nums: set[int] = set()
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            for (body,) in conn.execute(
+                "SELECT body FROM thread_replies WHERE thread_id=? AND board=?",
+                (thread_id, board),
+            ):
+                m = re.search(r"<!-- TEMPLATE:(\d+) -->", body or "")
+                if m:
+                    nums.add(int(m.group(1)))
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return nums
+
+
+def init_project_template(
+    project: str,
+    scaffolds: dict[int, str] | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """`project_{project}` スレを初期化し >>1-10 テンプレを投稿する。
+
+    scaffolds: {n: "本文"} で各レスを任意指定。未指定はプレースホルダを投稿。
+    冪等性: 既存 <!-- TEMPLATE:N --> があるレスはスキップ。
+    dry_run=True: 投稿せず posted リストのみ返す（テスト用）。
+    """
+    thread_id = f"project_{project}"
+    board = _env("SWARM_BOARD", "crystals")
+    scaffolds = scaffolds or {}
+
+    existing = _existing_template_nums(thread_id, board)
+    posted: list[int] = []
+    for n, (_slug, label) in TEMPLATE_REPLY_DEFINITIONS.items():
+        if n in existing:
+            continue
+        body = scaffolds.get(n) or f"<!-- TEMPLATE:{n} -->\n>>{n} {label}\n(未記入)"
+        if "<!-- TEMPLATE:" not in body:
+            body = f"<!-- TEMPLATE:{n} -->\n{body}"
+        if dry_run:
+            posted.append(n)
+            continue
+        ok = _swarm_post_python(thread_id, board, [body]) or _swarm_post_http(thread_id, board, [body])
+        if ok:
+            posted.append(n)
+    return {"thread_id": thread_id, "posted": posted}
+
+
+def update_template_reply(
+    project: str,
+    reply_no: int,
+    body: str,
+    dry_run: bool = False,
+) -> dict:
+    """テンプレレスを更新する（実態は新規 INSERT・最新版優先方式）。
+
+    INSERT-only: thread_replies への UPDATE/DELETE は行わない。
+    dry_run=True: 投稿せず updated=True を返す（テスト用）。
+    """
+    if reply_no not in TEMPLATE_REPLY_DEFINITIONS:
+        return {"updated": False, "reason": "invalid_reply_no"}
+    thread_id = f"project_{project}"
+    board = _env("SWARM_BOARD", "crystals")
+    if "<!-- TEMPLATE:" not in body:
+        body = f"<!-- TEMPLATE:{reply_no} -->\n{body}"
+    if dry_run:
+        return {"updated": True, "thread_id": thread_id, "reply_no": reply_no, "dry_run": True}
+    ok = _swarm_post_python(thread_id, board, [body]) or _swarm_post_http(thread_id, board, [body])
+    return {"updated": ok, "thread_id": thread_id, "reply_no": reply_no}

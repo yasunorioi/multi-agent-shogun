@@ -113,3 +113,98 @@ def test_dat_existing_skips_post(botsu_with_seeded_db, crystals_env):
     from botsu.crystallize import crystallize_cmd
     result = crystallize_cmd("cmd_001")
     assert result["posted"] is True
+
+
+# ====== プロジェクトテンプレ機構テスト(cmd_573 S1) ======
+
+
+def test_init_creates_10(crystals_env, monkeypatch):
+    """init_project_template: 初回実行で10件のテンプレレスが投稿される。"""
+    from botsu import crystallize
+
+    inserted: list[str] = []
+
+    def fake_post(thread_id: str, board: str, bodies: list[str]) -> bool:
+        inserted.extend(bodies)
+        return True
+
+    monkeypatch.setattr(crystallize, "_swarm_post_python", fake_post)
+    monkeypatch.setattr(crystallize, "_swarm_post_http", fake_post)
+
+    result = crystallize.init_project_template("test_proj")
+    assert result["thread_id"] == "project_test_proj"
+    assert len(result["posted"]) == 10
+    assert len(inserted) == 10
+    assert all("<!-- TEMPLATE:" in b for b in inserted)
+    for n in range(1, 11):
+        assert any(f"<!-- TEMPLATE:{n} -->" in b for b in inserted)
+
+
+def test_update_appends_with_magic(crystals_env, monkeypatch):
+    """update_template_reply: magic行付きで新規INSERTされる(INSERT-only動作)。"""
+    from botsu import crystallize
+
+    inserted: list[str] = []
+
+    def fake_post(thread_id: str, board: str, bodies: list[str]) -> bool:
+        inserted.extend(bodies)
+        return True
+
+    monkeypatch.setattr(crystallize, "_swarm_post_python", fake_post)
+    monkeypatch.setattr(crystallize, "_swarm_post_http", fake_post)
+
+    result = crystallize.update_template_reply("test_proj", 1, "新しいプロジェクト概要テキスト")
+    assert result["updated"] is True
+    assert result["reply_no"] == 1
+    assert result["thread_id"] == "project_test_proj"
+    assert len(inserted) == 1
+    assert "<!-- TEMPLATE:1 -->" in inserted[0]
+    assert "新しいプロジェクト概要テキスト" in inserted[0]
+
+
+def test_existing_returns_latest(crystals_env):
+    """_existing_template_nums: swarm.db のmagic行からテンプレ番号を正しく抽出。"""
+    db = crystals_env["swarm_db"]
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        ("project_test", "crystals", "shogun",
+         "<!-- TEMPLATE:1 -->\n>>1 概要\n初版", "2026-05-01T00:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        ("project_test", "crystals", "shogun",
+         "<!-- TEMPLATE:3 -->\n>>3 構成\n内容", "2026-05-01T00:01:00"),
+    )
+    conn.execute(
+        "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        ("project_test", "crystals", "shogun",
+         "<!-- TEMPLATE:1 -->\n>>1 概要\n更新版", "2026-05-01T00:02:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    from botsu.crystallize import _existing_template_nums
+    nums = _existing_template_nums("project_test", "crystals")
+    assert nums == {1, 3}
+
+
+def test_existing_cmd_replies_unaffected(crystals_env):
+    """cmd_XXXスレのレスは project_XXX の _existing_template_nums に影響しない。"""
+    db = crystals_env["swarm_db"]
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "INSERT INTO thread_replies (thread_id, board, author, body, posted_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        ("cmd_999", "crystals", "shogun",
+         "<!-- TEMPLATE:1 -->\n>>1 内容", "2026-05-01T00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    from botsu.crystallize import _existing_template_nums
+    nums = _existing_template_nums("project_test", "crystals")
+    assert nums == set()

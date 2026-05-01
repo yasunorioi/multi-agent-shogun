@@ -72,6 +72,31 @@ from botsu.reply import reply_add, reply_list, reply_list_for, reply_list_unread
 
 
 # ---------------------------------------------------------------------------
+# crystallize CLI handlers (cmd_573 S2)
+# ---------------------------------------------------------------------------
+
+def _crystallize_project_init(args) -> None:
+    from botsu.crystallize import init_project_template
+    result = init_project_template(args.project_name, dry_run=args.dry_run)
+    if args.dry_run:
+        print(f"[dry-run] thread={result['thread_id']} would post {len(result['posted'])} replies: {result['posted']}")
+    else:
+        print(f"posted: {result['posted']} -> thread={result['thread_id']}")
+
+
+def _crystallize_project_update(args) -> None:
+    from botsu.crystallize import update_template_reply
+    result = update_template_reply(args.project_name, args.reply_num, args.body, dry_run=args.dry_run)
+    if args.dry_run:
+        print(f"[dry-run] would update TEMPLATE:{args.reply_num} in {result['thread_id']}")
+    elif result["updated"]:
+        print(f"updated: TEMPLATE:{result['reply_no']} in {result['thread_id']}")
+    else:
+        print(f"failed: {result.get('reason', 'unknown')}", file=sys.stderr)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -415,6 +440,25 @@ def build_parser() -> argparse.ArgumentParser:
     p = check_sub.add_parser("coverage", help="cmd指示文と報告文のキーワードカバレッジを検出する")
     p.add_argument("cmd_id", help="対象コマンドID (例: cmd_419)")
     p.set_defaults(func=check_coverage)
+
+    # === crystallize (cmd_573 S2) ===
+    cryst_parser = top_sub.add_parser("crystallize", help="結晶化機構 管理")
+    cryst_sub = cryst_parser.add_subparsers(dest="cryst_entity", required=True)
+
+    proj_parser = cryst_sub.add_parser("project", help="project テンプレ管理")
+    proj_sub = proj_parser.add_subparsers(dest="cryst_action", required=True)
+
+    p = proj_sub.add_parser("init", help="project_{name} スレに >>1-10 テンプレ投稿")
+    p.add_argument("project_name", help="プロジェクト名 (例: shogun, hardware)")
+    p.add_argument("--dry-run", action="store_true", dest="dry_run", help="投稿せず対象を表示")
+    p.set_defaults(func=_crystallize_project_init)
+
+    p = proj_sub.add_parser("update", help="指定テンプレレスを INSERT-only 更新")
+    p.add_argument("project_name", help="プロジェクト名")
+    p.add_argument("reply_num", type=int, help="テンプレ番号 (1-10)")
+    p.add_argument("--body", required=True, help="新しいレス本文")
+    p.add_argument("--dry-run", action="store_true", dest="dry_run", help="投稿せず対象を表示")
+    p.set_defaults(func=_crystallize_project_update)
 
     return parser
 

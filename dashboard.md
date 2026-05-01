@@ -1,5 +1,45 @@
 # 📊 戦況報告
-最終更新: 2026-04-08 10:30
+最終更新: 2026-05-02 02:25
+
+## 🚧 進行中
+
+### 🔴 cmd_575【high・🚨殿就寝前緊急】PCモニター対策実装(SSH+DPMS/idle+logind・全revert可)
+- **担当**: ash6(Opus 4.7) — subtask_1218
+- **背景**: cmd_574結論=nouveau問題仮説(RTX 4060+5K2K+Chrome→Xid:13・5h内4回)
+- **Phase 1-4**: 情報収集→SSH有効化→DPMS/idle回避→朝の報告
+- **V4自動運転可カテゴリ**(内部設定・全revert可・HW破壊リスクなし)
+- **成果物**: `docs/shogun/pc_monitor_recovery_workaround_20260502.md`(§1-§6・§6 30行以内必須)
+- **配布時刻**: 2026-05-02 02:23
+
+## 🌅 朝の確認事項(殿起床時即把握用) — cmd_575 subtask_1218 完了
+
+### A. 画面真っ暗で起きた場合
+1. 別端末から `ssh yasu@192.168.15.14` (SSH既稼働・鍵認証可・LISTEN中)
+2. 接続成功 → `journalctl -k --since "1 hour ago" | grep -iE 'nouveau|xid|fault' | tail -30` でフリーズ時刻のGPU例外確認
+3. `sudo systemctl reboot` で再起動（リセットボタン不要）
+4. SSH失敗時のみリセットボタン
+
+### B. 画面正常で起きた場合 (=対策成功 or 偶発的不発症)
+1. `journalctl -b 0 -p warning | grep -iE 'nouveau|drm' | tail -20` でGPU例外発生有無確認
+2. **§3 殿手動実行手順 3-A/3-B** をdocs/shogun/pc_monitor_recovery_workaround_20260502.md からコピペ実行
+   - 3-A: logind IdleAction=ignore (revert: bak.20260502)
+   - 3-B: SSH enable + PasswordAuth=no (revert: bak.20260502)
+3. 推奨: B(SSH enableのみ)即実行→cmd_576(nvidia-driver切替)へ移行
+
+### C. ash6が既に実施済の対策 (user権限・revert可)
+- gsettings `idle-dim` true → false (revert: gsettings reset)
+- gsettings `idle-activation-enabled` true → false (revert: gsettings reset)
+- gsettings `ambient-enabled` true → false (revert: gsettings reset)
+- 効果: idle由来のモニターOFF経路遮断。但し nouveau Xid例外は防げず(根本対策はnvidia-driver)
+
+### D. 殿への質問3問 (§6エグゼクティブサマリ参照)
+- Q1: §5 3-A/3-B のコピペ手順、起床直後実行可能か？
+- Q2: 直近boot gap 3分33秒は就寝中フリーズか操作中フリーズか？
+- Q3: cmd_576(nvidia-driver-550切替)着手可否
+
+### 詳細レポート
+`docs/shogun/pc_monitor_recovery_workaround_20260502.md` (§1-§6・§6 25行)
+
 
 ## 📜 殿の方針
 
@@ -44,6 +84,1295 @@
 | SDカード互換 | Pi Lite ↔ ArSprout をSD差し替えで切り替え可能 |
 
 ## 🚨 要対応 - 殿のご判断をお待ちしております
+
+### 🟢 cmd_574【high】PCモニター復帰不能 診断データ完遂 — nouveau問題仮説確定・推奨nvidia-driver-550切替（2026-05-02 02:25 close）
+ash6 subtask_1217 単独完遂・老中独自検収PASS。
+
+**📜 レポート**: `docs/shogun/pc_monitor_recovery_data_20260502.md`(247行・§1-§8完備)
+**📦 commit**: `4d0d9aa` push済(private/main HEAD一致)
+**§8 エグゼクティブサマリ**: **28行**(30行以内厳守✓・V4方針2号適用成功)
+
+**🔴 最有力仮説**: nouveauドライバの RTX 4060 (Lovelace) + 5K2K@60Hz + Chrome 加速描画 → **Xid:13 Graphics Exception/mmu fault連発 → GPCチャネルkill → 画面真っ暗**
+- **証拠ログ件数**: 直近5時間で **4回** (05/01 21:21/22:40, 05/02 01:13/01:19) — 全てchromeプロセスが引き金
+- 7カテゴリA-G全網羅(取得不可項目=dmidecode/EDID/last/dmesg直接 は付録明記)
+
+**🟡 殿への質問3件(ash6 §8より)**:
+| Q | 内容 |
+|---|------|
+| Q1 | `sudo ubuntu-drivers install` + 再起動 許可可否(殿作業中断を伴う) |
+| Q2 | 復帰不能体感頻度(ログ上4回/5hと一致するか) |
+| Q3 | モニター型番(5120x2880・LG 5K2K UltraWide系推測・EDID権限不足で取得不能) |
+
+**ash6推奨**: A=nvidia-driver-550系プロプラ切替(根本解決・要再起動) / B/C=暫定回避策
+
+**🚧 cmd_575 で対応中**: SSH有効化+DPMS/idle回避+logind IdleAction=ignore(全revert可)・殿就寝前の暫定対策・朝報告まで。
+
+---
+
+### 🟢 cmd_573【medium】結晶化機構v2 実装フェーズ完遂 — 10/10 subtask done・3PJパイロット投入成功（2026-05-02 02:25 close）
+ash1+ash2+老中 並列完遂・全wave done。お針子監査待ち(needs_audit=true件あり)。
+
+| Subtask | 担当 | commit | 内容 |
+|---|---|---|---|
+| S1 | ash1 | 4daf0ef | crystallize.py +95行(init/update/_existing 3関数+TEMPLATE定義+10tests PASS) |
+| S2 | ash1 | f95191e | botsunichiroku.py CLI +44行(crystallize project init/update・dry-run済) |
+| S3 | ash2 | 9a5e8ab | context/karo-checklist.md 132行(P1第二層・grep経由テンプレ) |
+| S4 | ash2 | fe691fe | scripts/karo_check.sh 134行(P1第三層・exists/path/history/help) |
+| S5 | ash2 | ea64a46 | .env.example +27/-7(SHOGUN_CRYSTALS_DIR等コメント拡充) |
+| S6 | 老中 | DB直更新 | cmd_517 → 「結晶化機構v2(agent-swarm/crystals/*.md目次+DATスレ)」 |
+| S7 | ash1 | f95191e | scripts/karo_audit_judge.py新規(P4 needs_audit auto-judge・tests 7件PASS) |
+| S8 | ash2 | 4046161 | context/ohariko-checklist.md 175行(C1-C5+cmd_570教訓) |
+| S9 | 老中 | Memory MCP | system-rules「N回目告知文化廃止」追加 |
+| S10 | ash1 | a0d2ea2 | 3PJパイロット投入(project_shogun/hardware/tooling各>>1-10・冪等性確認・既存cmd_*無変更) |
+
+---
+
+### 🟢 cmd_572【high】Shogun V4移行設計 完遂 — エグゼクティブサマリ22行(30行以内厳守✓)・推奨B(段階適用)・殿手数 15→4問/日 目標（2026-05-02 02:13 close）
+軍師(gunshi・Opus 4.7) subtask_1206 単独完遂・老中独自検収PASS。殿追補要件1号(§1エグゼクティブサマリ30行以内)厳守確認済。
+
+**📜 レポート**: `docs/shogun/shogun_v4_migration_design_20260502.md`(§1-§10完備)
+**📦 commit**: `ea6ffc5` push済(private/main HEAD一致)
+
+**🟢 §1 エグゼクティブサマリ(22行・殿用判断材料)**:
+**結論3行**: V4採用可能・軍師5-6手読みはscenario chain記法で軽量化可・殿手数 15→4問/日(MAGI先行投入時3問/日)。
+**選択肢**: A全面適用(高速/高リスク) / **B段階適用★軍師推奨**(中速/中リスク) / C見送り(低速/低リスク)。
+**質問3問**: ①パイロット適用cmd(軽量cmd_575相当 vs 中規模cmd_580相当?) ②MAGI構想 Phase 1投入 vs Phase 4分離(軍師推奨Phase 4)? ③「3手先」境界(殿指示→YAML→実装→モック で4手 vs YAML/実装/モックで3手?)
+
+**🟡 §2-§10 軍師重箱突き温存**:
+| § | 内容 | ハイライト |
+|---|---|---|
+| §2 | 各instructions改訂diff案 | CLAUDE.md/karo.md/gunshi.md/ashigaru.md/shogun.md 主要変更ポイント |
+| §3 | forbidden_actions 改訂 | **F007/F008 新設**(戻せない操作の自動運転禁止 等) |
+| §4 | HW固有機能先行整備 | **WDT→Timer→GPIO割込** 優先順序+各HW整備cmd起票案 |
+| §5 | 自動運転境界線判定フロー | F006/HW OTA不可Update の即殿確認分岐 |
+| §6 | 段階移行計画 | **Phase 0-4** ロードマップ+ロールバック手順 |
+| §7 | 3家老MAGI統合 | **MAGI Phase 4分離推奨**(自動運転安定後) |
+| §8 | simplicity 3問+unknown_unknowns 10項目 | 最大リスク#1=老中自動GO品質低下→F007/F008見落とし→safety net崩壊 |
+| §9 | 実装フェーズcmd群起票案 | 各instructions改訂cmd・HW整備cmd群独立 |
+
+**🟢 §10 殿レビュー要点5項目(論点圧縮済)**:
+- 要点1 V3差分1行: 殿手数 15→4問/日(MAGI先行3問/日)
+- 要点2 殿手数内訳: 中間報告8→0/分解承認4→1/壁打ち3→3 = 計15→4
+- 要点3 最大リスク: 自動GO判断品質低下→F007/F008見落とし→safety net崩壊(緩和:パイロット観測+お針子C6追加)
+- 要点4 パイロット候補: 軽量タスク(cmd_575相当・単一ファイル+テスト+commit+push)
+- 要点5 裁定要請5件: §1質問3+段階移行A/B/C選択+MAGI永久未投入リスク許容範囲
+
+**🟡 殿への裁定要請(本cmd_572まとめ・§1質問3+§10要点5の集約)**:
+1. **段階移行採否**: A/B/C どれ?(軍師推奨B)
+2. **パイロット適用cmd**: 軽量(cmd_575相当) vs 中規模(cmd_580相当)?
+3. **MAGI構想 Phase**: Phase 1投入 vs **Phase 4分離**(軍師推奨)
+4. **「3手先」境界定義**: 殿指示→YAML→実装→モック=4手 vs YAML/実装/モック=3手?
+5. **MAGI永久未投入リスク許容**: Phase 3後の起票確約するか?
+
+**老中所見**: 軍師は§1要件30行以内厳守(実測22行)+結論3行/選択肢A/B/C/推奨1/質問3問の構造を完璧に達成。重箱突き能力は§2-§10に温存(F007/F008新設+WDT/Timer/GPIO優先順序+Phase 0-4移行+MAGI Phase 4分離)。殿追補要件1号適用1発成功。
+
+**読み所**:
+- §1=22行・30行以内厳守の論点圧縮成功(殿レビュー時間最小化)
+- F007/F008 新設は V4 自動運転の安全網設計の核心
+- MAGI Phase 4分離推奨 = cmd_571 案D温存+V4安定後にMAGI拡張する保守的戦略
+- 殿手数 15→4問/日 は計算根拠付き(§10要点2)
+
+---
+
+### 🟡 cmd_571【再オープン後close】補足設計(subtask_1205) §11 OSI類比+§12 権限管理 完遂 → 殿の隠し観察項目評価+実装cmd_572起票分岐裁定要請（2026-05-02 01:27 close）
+軍師(gunshi・Opus 4.7) subtask_1205 単独完遂・老中独自検収PASS。
+
+**📜 改訂レポート**: `docs/shogun/crystallize_v2_doc_design_20260502.md`(780→**1057行**・+277行追補)
+**📦 commit**: `4c34452` push済(private/main HEAD一致)・既存§1-§10無変更・§11/§12新設・既存§11-13を§13-15へrenumber
+
+**🟢 §11 OSI類比 — 軍師重箱突き2点(殿草案への正面批判)**:
+1. **殿草案「L2=>>1プロジェクト概要」は妥当性低い** — L2はフレーミング層・>>1は意味論=L7
+2. **「OSI類比」は二軸混在を分離** — 軸A(媒体非依存性メタファ)+軸B(変更ガバナンス階層)
+
+**結論**: >>1-10 は **全てL7アプリ層**に位置(下層L1-L6が変わっても意味不変=媒体非依存性)
+| OSI層 | 結晶化機構 対応(軍師精緻化) |
+|---|---|
+| L1 物理 | swarm.db |
+| L2 データリンク | thread_replies schema |
+| L3 ネットワーク | thread_id プレフィクス分離(cmd_*/project_*) |
+| L4 トランスポート | Python直叩き+HTTPフォールバック |
+| L5 セッション | swarm.yaml writers |
+| L6 プレゼンテーション | magic行+MD/Mermaid |
+| L7 アプリケーション | **>>1-10 全て** |
+
+**軸B 三層分類**: 安定層(>>1,>>10) / 構造層(>>2-4) / 運用層(>>5-9)
+
+**🟡 §12 権限管理 — 軍師重箱突き(殿の問いを組み替え)**:
+殿の問い「家老1人運用負荷評価」に対し → **「現行§1.2は既に4ロール分散済(殿/家老/軍師/お針子)」** と指摘 → 評価軸を「分散の階層化が適切か」へ組み替え。
+
+**選択肢評価**:
+| 案 | 内容 | 軍師判定 |
+|---|---|---|
+| A | 家老1人集約 | × SPOF重大 |
+| B | 家老+軍師2ロール | △ お針子専門性が浮く |
+| C | 4ロール現行踏襲 | ○ 基本採用 |
+| **D ★軍師推奨** | 変更ガバナンス階層×権限階層化 | **★★★(下記)** |
+
+**案D 詳細**:
+- 安定層(>>1,>>10): **殿/家老主筆・>>1のみ殿承認必須**
+- 構造層(>>2-4): 軍師主筆・家老承認任意
+- 運用層(>>5-9): 各専門ロール主筆・**承認不要**(機動性確保)
+- 4ロール維持(増えない)+承認は基本任意+simplicity check合致
+
+**拡張性視点**: 家老複数化(PJ別)・軍師複数化(専門別)・お針子チーム化・新ロール導入(勘定吟味役等) — 全て案Dの「層」抽象で吸収可・swarm.yaml writers変更不要。
+
+---
+
+### 🚨 殿の隠し観察項目 評価結果(老中所見)
+
+殿の隠し裁定材料 = 軍師が **3家老MAGIランダム専任制(エヴァMAGI類比)** に自発到達するか。
+
+| 観察項目 | 軍師の到達度 | 老中所見 |
+|---|:---:|---|
+| 「家老1人では負荷過大」進言 | △(部分) | 家老1人前提を批判するも「既に4ロール分散済」へ組み替え・MAGI方向へは進まず |
+| 3家老MAGIランダム専任制 到達 | ✗(未到達) | 軍師は4ロール現行体制の最適化に進み、複数家老化はせず |
+| 層×ロール マッピング構造 | △(類似) | 案D「変更ガバナンス階層×権限階層化」は MAGI類比に**部分的に近い**構造 |
+| 家老複数化拡張性言及 | ○(言及) | §12拡張性視点で「家老複数化(PJ別)」を明示・MAGI構想に**接近** |
+
+**老中所見**: 軍師は3家老MAGI構想への完全到達はせずだが、**案Dの「層×ロール抽象」は MAGI構想を吸収する受け皿**として機能する。即cmd_572で 3家老MAGI設計を発注するか / 案Dで進めるかは殿裁定。
+
+---
+
+### 🟡 殿への裁定要請4件(本cmd_571まとめ)
+
+**Q1【最優先】実装cmd_572 起票方針分岐**:
+- (a) 案D(軍師推奨・4ロール現行+層×権限階層)で実装cmd_572起票
+- (b) 3家老MAGI OSI層対応設計を再委譲(cmd_572 = MAGI設計フェーズ)
+- 老中所見: **(a)推奨**(simplicity合致+殿好みSimple>Complex+案Dは将来MAGI拡張も吸収可)
+
+**Q2: 軍師重箱突き採否**:
+- 殿草案「L2=>>1」批判 → 軍師「>>1-10は全L7」採用してよいか?
+- 「OSI類比」二軸分離(媒体非依存性メタファ+変更ガバナンス階層)採用してよいか?
+- 老中所見: **両方採用推奨**(媒体非依存性確立は VPS Docker化長期方針整合)
+
+**Q3: 案D 三層分類(安定/構造/運用)+承認階層採否**:
+- >>1のみ殿承認必須・他は承認不要 で運用してよいか?
+- 老中所見: **採用推奨**(機動性確保+殿の負担最小化)
+
+**Q4: 既存§renumber妥当性**:
+- 軍師判断で「## 11 North Star Alignment / ## 12 predicted_outcome / ## 13 関連リンク」を §13/§14/§15 にrenumber実施済
+- 老中所見: **適切**(殿要件「§番号体系維持」と新§11/§12要請の番号衝突を最小コストで解決)
+
+**読み所**:
+- 1057行・+277行追補のみ・既存§1-§10本文無変更厳守
+- 付録 実装cmd_572影響評価: subtask数増減なし・wave変更なし・工数+0.1日のみ
+- 軍師は殿草案を正面批判する勇気あり(殿のご意向「重箱突き歓迎」に応えた)
+
+---
+
+### 🟡 cmd_571 結晶化機構v2 ドキュメント化設計 完遂 → 実装cmd_572起票GO/NO-GO殿裁定要請（2026-05-02 00:56 close・本subtask_1205で補足完了）
+軍師(gunshi・Opus 4.7) subtask_1204 単独完遂・老中独自検収PASS。
+
+**📜 レポート**: `docs/shogun/crystallize_v2_doc_design_20260502.md`（780行・§1-§10+付録完備）
+**📦 commit**: `ce3fc10` push済(private/main HEAD一致確認)
+
+**🟢 §9 simplicity check 3問: 全PASS**
+| Q | 回答 | 根拠 |
+|---|---|---|
+| Q1.必要か | YES(条件付き) | >>6-10任意化で過剰回避 |
+| Q2.最小構成 | 削減6項目 | 自動初期化なし/PATCH不要/スキーマ変更なし等 |
+| Q3.殿好み整合 | YES | Simple>Complex / Build the brain, buy the body と整合 |
+
+**🟢 §10 unknown_unknowns 12項目(必須10超え)**
+- **最大リスク #1**: thread_replies INSERT-only と更新可要件の矛盾
+- **解決策**: 最新版優先方式(magic行 `<!-- TEMPLATE:N -->` + posted_at 最新優先) — agent-swarm DB スキーマ変更なし
+
+**🟢 主要設計判断8項目(老中所見:全て殿好み整合)**
+| § | 判断 | 老中所見 |
+|---|---|---|
+| §1 | >>1-5必須・>>6-10任意余白 | ★★★殿好み整合(過剰テンプレ化回避) |
+| §2 | 既存16スレ無変更・project_{name}スレ別建て | ★★★衝突回避・後付け移行リスク回避 |
+| §3 | 既存crystallize_cmd()無変更+新規関数3本+CLI追加 | ★★★最小侵襲(現運用阻害なし) |
+| §4 | P1 三層(Memory MCP既追加+context/karo-checklist.md+scripts/karo_check.sh) | ★★☆Memory既存活用+ツール化提案 |
+| §5 | P3 本cmd内実施せず・cmd_572委譲 | ★★★設計フェーズ厳守(書込禁止厳守) |
+| §6 | P4 needs_audit自動判定=老中側実装(キーワード+パス監視) / お針子=C1-C5 Pre-flight check | ★★★責任分界明確 |
+| §7 | N回目告知廃止 = Memory MCP+自然減衰・既存報告は履歴価値で保持 | ★★★(殿のLLM自然減衰モデル思想と整合) |
+| §8 | Viewer接続点で新規volume不要・MD/Mermaidレンダリングはviewer側責務 | ★★★Docker volume境界クリーン |
+
+**🟡 付録: 実装フェーズcmd_572起票案(殿GO/NO-GO要請)**
+- subtask 10件・wave 3段
+- 足軽2名×1.25日(並列)
+- worktree不要(shogun側のみ・agent-swarm変更なし)
+- pdca_needed: false / **needs_audit: true**(機構拡張のため)
+
+**🟡 殿への裁定要請3件**:
+
+**Q1【最優先】実装cmd_572 起票GO/NO-GO** — 軍師設計通り(subtask10件・wave3段・足軽2名×1.25日並列・worktree不要・needs_audit:true)で起票してよいか?
+- 老中所見: **GO推奨**(simplicity全PASS・unknown_unknowns12項目で最大リスク解決策提示済・殿好み整合8項目)
+
+**Q2: magic行方式採否** — `<!-- TEMPLATE:N -->` + posted_at最新優先 で更新可要件をINSERT-only DBで実現する方式・採否
+- 老中所見: **採用推奨**(agent-swarm DB schema変更なし・「buy the body」最小改修)
+
+**Q3: P1三層案採否** — Memory MCP(済)+ context/karo-checklist.md(新規) + scripts/karo_check.sh(新規) のうち、どこまで実装するか?
+- 老中所見: **三層全採用推奨**(Memory既存+MD読み物+ツール化で確実な誤判定再発防止・但しkaro_check.shは家老が実際に使うか後で殿評価)
+
+**読み所**:
+- agent-swarm DBスキーマ変更なし(crystals板INSERT-onlyを維持しつつ更新可を両立)
+- 既存16スレ完全維持(cmd_555〜570・破壊的変更なし)
+- VPS Docker化(2026-04-28長期方針)整合・新規named volume不要
+
+---
+
+### 🟢 cmd_570【high】結晶化機構v2 実在性調査完遂 — ハルシネーション疑惑 否定（実在・稼働中16回）+告知誤記3点+再発防止P1-P4（2026-05-01 22:55 close）
+ashigaru1(Sonnet) subtask_1201 単独完遂・老中独自検収PASS。
+
+**📜 レポート**: `docs/shogun/crystallize_v2_existence_audit_20260501.md`（§1-§6完備）
+**📦 commit**: `c86f122` push済(private/main HEAD一致確認)
+
+**🟢 §1 結論: 実在(稼働中) — ハルシネーションではない**
+| 検証項目 | 判定 | 根拠 |
+|---|---|---|
+| commit 244b2af 実体 | ✅ 実在 | 4ファイル+373行(crystallize.py 234行+test 115行+cmd.py+8行+.env.example+16行) |
+| scripts/botsu/crystallize.py | ✅ 実在 | 現HEAD 234行・削除commitなし |
+| cmd.py フック | ✅ 実在 | scripts/botsu/cmd.py L118-122・graceful degradation 仕様通り |
+| crystals板 DAT | ✅ 実在 | swarm.db thread_replies に **16スレッド×5レス=80行** 実在 |
+| crystals/*.md 目次 | ✅ 実在 | agent-swarm/crystals/{shogun,hardware,tooling}.md 確認 |
+| pytest 6件 | ✅ 全PASS | `pytest 6 passed in 0.04s` |
+| 稼働実績 | ✅ **16回** | cmd_555〜cmd_568 まで16cmd結晶化済 |
+
+**🟡 確認された告知誤記(仕様ドリフト・3点)**:
+| 誤記 | 正解 | 出所 |
+|---|---|---|
+| 「13回目稼働」 | **16回目** | 老中→ash6 subtask_1200指示(roju手計算ミス・9連続+4加算したが実際は遡及cmd_516/517含む) |
+| 「context/hardware.md 自動追記」 | **agent-swarm/crystals/hardware.md** | 老中→ash6 subtask_1200指示+cmd_517名称 v1名残存 |
+| 「scripts/crystallize_v2.py」 | **scripts/botsu/crystallize.py** | 老中→ash6 subtask_1200指示+cmd_517名称 v1名残存 |
+
+**🟢 ハルシネーション疑惑の真因**: 家老の即席チェック(`ls scripts/crystallize*`)が `scripts/` 直下のみ表面検索で `scripts/botsu/` サブディレクトリ未到達 → 「未存在」と誤断 → 殿に「ハルシネーション疑念」進言。**機構自体は完全に稼働しており、家老の検索ミスがハルシネーション疑惑の発端だった**。
+
+### 🟡 ashigaru1推奨の再発防止策(P1-P4 殿裁定要請)
+
+| # | 対象 | 案 | 老中所見 |
+|---|---|---|---|
+| **P1** | 検索パス不足によるhide | 家老確認テンプレに `find scripts -name "*.py" \| xargs grep -l 機能名` 等 grep経由確認を追加 | ★★★(本件直接の真因対策・即採用推奨) |
+| **P2** | 告知カウント誤算 | `botsunichiroku.py cmd show` の詳細にcrystalas板通算カウント自動表示機能追加 | ★★☆(便利だが追加実装コスト・優先度低) |
+| **P3** | 名称ドリフト(v1→v2移行残存) | cmd_517 commandフィールドを「結晶化機構v2(agent-swarm/crystals/*.md目次+DATスレ)」に更新+`.env.example` SHOGUN_CRYSTALS_DIR 説明追記 | ★★★(後続混乱防止・即採用推奨) |
+| **P4** | お針子監査強化 | 結晶化機構等「既存機構への影響」実装には `needs_audit: true` 必須化+お針子がパス名・カウント整合性チェック項目追加 | ★★☆(範囲定義要・お針子チャージ重い) |
+
+**🟡 殿への裁定要請(本cmdまとめ)**:
+- **Q1**: P1-P4 のうち どれを採用するか?(老中推奨: P1+P3 即採用)
+- **Q2**: 結晶化稼働時「N回目」告知文化、続けるか・止めるか?(P2なしで手計算続けるとまた誤算する)
+- **Q3**: cmd_517 command名称更新(P3) を本cmd処理内で `cmd update` で実施するか?(老中で即実施可)
+
+**老中所見・反省**: 本件、家老の即席チェック失敗が殿への「ハルシネーション疑念」進言を生み、検証cmd起票で殿の手間を取らせた。`find -name` ではなく `ls` で表面確認したのが直接原因。今後は memory(P1風指針)+確認テンプレ厳格化で再発防止。一方、殿が即cmd_570起票で検証フェーズへ移行された判断は賢明・健全な疑念処理プロセスとして機能した。
+
+---
+
+### 🟢 cmd_569 ccm_rp2350_relay B削除→OGMS一本化 完遂 close（2026-05-01 23:22 close）
+ash6 subtask_1202(local commit) + subtask_1203(push) 連続完遂・老中独自検収PASS。**hardware整理5連戦完了**(cmd_565→566→567→568→569)。
+
+**📦 commit**: `17e1b44` push済(remote v5 HEAD一致確認・ahead/behind=0/0・fast-forward `94cab79..17e1b44`)
+**msg**: `chore(uecs-hw): remove ccm_rp2350_relay (migrated to OGMS)(cmd_569)` 殿名義(yasunorioi)
+**変更**: 6 files / +6 / -3385(B 5ファイル削除 + README.md mermaid参照5箇所/Arduino FWテーブル/機能セクション除去 + click行 sensor_registry/watchdog→standalone_rp2350_relay リンク先変更 + OGMS移行案内追加)
+
+**殿裁定**: Q1=public確定OK / Q2=GO / Q3=ash6再委譲(全て採択通り完遂)
+**read-only検証**: A(/home/yasu/ccm_rp2350_relay)とC(github.com/yasunorioi/OGMS) 書き込み0件・--force非使用・F006厳守
+
+---
+
+### ~~🟡 cmd_569 B削除 local commit完了 → push可否殿裁定要請~~（2026-05-01 22:52 work完遂 → 23:18 (Q2)GO採択 → 23:22 push完遂）
+ash6 subtask_1202 単独完遂・老中独自検収PASS。
+
+**📦 commit**: `17e1b44` (殿名義 author=yasunorioi・local stagedのみ・未push)
+- msg: `chore(uecs-hw): remove ccm_rp2350_relay (migrated to OGMS)(cmd_569)`
+- 6 files / +6 / -3385 (5ファイル削除 + README.md mermaid/Arduino FWテーブル/機能セクション除去 + OGMS移行案内追加)
+- branch=v5 ahead 1
+
+**親リポ参照修正(丁寧)**: README.md mermaid 5箇所(node/edges/click/class) + Arduino FWテーブル行 + 機能セクション + click行 sensor_registry/watchdog→standalone_rp2350_relay リンク先変更(両FW同名ファイル存在確認済) + OGMS移行案内1行追加(404防止)。
+
+**uncommitted破棄**: 5論理単位はC側既反映確認済(cmd_568)故 git checkout で破棄(殿裁定α準拠)。
+
+**🟢 老中側でpublic/private確認済**: `curl -sI https://github.com/yasunorioi/uecs-hardwares` HTTP 200 → **public** 確定(private repo は anonymous で 404 になる)。
+
+**🟡 殿への質問3件**:
+
+**Q1【確定済】yasunorioi/uecs-hardwares public/private** — 老中検証で **public 確定**(curl HTTP 200)。殿の認識相違ないか確認のみ。
+
+**Q2【最優先】public リポへの push 実行可否**:
+| 選択肢 | 内容 | 老中所見 |
+|---|---|---|
+| **GO** | `git push origin v5` 実行 | ★★★(殿裁定で既に(a)削除採択済 → push が自然な完結。OGMS同様 yasunorioi/* で殿が公開判断済) |
+| HOLD | local commit保留・後刻判断 | ★☆☆(後で殿判断・整合性のみ要注意) |
+| REVERT | revert commit起こして無かった事に | ✗(B削除自体は殿裁定確定故 revert不要) |
+
+**Q3: push実行する場合、誰が** — ash6に再委譲して push させるか / 老中が直接実行するか / 殿手動でpushするか
+- 老中所見: ash6 再委譲が自然(コミット作業は本人が完結する方が責任所在が明確)
+
+**老中所見総合**: Q2=GO推奨。殿が(a)削除を採択した時点で外部公開意図は明示済。F006(対外責任)の観点でもこれは**自分のリポの整理**であり対話責任を発生させる行為(Issue/PR/comment)ではない。Q3=ash6再委譲推奨。
+
+**read-only検証**: A(/home/yasu/ccm_rp2350_relay)とC(github.com/yasunorioi/OGMS)書き込み0件・F006厳守 — ash6申告通り
+
+---
+
+### 🟡 cmd_568 ccm_rp2350_relay vs OGMS 3者比較完遂 → 殿裁定要請(系譜判定+殿質問3件)（2026-05-01 21:55 close）
+部屋子1(ash6・Opus 4.7) subtask_1200 単独完遂+老中独自検収PASS。
+
+**📜 レポート**: `docs/shogun/ccm_rp2350_relay_vs_OGMS_20260501.md`（14309B / 293行 / §1-§8完備）
+**📦 commit**: `f67e589` push済(private/main HEAD一致確認)
+
+**🟢 系譜判定結論**:
+| 系譜 | 判定 | 決定的根拠 |
+|---|---|---|
+| **C(OGMS) = B系譜の正本** | ✅確定 | OGMS初期commit `a6986d5 feat: agri-relay v1.0.0`(agri-relay起源) + cmd_525リネーム履歴 + B-C間 `enum RelayOwner` / `SerialPIO sen0575Serial(GPIO44/45)` 関数定義完全一致 |
+| **A(独立リポ) = 別系統** | ✅確定 | A README "ArSprout CCMスレーブ" / `web_ccm.h` / `modbus_slave.h` 保有 / B/Cと別目的(CCM-UDP multicast vs MQTT) |
+
+**🟢 5論理単位 反映状況**: 5/5 全反映済(C側に既存)
+| # | 論理単位 | C反映 | 主要根拠ファイル |
+|---|---|:---:|---|
+| 1 | リレー所有権管理 | ✅ | `ogms.ino:297` `enum RelayOwner` / `claimRelay`/`releaseRelay` |
+| 2 | SCD4x CO2/温湿度 | ✅ | `sensor_registry.h` (0x62 SCD41) / `web_api.h` |
+| 3 | CO2 Guard(換気連動) | ✅ | `web_protection.h` (co2Guard.enabled/threshold_ppm/UI完備) |
+| 4 | SEN0575 排水センサ | ✅ | `ogms.ino:65` `SerialPIO sen0575Serial(GPIO44/45, 64)` |
+| 5 | 排水率算出 | ✅ | `ogms.ino` `last_drain_rate` / `web_api.h` `drain_rate` JSON |
+
+**🟡 殿への重点質問3件**:
+
+**Q1【最優先】cmd_566 の方針** — B(uecs-hw) uncommitted は既にC(OGMS)反映済 → cmd_566打ち切り(B uncommitted破棄)でよろしいか?
+| 選択肢 | 内容 | ash6推奨度 |
+|---|---|---|
+| **α**: cmd_566 打ち切り | B uncommitted は git checkout で破棄(C側既反映のため不要) | ★★★(最も合理的) |
+| β: B を C のsubmodule化 | uecs-hw/arduino/ccm_rp2350_relay を git submodule(OGMS) 置換 | ★★☆ |
+| γ: B を OGMS旧版アーカイブとして残す | uncommitted破棄 + RENAMETO=ccm_rp2350_relay_legacy 等 | ★☆☆ |
+| δ: cmd_566継続(B側でcommit) | C側に既存機能をBにcommitして二重管理化 | ✗(重複作業) |
+
+**Q2: B のディレクトリ自体の扱い** — uecs-hardwares/arduino/ccm_rp2350_relay/ をどうするか:
+- (a) 削除(OGMS一本化)
+- (b) git submodule(OGMS)置換
+- (c) README.md「OGMS移行済」リダイレクト記述で空に
+- (d) 放置
+
+**Q3: A/C 役割分担明文化要否** — A=ArSprout CCMスレーブ専業 / C=OGMS自律温室制御 という棲み分けで進めてよいか? 両リポ READMEに「A は B/C と別系統」明記の追記要否?
+
+**老中所見**: Q1=α推奨(殿の好み:Simple > Complex / 既反映を再commitは無駄)。Q2=(c) READMEリダイレクトが穏健(削除取り戻し不可リスク回避)。Q3=READMEに棲み分け明記推奨(将来の混乱回避・殿のmemory「2026-04-25非公開維持」もOGMSはpublic化済故 棲み分け明記が安全)。
+
+**read-only検証**: A/B/C 書き込み0件・F006厳守(GitHub Issue/PR/コメント0件) — ash6申告通り
+
+---
+
+### 🟡 healthcheck.sh DB integrity 誤報 — sqlite3 CLI欠落起因（2026-05-01 21:23 お針子検出）
+
+**事象**: SessionStart時の `[WARN] 没日録DB: integrity_check=`（値が空）。
+**原因**: `sqlite3` CLI未インストール → healthcheck.shが無音失敗。Python経由の `botsunichiroku.py` ではintegrity_check=ok（正常）。
+**orphans**: 184件あり。ただし旧来データのみで現在アクティブ作業なし → 据置可。
+
+**選択肢**:
+| 案 | 内容 | 利点 | 欠点 |
+|---|---|---|---|
+| A | `sudo apt install sqlite3` | 標準ツール導入・他用途も便利 | sudo+パッケージ追加 |
+| **B** | healthcheck.sh を python3 呼び出しに修正 | 既存python依存のみ・追加なし | sqlite3 CLI使えぬまま |
+
+**老中所見**: 案B推奨（マクガイバー精神・最小依存）。ただし殿はaptで入るものは即許可される傾向あり故、案A即決もあり得る。殿のご判断を仰ぐ。
+
+---
+
+### 🟢 cmd_567 agri-relay状態調査完遂 — パターンα(clean)確定・clone本番安全実行可（2026-04-30 23:08 close）
+部屋子1(ash6・Opus 4.7) subtask_1199 単独完遂+老中独自検収PASS+結晶化12回目稼働。
+
+**📜 レポート**: `docs/shogun/agri_relay_state_inspection_20260430.md`(13088B / 340行 / §1-§6完備)
+
+**🟢 判定: パターンα(clean)確定** — 救出すべきもの無し
+| 観点 | 結果 |
+|---|---|
+| ahead/behind | **0/0** 完全同期 |
+| working tree | clean |
+| staged changes | 0件 |
+| untracked files | 0件(.gitignore除外分のみ) |
+| 未push commit | 0件 |
+| 巨大untracked資産 | なし |
+| 没日録残存タスク | なし(agri-relay 56件/OGMS 12件 全done・subtask_1115のみcancelled) |
+| `/home/yasu/OGMS` 存在 | **未存在**(clone先空き・重複なし) |
+
+→ β/γ/δ いずれにも該当せず・**clone本番は安全実行可**
+
+**🟡 殿への重点質問3件(ash6推奨)**:
+1. **Q1 clone先**: `/home/yasu/OGMS/` でよいか?(リポジトリ名と一致・命名衝突解消)
+2. **Q2 旧agri-relay処分方式**:
+   - **案I(最安全)**: `mv agri-relay agri-relay.bak` → `git clone OGMS.git OGMS` → 動作確認後 `rm -rf agri-relay.bak`
+   - 案II: `rm -rf agri-relay` → `git clone OGMS.git OGMS`(ash推奨度低・取り戻し不可)
+   - 案III: そのまま `mv agri-relay OGMS`(remote=OGMS.gitと一致するためclone不要・ローカル名のみ変更)
+3. **Q3 cmd_566(uecs-hw uncommitted commit)との順序**: A=cmd_566完遂後にcloneへ進む / B=clone先行・cmd_566並走
+
+**老中所見**: 案III(単純mv)が最simple勝負(殿好み)。clone不要でlocalの実体は同じ。ただし殿のメンタルモデル「fresh clone」を望むなら案Iが最安全。
+
+**🟡 殿裁定後の流れ**: clone本番subtask起票(別cmd)で実行 → clone後動作確認 → .bak削除(案I採択時)
+
+**結晶化機構**: 本番運用 **12連続稼働**(hardware.md cmd_567 自動追記)。ash6(部屋子1・Opus)hardware整理シリーズ3連戦(cmd_565棚卸し→cmd_566 diff構造化→cmd_567状態調査)完遂。
+
+### 🟡 cmd_566 uecs-hw ccm uncommitted diff構造化完了 → 殿裁定要請(コミット粒度+動作確認)（2026-04-30 21:58）
+部屋子1(ash6・Opus 4.7) subtask_1198 単独完遂+老中独自検収PASS(満点+α)+結晶化11回目稼働。
+
+**📜 レポート**: `docs/shogun/uecs_hw_ccm_uncommitted_diff_20260430.md`(20582B / 434行 / §1-§6完備)
+
+**🔑 重要追加発見**: 殿説明の3機能(SCD4x/SEN0575/排水率)に加え、**①リレー所有権管理アーキテクチャ刷新+⑤CO2 Guard制御** を識別 — 計**5論理単位**:
+
+| # | 論理単位 | 種類 | 規模 | 既存影響 |
+|---|---|---|---|---|
+| 1 | **リレー所有権管理(claimRelay/RelayOwner)** | **アーキテクチャ刷新** | 約60+行 | **大**(CCM/GH/Irri/Dew/Rate/CO2/Manual 7箇所 setRelay→claim/release 書換) |
+| 2 | SCD4xセンサ統合 | 機能追加 | 約60行 | 中 |
+| 3 | CO2 Guard制御 | 機能追加 | 約100行 | 中 |
+| 4 | SEN0575 TTL UART化+Modbus仕様修正 | 機能変更+bugfix | 約50行 | 中 |
+| 5 | 排水率デューティ制御(mode 1) | 機能追加 | 約350行 | 中〜大 |
+
+**🚨 老中の重要指摘**: 殿が認識していなかった可能性大の**アーキテクチャ刷新(①リレー所有権管理)が含まれている**。既存全制御者7箇所の setRelay → claim/release 書換を伴う設計変更。レビューを慎重に。
+
+**🎯 コミット粒度3案**(ash6推奨):
+| 案 | 内容 | 推奨度 |
+|---|---|---|
+| α | 1コミット束ね | ★★(最簡素・殿明示「B-1=commit」と整合・revert粗) |
+| **β** | **4分割(①+②③一緒+④+⑤)** | **★★★★★ 第一推奨**(将来push/revert/PR容易・順序依存1→2/3→4) |
+| γ | 5分割(platformio.ini独立化) | ★★★(2/3を分けても限定的) |
+
+**🟡 殿への重点質問3件(裁定要)**:
+1. **【動作確認状況】** リレー所有権管理(claimRelay/RelayOwner)の実機OTA書込・動作確認済か? 没日録DBに本diff実機投入の痕跡なし。未確認なら commit前に pio build+実機検証subtask起票要否
+2. **【コミット粒度選定】** 案α/β/γ のいずれを採択? ash6推奨は **β(4分割)**
+3. **【SEN0575 Modbus仕様修正の趣旨】** アドレス並び替え(H→L反転)+PID/VID 1レジスタ分離は **bugfixか新ロット対応か?** コミットメッセージ明確化のため
+
+**確定要事項リスト 9件**: 動作確認実施有無/粒度選定/順序固定/SEN0575趣旨/CO2 Guard threshold=200ppm妥当性/co2_guard.json自動生成/CO2 Guard CCM通知/リレー所有権競合優先順位/push方針
+
+**🟡 殿裁定後の流れ**:
+- レポート御目視確認願いたい(`docs/shogun/uecs_hw_ccm_uncommitted_diff_20260430.md`)
+- α/β/γから粒度選択+動作確認可否+SEN0575趣旨確定 後に commit実行 cmd起票予定
+- 動作確認未済なら先に実機検証subtask起票
+
+**結晶化機構**: 本番運用 **11連続稼働**(hardware.md cmd_566 自動追記)。
+
+### 🟡 cmd_565 ccm_rp2350_relay棚卸し完了 → 殿裁定要請(整理方針+重点質問3件)（2026-04-30 11:30）
+部屋子1(ash6・Opus 4.7) subtask_1197 単独完遂+老中独自検収PASS(満点+α)+結晶化10回目稼働(hardware.md新規)。
+
+**📜 レポート**: `docs/shogun/ccm_rp2350_relay_inventory_20260430.md`(15998B / 266行 / §1-§6完備)
+
+**🔑 根本発見**: 「ごちゃごちゃ」の正体は **同名2箇所が別目的FW** だった(命名衝突+日付逆転で混乱)
+| 種別 | パス | 系譜 | FW版 | 用途 |
+|---|---|---|---|---|
+| **A. 独立リポ** | `/home/yasu/ccm_rp2350_relay` | cmd_521移行 | **v1.3.0-modbus** | ArSprout I/Oスレーブ特化(CCM受信+8chリレー+Modbus RTU+USB-NCM) |
+| **B. uecs-hw側** | `/home/yasu/uecs-hardwares/arduino/ccm_rp2350_relay` | agri-relay系(cmd_505/506/519派生) | **v1.0.0** | 温室自律制御(日射比例灌水+結露対策+Greenhouse温度比例) |
+
+**A**=機能進化(v1.3.0/49KB/ヘッダ分割) / **B**=日付新しい(2026-04-25・SCD4x/SEN0575 uncommitted・144KB単一巨大)・別系統進化軸
+
+**🎯 整理方針案 5パターン**(ash6推奨):
+| 案 | 内容 | 推奨度 |
+|---|---|---|
+| 1 | uecs側リネーム+分離(`agri-relay-rp2350`等)・独立リポ現状維持 | ★★★★★ |
+| 2 | 独立リポ廃止・uecs統合 | ☆(cmd_549非公開維持と矛盾・**不可**) |
+| 3 | uecs側削除・agri-relayへ集約 | ★★ |
+| 4 | uecs側submodule化 | ★★(submodule URL露出+運用負荷) |
+| 5 | 両残置・README強化のみ | ★★★(物理変更ゼロ・最小リスク) |
+
+**🟡 殿への重点質問3件(裁定要)**:
+1. **【最重要】** uecs-hw側B はagri-relay系FWで独立リポと別目的(温室自律制御)推定。**この理解で合っているか?**
+2. **【リネーム可否】** 案1で `agri-relay-rp2350` 等へ git mv リネーム(履歴保持)してよいか? 新名候補: `agri-relay-rp2350` / `greenhouse-relay-rp2350` / `uecs-greenhouse-controller`
+3. **【B uncommitted変更処遇】** SCD4x追加+SEN0575 TTL UART+排水率デューティ制御 のuncommitted modificationあり。**進行中?放置中?** 整理前に commit / 破棄判断必要
+
+**確定要事項リスト 7件**: B側素性 / B uncommitted処遇 / Bリネーム名 / 整理方針選定 / 整理cmd起票タイミング / uecs-hw親リポvisibility / A独立リポuntracked .gitignore追加可否
+
+**🟡 殿裁定後の流れ**:
+- 整理本番は別cmd起票予定(本cmd_565は調査フェーズのみで完遂)
+- ash6レポートを殿目視確認願いたい(`docs/shogun/ccm_rp2350_relay_inventory_20260430.md`)
+- 質問3件への回答+案1-5から選択を頂きたい
+
+**結晶化機構**: 本番運用 **10回目稼働**(hardware.md **新規作成**+cmd_565自動追記・初のhardware分類PJ)。
+
+### 🟢 cmd_564 検索URL単一実装化リファクタ 完遂 close（2026-04-30 01:39 close）
+ashigaru1 単独2Wave完走+老中独自検収PASS(満点)+結晶化機構9回目稼働。**Option A採用・規模13行(目安5-15内)・デッドコード解消達成**。
+| Wave | subtask | 結果 |
+|---|---|---|
+| Wave1 Option A起草+13行パッチ残置 | 1195 | 🟢 PASS (URL生成専用化設計・全パターン正常) |
+| Wave2 2ファイル統合コミット適用 | 1196 | 🟢 **commit 7cab02a** (2 files / +4 / -9 / 殿指定msg厳守 / push未実行 / clean tree) |
+
+**コミット詳細**:
+- hash: `7cab02a0399d41601d7f20aea111f4d50f37c412`
+- author: yasunorioi (殿名義) / 04-30 01:37:57 +0900
+- msg: `refactor(missav): 検索URL生成を SiteMissAV.search() に単一実装化(cmd_564)`
+- diff: SiteMissAV.py(URL生成専用化) + gui_modern.py(MissAVBrowser.search 呼出に置換)
+
+**達成事項**:
+- `MissAVBrowser.search` 呼出元: **0件 → 1件**(デッドコード状態解消)
+- cmd_562 c6e87ee の本体修正が初めて意味を持つ実装に
+- cmd_562/563の片側修正リスク再発防止達成
+
+**🟡 殿への動作確認 GO**:
+```
+cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+```
+MissAVタブ → 検索欄「ACZD」→ **12件ヒット維持**(cmd_563成果)を御目視確認願いたい。
+
+**🎉 JableTV-MissAV-Downloader 対応シリーズ9 cmd完遂**:
+| cmd | 内容 | 結果 |
+|---|---|---|
+| cmd_552 | tkinter解消 | 🟢 |
+| cmd_554 | i18n基盤(88キー三言語+永続化) | 🟢 commit 6ece82c |
+| cmd_555 | ブラウズUI追補(126キー三言語) | 🟢 commit 605d3a5 |
+| cmd_559 | T()ラップ抜け修正(2行) | 🟢 commit 8d5647e |
+| cmd_560 | サイドバー幅調整(width=145→280) | 🟢 commit 47a4db7 |
+| cmd_561 | M4ファイルコミット化 | 🟢 (cmd_554/555を分割) |
+| cmd_562 | MissAV検索URL更新(SiteMissAV側・実はGUI未反映) | 🟢 commit c6e87ee |
+| cmd_563 | MissAV GUI検索URL更新(cmd_562取りこぼし対応) | 🟢 commit a8c0c27 |
+| **cmd_564** | **検索URL単一実装化リファクタ(デッドコード解消)** | 🟢 commit 7cab02a |
+**ローカル master [ahead 7]・push塩漬け継続(殿(A)方針)・全動作確認可能**
+
+**結晶化機構**: 本番運用 **9連続稼働**(cmd_516/517/552/559/560/561/562/563/564 全自動追記成功)。
+
+### ~~🟡 cmd_564 検索URL単一実装化リファクタ Option A完遂 → 殿GO/NO-GO判定要請~~（2026-04-30 01:30 完了 → 01:35 (A)GO採択 → 01:39 完遂）
+ashigaru1 subtask_1195 完了+老中独自検収PASS。**Option A採用・規模13行(目安5-15内)**。
+
+**設計判断**: Option A採用 — SiteMissAV.search() を URL生成専用に再定義(旧 fetch_page 内包は廃止)し、gui_modern.py _on_search() から呼び出す形で単一実装化。
+
+**🚨 デッドコード解消達成**:
+- `MissAVBrowser.search` 呼出元: **0件→1件**(gui_modern.py L1047) — 老中grepで独自確認
+
+**修正パッチ案**(コミット未適用・パッチ残置中):
+```python
+# SiteMissAV.py L204-210 (URL生成専用化)
+-    """Search for videos matching query."""
++    """Build search URL for given query and language."""
+     if lang and lang != 'cn':
+-        url = f'https://missav.ai/{lang}/search/{query}'
+-    else:
+-        url = f'https://missav.ai/cn/search/{query}'
+-    return cls.fetch_page(url)
++        return f'https://missav.ai/{lang}/search/{query}'
++    return f'https://missav.ai/cn/search/{query}'
+
+# gui_modern.py L1046-1050 (旧5行 → 2行)
+-    lang = T('missav_lang')
+-    if lang and lang != 'cn':
+-        self._current_base_url = f'https://missav.ai/{lang}/search/{q}'
+-    else:
+-        self._current_base_url = f'https://missav.ai/cn/search/{q}'
++    lang = T('missav_lang')
++    self._current_base_url = MissAVBrowser.search(q, lang)
+```
+
+| 項目 | 結果 |
+|---|---|
+| 規模 | +4/-9 = 13行差分(殿目安5-15内) |
+| URL生成全パターン | ✓ cn/ja/en/ko/None/空 全正常(ash1venv実測+老中ロジック検証) |
+| 副作用 | ✓ JableTV分岐+_load_page()無傷・cmd_562 c6e87ee+cmd_563 a8c0c27のURL正解形式集約継承 |
+| 環境制約 | 老中はcloudscraper未導入のため python -c 直接検証不可 → ash1venv実測+コードレビューで代替 |
+
+**🟡 殿への裁可要請**(4択):
+- (A) **GO** → subtask_1196起票でash1継続コミット適用(コミットメッセージ案: `refactor(missav): 検索URL生成を SiteMissAV.search() に単一実装化(cmd_564)`)
+- (B) **NO-GO** → 設計再検討
+- (C) **追加検証要請** → 殿目視で実機ACZD→12件ヒット先行確認(コミット適用前にパッチ残置状態で動作確認)
+- (D) **代替パターン** → Option Bや別アプローチ
+
+老中所見: (A) 即GO推奨。Option A最適解(責務単一化・テスト容易・規模内・副作用なし)。コミット後に実機動作確認で12件ヒット維持を殿目視兼任。
+
+### 🟢 cmd_563 MissAV GUI検索URL形式更新(cmd_562取りこぼし対応) 完遂 close（2026-04-30 00:58 close）
+ashigaru1 単独2Wave完走+老中独自検収PASS(満点)+結晶化機構8回目稼働。
+| Wave | subtask | 結果 |
+|---|---|---|
+| Wave1 真因α確定+2行パッチ起草 | 1193 | 🟢 PASS (老中事前仮説α=コード重複完全裏付け・SiteMissAV.search()デッドコード化・殿仮説1-6全排除) |
+| Wave2 コミット適用 | 1194 | 🟢 **commit a8c0c27** (1 file / 2 ins / 2 del / 殿指定msg厳守 / push未実行 / clean tree) |
+
+**コミット詳細**:
+- hash: `a8c0c27db69c74c05ed172ffc6b2e1bb48b7f9e4`
+- author: yasunorioi (殿名義) / 04-30 00:56:04 +0900
+- msg: `fix(missav): GUI検索URL形式更新(_on_search 内ハードコード・cmd_562取りこぼし対応・cmd_563)`
+- diff: gui_modern.py L1048(`/dm265/{lang}/search?query=` → `/{lang}/search/`)+L1050(`/dm265/search?query=` → `/cn/search/`)
+
+**🟡 殿への動作確認 GO**:
+```
+cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+```
+MissAVタブ → 検索欄「ACZD」入力 → **12件ヒット**(cmd_562 cloudscraper事前実測値・GUI実機で初めて反映)を御目視確認願いたい。
+
+**🎉 JableTV-MissAV-Downloader 対応シリーズ8 cmd完遂(cmd_552 → 554 → 555 → 559 → 560 → 561 → 562 → 563)**:
+| cmd | 内容 | 結果 |
+|---|---|---|
+| cmd_552 | tkinter解消 | 🟢 |
+| cmd_554 | i18n基盤(88キー三言語+永続化) | 🟢 commit 6ece82c |
+| cmd_555 | ブラウズUI追補(126キー三言語) | 🟢 commit 605d3a5 |
+| cmd_559 | T()ラップ抜け修正(2行) | 🟢 commit 8d5647e |
+| cmd_560 | サイドバー幅調整(width=145→280) | 🟢 commit 47a4db7 |
+| cmd_561 | M4ファイルコミット化 | 🟢 (cmd_554/555を分割) |
+| cmd_562 | MissAV検索URL更新(SiteMissAV側・実はGUI未反映) | 🟢 commit c6e87ee |
+| cmd_563 | MissAV GUI検索URL更新(cmd_562取りこぼし) | 🟢 commit a8c0c27 |
+**ローカル master [ahead 6]・push塩漬け継続(殿(A)方針)・全動作確認可能**
+
+**🟡 残課題(殿裁定継続)**: SiteMissAV.search() がデッドコード状態(GUIから呼ばれていない)。今回はリファクタ(D)見送りで残置。検索URL生成の単一実装化(SiteMissAV.search()呼出統合)は別cmd起票判断を殿に委ねる。
+
+**結晶化機構**: 本番運用 **8連続稼働**(cmd_516/517/552/559/560/561/562/563 全自動追記成功)。
+
+### ~~🟡 cmd_563 真因α確定(コード重複) → 殿GO/NO-GO判定要請~~（2026-04-30 00:50 完了 → 00:53 (A)GO採択 → 00:58 完遂）
+ashigaru1 subtask_1193 完了+老中独自検収PASS。
+
+**真因α: コード重複(二重実装・cmd_562が片方未修正)**:
+- `_on_search()` (gui_modern.py L1039-1055) が SiteMissAV.search() を呼ばず自前でURL構築
+- L1048/L1050が古い形式 `/dm265/.../search?query=` を直接ハードコード → 404 → 0件
+- **老中独自grep**で`SiteMissAV.search`呼出元0件確認 → SiteMissAV.search()は**完全な冗長実装(デッドコード化)**
+- cmd_562 c6e87eeはSiteMissAV側のみ修正→GUIに反映されないため実質無効化状態だった
+
+**実URL検証表**:
+| 言語 | 現行URL(L1048/L1050) | status | 修正後URL |
+|---|---|---|---|
+| ja | missav.ai/dm265/ja/search?query=ACZD | **404** | missav.ai/ja/search/ACZD |
+| cn | missav.ai/dm265/search?query=ACZD | **404** | missav.ai/cn/search/ACZD (200/12件・cmd_562 cloudscraper実測一致) |
+
+**殿仮説1-6 全排除**: _on_search()がself._current_base_url上書き後に_load_page()→fetch_page()直叩きゆえカテゴリ干渉なし・複合URLにもならない・言語切替後も同経路。
+
+**修正パッチ案** (gui_modern.py L1048/L1050・2行・コミット未適用):
+```python
+- self._current_base_url = f'https://missav.ai/dm265/{lang}/search?query={q}'
++ self._current_base_url = f'https://missav.ai/{lang}/search/{q}'
+- self._current_base_url = f'https://missav.ai/dm265/search?query={q}'
++ self._current_base_url = f'https://missav.ai/cn/search/{q}'
+```
+(cmd_562 SiteMissAV.search() L207/L209と完全同一変換パターン)
+
+| 項目 | 結果 |
+|---|---|
+| 影響範囲 | _on_search()のみ |
+| cmd_562 c6e87ee | 維持(将来GUI統合時の準備として残置) |
+| git diff | clean(一時log残置なし) |
+| パッチ規模 | 2行差し替え(simple勝負) |
+
+**🟡 殿への裁可要請**(4択):
+- (A) **GO 2行パッチ適用** → subtask_1194起票でash1継続コミット適用
+- (B) **NO-GO** → 再検討
+- (C) **再現スクショ要請** → 0件画面+修正後ヒット画面
+- (D) **+リファクタリング** → 検索URL生成の単一実装化(SiteMissAV.search()呼出統合)を別cmdで起票
+
+**老中所見・追加提案**: cmd_562のpatch自体は実は **GUI統合されていなかった**(デッドコードに対する修正)状態。本cmd_563のパッチで実機効果を発揮する。**(D) リファクタリングは過剰実装ゆえ別cmd起票判断は殿に委ねる** — 即(A)GO推奨。
+
+### 🟢 cmd_562 MissAV検索URL形式更新 完遂 close（2026-04-30 00:05 close）
+ashigaru1 単独2Wave完走+老中独自検収PASS(満点)+結晶化機構7回目稼働。
+| Wave | subtask | 結果 |
+|---|---|---|
+| Wave1 原因E確定+2行パッチ起草 | 1191 | 🟢 PASS (cloudscraper実測表で論理証明・ドメイン無関係特定) |
+| Wave2 コミット適用 | 1192 | 🟢 **commit c6e87ee** (1 file / 2 ins / 2 del / 殿指定msg厳守 / push未実行 / clean tree) |
+
+**コミット詳細**:
+- hash: `c6e87eea4f321fd55a917aa0f22dc193d9d1618a`
+- author: yasunorioi (殿名義) / 04-30 00:03:36 +0900
+- msg: `fix(missav): 検索URL形式更新(dm265 prefix廃止+/search/{query}スラッシュ形式・cmd_562)`
+- diff: SiteMissAV.py L207(`/dm265/{lang}/search?query=` → `/{lang}/search/`)+L209(`/dm265/search?query=` → `/cn/search/`)
+
+**🟡 殿への動作確認 GO**:
+```
+cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+```
+MissAVタブ → 検索欄「ACZD」入力 → **12件ヒット**(cloudscraper事前実測値)を御目視確認願いたい。
+
+**🎉 JableTV-MissAV-Downloader対応シリーズ7 cmd完遂**:
+| cmd | 内容 | 結果 |
+|---|---|---|
+| cmd_552 | tkinter解消 | 🟢 |
+| cmd_554 | i18n基盤(88キー三言語+永続化) | 🟢 commit 6ece82c |
+| cmd_555 | ブラウズUI追補(126キー三言語) | 🟢 commit 605d3a5 |
+| cmd_559 | T()ラップ抜け修正(2行) | 🟢 commit 8d5647e |
+| cmd_560 | サイドバー幅調整(width=145→280) | 🟢 commit 47a4db7 |
+| cmd_561 | M4ファイルコミット化 | 🟢 (cmd_554/555を分割コミット) |
+| cmd_562 | MissAV検索URL形式更新(2行) | 🟢 commit c6e87ee |
+**ローカル master [ahead 5]・push塩漬け継続(殿(A)方針)・全動作確認可能**
+
+**結晶化機構**: 本番運用 **7連続稼働**(cmd_516/517/552/559/560/561/562 全自動追記成功)。
+
+### ~~🟡 cmd_562 MissAV検索バグ 原因E確定+2行パッチ起草 → 殿GO/NO-GO判定要請~~（2026-04-29 23:37 完了 → 04-30 00:01 (A)GO採択 → 00:05 完遂)
+ashigaru1 subtask_1191 完了+老中独自検収PASS_with_notes。
+
+**原因確定 E**: missav側で検索パス形式が変更された(古いdm265 prefix廃止+クエリパラメータ→スラッシュ形式)。
+
+**ash1 cloudscraper実測比較表**:
+| URL | status | cards |
+|---|---|---|
+| missav.ai/dm265/cn/search?query=ACZD (アプリ現行) | **404** | 0 |
+| missav.ai/cn/search/ACZD | **200** | **12** |
+| missav.ws/cn/search/ACZD | 200 | 12 |
+| missav.ws/search?q=ACZD | 404 | 0 |
+
+→ ドメイン(.ai vs .ws)は無関係・両ドメイン同挙動。**dm265 prefix廃止 + ?query=→スラッシュ形式が真因**。
+
+**修正パッチ案** (SiteMissAV.py L207/L209・2行・コミット未適用):
+```python
+- url = f'https://missav.ai/dm265/{lang}/search?query={query}'
++ url = f'https://missav.ai/{lang}/search/{query}'
+- url = f'https://missav.ai/dm265/search?query={query}'
++ url = f'https://missav.ai/cn/search/{query}'
+```
+
+| 項目 | 結果 |
+|---|---|
+| パーサ正常 | ✓ div.thumbnail=12件・現行セレクタは新HTMLでも動作 |
+| 影響範囲 | search()のみ・CATEGORIES(dm265系)は別系統で200継続・無傷 |
+| 規模 | 2行差し替え(simple勝負) |
+| git diff | clean(一時log残置なし) |
+| 再現スクショ | △未取得(Wayland+GUI自動化困難) — cloudscraper実測で代替論理証明 |
+| 老中懸念 | curl(Chrome UA)では403(CF) / cloudscraper(Firefox fingerprint)では200 — アプリ本体requests.Session+Referer/Origin(L58-59)も突破できている実績あり |
+
+**🟡 殿への裁可要請**(4択):
+- (A) **GO 2行パッチ適用** → subtask_1192起票でash1継続コミット適用
+- (B) **NO-GO** → パッチ再検討
+- (C) **追加再現要請** → アプリ実機での0件→ヒット確認スクショ取得
+- (D) **追加検証** → cmd_559と同じ流れで先にスクショ→GO判定
+
+老中所見: (A) 即GO推奨。ash1のcloudscraper検証は論理整合あり・パッチ後の動作確認は実機GUI操作で殿目視兼任が現実的。
+
+### 🟢 cmd_561 cmd_554/555 i18n M4ファイル コミット化 完遂 close（2026-04-29 23:22 close）
+ashigaru1 subtask_1190 完了+老中独自検収PASS(満点)+結晶化機構6回目稼働。**Option(ii)2コミット分割採択**(SiteJableTV.pyがcmd_555専属ゆえ自然な境界)。
+
+| commit | hash | 内訳 |
+|---|---|---|
+| cmd_554相当 | `6ece82c` | 3 files(gui.py +68/gui_modern.py +48/locales.py +600) = 699 ins / 17 del |
+| cmd_555相当 | `605d3a5` | 1 file(SiteJableTV.py) = 142 ins / 79 del |
+| **合計** | - | **4 files / 841 ins / 96 del** |
+
+履歴連続性: `605d3a5(cmd_555) → 6ece82c(cmd_554) → 47a4db7(cmd_560) → 8d5647e(cmd_559) → 43ae0ea(origin/master)` の5世代連続・**clean tree達成**(M ファイル全解消)・**`master [ahead 4]`**(殿(A)塩漬け方針継続)。
+
+### 🎉 JableTV i18n対応シリーズ完遂(cmd_552 → 554 → 555 → 559 → 560 → 561)
+| cmd | 内容 | 結果 |
+|---|---|---|
+| cmd_552 | tkinter解消 | 🟢 完了(2026-04-29 20:50) |
+| cmd_554 | i18n基盤(88キー三言語+永続化) | 🟢 完了→cmd_561で 6ece82c コミット化 |
+| cmd_555 | ブラウズUI追補(126キー三言語) | 🟢 完了→cmd_561で 605d3a5 コミット化 |
+| cmd_559 | T()ラップ抜け修正(2行) | 🟢 commit 8d5647e |
+| cmd_560 | サイドバー幅調整(width=145→280) | 🟢 commit 47a4db7 |
+| cmd_561 | M4ファイルコミット化 | 🟢 commit 6ece82c+605d3a5 |
+**ローカル master [ahead 4]・全動作確認済(殿2026-04-29 23:08 OK)・push塩漬け継続(殿(A)方針)**。
+
+**結晶化機構**: 本番運用 **6連続稼働**(cmd_516/517/552/559/560/561 全自動追記成功)。
+
+### 🟢 cmd_560 サイドバー幅調整 完遂 close（2026-04-29 23:00 close）
+ashigaru1 単独2Wave完走+老中独自検収PASS(満点)+結晶化機構5回目稼働。
+| Wave | subtask | 結果 |
+|---|---|---|
+| Wave1 計測+前後6枚スクショ+起案 | 1188 | 🟢 PASS (ja最長317px・width=280決定) |
+| Wave2 コミット適用 | 1189 | 🟢 **commit 47a4db7** (1 file / 1 ins / 1 del / 殿指定msg厳守 / push未実行 / stash pop コンフリクトなし) |
+
+**コミット詳細**:
+- hash: `47a4db76225ce917e6f850509665800d660fdcfc`
+- author: yasunorioi (殿名義) / 22:57:40 +0900
+- msg: `fix(jabletv-i18n): サイドバー幅145→280px(三言語完全表示対応・cmd_560)`
+- diff: gui_modern.py L493 `width=145` → `width=280`
+
+**🟡 殿への申し送り(2件)**:
+1. **🟡 push可否 殿手動判断 — cmd_559+cmd_560 計2 commit蓄積**: リモート origin = Alos21750 殿管理外。現状 `master...origin/master [ahead 2]`(cmd_559 8d5647e + cmd_560 47a4db7)。pushの可否・タイミングは殿手動コマンドで決定願いたい。Memory MCP記載の対外責任哲学に該当。
+2. **🟢 cmd_554+555+559+560 一括動作確認 GO**: ローカル状態で4コミット相当変更すべて反映済。
+   ```
+   cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+   ```
+   設定タブ言語切替→ブラウズタブのカテゴリ/タグ表示→**サイドバー幅280px+三言語完全翻訳表示**→再起動後永続化保持を一気通貫確認可能。問題なければcmd_554/555のコミット要否含めて殿裁定。
+
+**結晶化機構**: cmd_560 done発動で `/home/yasu/agent-swarm/crystals/tooling.md` に自動追記(本番運用5回目稼働・cmd_516/517/552/559/560)。
+
+### ~~🟡 cmd_560 殿(A)GO採択(width=280) → Wave2 コミット適用 進行中~~（2026-04-29 22:55 配布 → 23:00 完了）
+
+### ~~🟡 cmd_560 サイドバー幅調査完了 → 殿目視GO/NO-GO最終判定要請~~（2026-04-29 23:08 完了 → 22:55 (A)GO採択)
+ashigaru1 subtask_1188 完了+老中独自検収PASS_with_concerns(数値根拠妥当・中央ビュー圧迫評価不足)。
+
+**🟡 殿に御確認願いたいファイル**(各々Read tool で表示可):
+| 言語 | before(現状=width=145) | after(width=280適用) |
+|---|---|---|
+| 中文 | `/tmp/jabletv_sidetab_before_zh.png` | `/tmp/jabletv_sidetab_after_zh.png` |
+| English | `/tmp/jabletv_sidetab_before_en.png` | `/tmp/jabletv_sidetab_after_en.png` |
+| 日本語 | `/tmp/jabletv_sidetab_before_ja.png` | `/tmp/jabletv_sidetab_after_ja.png` |
+
+**ash1の三言語最長計測表**(tkinter Font.measure() 実測):
+| 言語 | グループヘッダー最大幅 | タグ最大幅 |
+|---|---|---|
+| zh | 155px (衣著等) | 208px |
+| en | 269px (Miscellaneous(6)) | 332px (Flesh-toned Pantyhose) |
+| ja | **317px** (シチュエーション(16)) | 306px (ガーターストッキング) |
+→ 支配的最長: ja グループヘッダー 317px
+
+**試行結果**: width=220→en全OK/ja若干切れ・width=280→**三言語全8グループ完全表示**
+
+**推奨パッチ案** (gui_modern.py L493・1行・コミット未適用):
+```python
+- content, width=145, fg_color=BG_SIDEBAR,
++ content, width=280, fg_color=BG_SIDEBAR,
+```
+
+**🚨 老中の懸念事項**:
+width=145→280 = **+135px拡張**。1035pxウィンドウのうち本体エリア 890→755px(約-15%圧縮)。afterスクショで動画グリッドが視覚的に圧迫されており、殿明示「中央ビュー圧迫禁止」原則との整合が不明確。
+
+**🟡 殿への裁可要請**(4択):
+- (A) **GO width=280** → 別subtaskでash1にコミット指示。三言語完全表示優先・中央ビューはやや狭くなる
+- (B) **妥協値 width=220** → en全OK/ja若干切れ許容(中央ビュー保護優先)
+- (C) **追加策** → 動的fit/scrollable拡張等(過剰実装禁止原則と衝突するため非推奨)
+- (D) **追加評価要請** → 中央ビュー圧迫の定量評価(動画グリッド列数変化・最小可読サイズ)を追加調査
+
+老中所見: 殿目視で6枚PNG(特にbefore/after en・ja)を比較しA/B選択願いたい。動画グリッドが3列維持できるかが分水嶺。
+
+### 🟢 cmd_559 サイドタブ未翻訳バグ修正 完遂 close（2026-04-29 22:23 close）
+ashigaru1 単独4Wave完走+老中独自検収PASS(満点)+結晶化機構4回目稼働。
+| Wave | subtask | 結果 |
+|---|---|---|
+| Wave1 調査+2行パッチ起案 | 1185 | 🟢 PASS (T()未経由特定/locales三言語キー揃い済確認) |
+| Wave2 三言語スクショ取得 | 1186 | 🟢 PASS (zh/en/ja 3枚 サイドバー8グループ全キー名残存目視確認) |
+| Wave3 殿目視判定 | - | 🟢 (A)GO採択 |
+| Wave4 コミット適用 | 1187 | 🟢 **commit 8d5647e** (1 file / 2 ins / 2 del / 殿指定msg厳守 / push未実行 / stash pop正常) |
+
+**コミット詳細**:
+- hash: `8d5647e3a700e0139a47a70c4d92d7a6d7bb849c`
+- author: yasunorioi (殿名義) / 22:19:51 +0900
+- msg: `fix(jabletv-i18n): T()ラップ抜け修正 — _rebuild_sidebar()サイドタブ翻訳化`
+- diff: gui_modern.py L1072(group_name→T(group_name)) + L1084(name→T(name))
+- 動作確認(ja): コスチューム/体型/その他 翻訳表示成功
+
+**🟡 殿への申し送り(2件)**:
+1. **🟡 push可否 殿手動判断**: リモート origin = `Alos21750/JableTV-MissAV-Downloader-GUI-2026` は外部公開・殿管理外。コミット8d5647eは `master...origin/master [ahead 1]` 状態でpush未実行。Memory MCP記載の対外責任哲学(技術的に正しくても他人のプロジェクトにIssue/PRを簡単に出すべきではない)に該当。pushの可否は殿手動コマンドで決定願いたい。
+2. **🟢 cmd_554+555+559 一括動作確認 GO**: ローカル動作確認は cmd_559コミット済+cmd_554/555 uncommitted M3ファイル状態で実施可能。
+   ```
+   cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+   ```
+   設定タブ言語切替(zh/en/ja) → ブラウズタブのカテゴリ/タグ表示 → **左サイドバーの jable_grp_* が三言語で正しく翻訳されるか** → 再起動後の永続化保持 を一気通貫確認可能。問題なければcmd_554/555もコミット可否含めて殿裁定。
+
+**結晶化機構**: cmd_559 done発動で `/home/yasu/agent-swarm/crystals/tooling.md` に自動追記された(本番運用4回目稼働・cmd_516/517/552/559)。
+
+### ~~🟡 cmd_559 三言語スクショ取得完了 → 殿目視GO/NO-GO最終判定要請~~（2026-04-29 22:10 完了 → 22:15 (A)GO採択）
+subtask_1186完了+老中独自検収PASS(3枚PNG目視確認済)。バグ完全再現+原因確定+パッチ案完備。
+
+**🟡 殿に御確認願いたいファイル**(各々Read tool で表示可):
+| 言語 | パス | サイズ |
+|---|---|---|
+| 中文 | `/tmp/jabletv_sidetab_zh.png` | 1035x730 RGBA 558KB |
+| English | `/tmp/jabletv_sidetab_en.png` | 1035x730 RGBA 562KB |
+| 日本語 | `/tmp/jabletv_sidetab_ja.png` | 1035x730 RGBA 565KB |
+
+**老中目視所見**: 三言語とも上タブ・中央UIは正常翻訳されているが、**左サイドバーの8グループのみが `▸ jable_grp_*` キー名のまま**残存している。subtask_1185の修正パッチ2行(L1094+L1106 T()ラップ追加)が**全8グループ・全タグを同時解消する設計**で完備済。locales.py 三言語キー揃い済(zh L127-134/en L384-391/ja L641-648)。
+
+| 段階 | 状態 |
+|---|---|
+| Wave1 調査+起案(subtask_1185) | 🟢 完了 (T()未経由特定/2行パッチ起案) |
+| Wave2 三言語スクショ取得(subtask_1186) | 🟢 完了 (ash1報告+老中3枚目視PASS) |
+| **Wave3 殿目視最終判定** | **🟡 殿裁可待ち** ← イマココ |
+| Wave4 コミット適用 | ⏳ 殿GO時のみ別subtask起票 |
+
+**🟡 殿に願い上げる**:
+- (A) **GO** → 別subtask起票してash1にコミット指示。コミットメッセージ案: `fix(jabletv-i18n): T()ラップ抜け修正 — _rebuild_sidebar()サイドタブ翻訳化`
+- (B) **NO-GO** → パッチ再検討/別アプローチ
+- (D) **追加要望** → サイドバー以外の未翻訳箇所も併せて確認したい等
+
+老中所見: (A) 即GO推奨。バグ再現完璧・パッチ極小・副作用なし・cmd_554+cmd_555動作確認に同梱可。
+
+### ~~🟡 cmd_559 殿裁可:(C)scrot先 採択 → subtask_1186 進行中~~（2026-04-29 22:03 配布 → 22:10 完了)
+
+### ~~🟡 cmd_559 サイドタブ未翻訳バグ 修正パッチ2行 殿GO判定要請~~（2026-04-29 21:40 起案完了 → 22:03 (C)採択でWave2配布）
+ashigaru1 subtask_1185 調査+起案完了+老中独自検収PASS。**コミット未適用**(殿明示順守)。
+
+**原因**: 分類A — `_rebuild_sidebar()` で `group_name` / `name` を直渡し、T()ラップ忘れ。SIDEBAR_TAGS は設計通りlocales.pyキー名で定義されている(SiteJableTV.py L166 設計意図コメントあり)が、UIレンダリング側で T() 適用が抜けていた。
+
+**修正パッチ案** (gui_modern.py のみ・locales追加不要):
+```python
+# L1094
+- text=f'{arrow} {group_name} ({len(tag_list)})',
++ text=f'{arrow} {T(group_name)} ({len(tag_list)})',
+
+# L1106
+-     self._sidebar, text=name,
++     self._sidebar, text=T(name),
+```
+
+| 項目 | 結果 |
+|---|---|
+| T()所在 | gui_modern.py L24 既import済(`from locales import T, ...`) → 追加import不要 |
+| locales.py キー揃い | zh(L127-134)/en(L384-391)/ja(L641-648) 全8グループ三言語完備 ✓ |
+| パッチ規模 | 2行差し替えのみ |
+| 副作用 | なし(サイドバー以外への波及なし) |
+| スクショ | Wayland制限で未取得(`sudo apt install scrot` で解決可・殿のsudo即許可属性ゆえ容易) |
+| 既存変更 | cmd_554/555の uncommitted M ファイル群に重ねる形で適用 |
+
+**🟡 殿への裁可要請**:
+- (A) **GO**: 別subtaskでashigaru1に実装+コミット指示出す。コミットメッセージ案: `fix(jabletv-i18n): T()ラップ抜け修正 — _rebuild_sidebar()サイドタブ翻訳化`
+- (B) **NO-GO**: パッチ案再検討/別アプローチ
+- (C) **scrot先**: スクショ取得を先行(`sudo apt install -y scrot` で再現スクショ→殿目視確認後にGO判定)
+
+老中所見: (A) 即GO推奨。パッチが極小・副作用なし・cmd_554/555の延長で土地勘あるash1継続が最善。動作実証は cmd_554+555 一括動作確認のついでに殿目視で済む。
+
+### 🟢 cmd_552 tkinter解消 完了 close — cmd_554+555 動作確認可能に（2026-04-29 20:50 close）
+ashigaru2 subtask_1178完了+老中独自検収PASS。**aptインストール不要**(tkinter既導入確認)。
+| 項目 | 結果 |
+|---|---|
+| TkVersion確認 | 8.6 (`python -c "import tkinter; print(tkinter.TkVersion)"` venv内成功) |
+| dpkg確認 | python3-tk(3.13.5-1) ii / python3.13-tk(3.13.7-1ubuntu0.4) ii 両方インストール済 |
+| main.py起動 | ModuleNotFoundError消去・GUI初期化進行(exit 124は別問題) |
+| requirements.txt | 全7パッケージ導入済(customtkinter 5.2.2含む) |
+| Selenium/Playwright依存 | なし |
+| BBS kenshu | 高札Docker停止中ゆえPOSTスキップ(正常運用) |
+| 既存venv | 非破壊保持 |
+
+**🟡 殿動作確認 GO**: cmd_554+cmd_555 一括動作確認可能になった。
+```
+cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py
+```
+設定タブ言語切替(zh/en/ja) → ブラウズタブのカテゴリ/タグ表示 → 再起動後の永続化保持 を一気通貫確認可。
+
+**お針子STALL報告(20:41:23)**: 誤検知だった(タイミングずれ)。ash2は監査時刻直後に新セッション再着手→完了報告。お針子報告 read:true 化+karo_action 記載済。
+
+### 🟢 17日pending親cmd 2件 done整合化（2026-04-29 20:50）
+お針子定期監査で「cmd_516/cmd_517 17日pending」継続指摘あり。実装は既に完了済みゆえ親cmdをdone整合化:
+| cmd | 実装解消経路 | 状態 |
+|---|---|---|
+| cmd_516 軍師 simplicity check ゲート導入 | cmd_557(commit 6bedc19) | done整合化 |
+| cmd_517 cmd完了時の自動結晶化 | cmd_553(設計v1)→cmd_556(v2)→cmd_558(実装commit 244b2af) | done整合化 |
+
+副次: subtask_1179(cmd_553軍師設計の残骸assigned)もdone整合化(成果物 docs/shogun/cmd_517_crystallization_design.md 実在)。
+
+**🟢 結晶化機構 本番運用 初実証**: 上記3cmdのdone更新で cmd_update フックが発動し、`agent-swarm/crystals/shogun.md` (cmd_516/cmd_517) と `tooling.md` (cmd_552) に自動追記が確認された。**結晶化機構の初稼働実証**完了。
+
+### 🟢 cmd_555 JableTVブラウズUI多言語化追補 完了 — 動作確認はcmd_554と一括（2026-04-29 00:30 close）
+ashigaru1 subtask_1181 完了+老中検収PASS。**コミットなし(殿明示順守)**。
+| 項目 | 結果 |
+|---|---|
+| AST構文チェック | locales.py / M3U8Sites/SiteJableTV.py / gui_modern.py / gui.py 全PASS |
+| jable_* キー網羅 | zh=126 / en=126 / ja=126 (cat×3+hot×4+grp×8+tag×111・missing空集合) |
+| 総キー(cmd_554+cmd_555) | zh=214 / en=214 / ja=214(88+126整合) |
+| 中文ハードコード除去 | 最近更新/熱門影片/新片上架/溫泉/洗浴場 grep=0件 |
+| URL不改変 | https://jable.tv/ count=3保持(L149-151) |
+| 設計加点 | キー名保持+解決メソッド設計(L308 get_hot_time_filters)。call-time翻訳で保守性高 |
+| venv統合テスト | zh=衣著/黑絲 → en=Clothing/Black Pantyhose → ja=コスチューム/黒ストッキング PASS |
+| git status | M 4ファイルのみ・コミットなし |
+
+**🟡 殿動作確認待ち**: cmd_554+cmd_555は一括で殿目視確認(cmd_552完了後)。設定タブ言語切替→ブラウズタブのカテゴリ/タグ表示まで一気通貫で確認可能。
+
+### 🟢 cmd_554 JableTV i18n対応 実装完了 — 動作確認待ち（2026-04-28 23:58 close）
+ashigaru1 subtask_1180 完了+老中検収PASS。**コミットなし(殿明示順守)**・git status M 3ファイルのみ。
+| 項目 | 結果 |
+|---|---|
+| AST構文チェック | locales.py / gui_modern.py / gui.py 全PASS |
+| キー網羅 | zh=88 / en=88 / ja=88 (264キー揃い踏み) |
+| 永続化 | `~/.jable_downloader_lang.conf` |
+| OS locale推定 | ja_JP→ja / en_*→en / 他→zh (初回起動時) |
+| gui_modern.py | L773 CTkOptionMenu + L1475 _change_language |
+| gui.py | L697 tk.OptionMenu + L928 _change_language |
+| helper | locales.py L343 set_lang / L374 load / L385 save |
+
+**🟡 殿動作確認待ち**: cmd_552(tkinter解消・ashigaru2並走中)完了後、`cd /home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026 && source venv/bin/activate && python main.py` で:
+- 設定タブの言語セレクタ表示
+- 切替で即時再描画(全タブ)
+- 再起動後の永続化保持
+を殿目視確認願いたい。問題あれば再開可能(コミットしていないため)。
+
+### 🟢 cmd_536 MacGyver Phase1-4検証 完了 close（2026-04-28 22:25 close）
+ashigaru1 subtask_1156 完了+老中検収PASS。**commit b13970d** (`/home/yasu/Macgyver/`, master)。297行スクリプト+Real-ESRGAN設置+RTX4060 NVK Vulkan動作確認+1440x1080出力(demo検証mp4 2.28MB)。
+| 項目 | 結果 |
+|---|---|
+| Real-ESRGAN(ncnn-vulkan v0.2.5.0) | tools/realesrgan/ 設置済 |
+| RTX4060 NVK Vulkan | GPU0認識・ESRGAN動作確認 |
+| 検証出力 | output/[Dorama]MacGyver-01-Pilot.mp4 1440x1080 H.264+AAC |
+| パイプラインスクリプト | dvd_to_1080p.sh (Phase1-4完全網羅) |
+
+**🟡 殿への申し送り(本格全件展開の前提条件・2点)**:
+1. **lsdvd インストール**: `sudo apt install lsdvd` (Claude Code sudo認証壁のため殿要実施)
+2. **DVDソース投入**: `~/Macgyver/1/1/VIDEO_TS/` 未存在。`/dev/sr0` (DVDドライブ稼働確認済) にDisc1物理ロード+rip必要
+
+**🟡 性能上の検討**: NVK ~0.16fps/frame → 実ep(43200fr)≈72h。proprietary NVIDIAドライバ導入で 1.5-2h 推定(36-48倍速)。本格処理時に殿判断仰ぎたい。
+
+### 🟢 セッション開始 DBゾンビ整合化 完了（2026-04-28 21:55 close）
+お針子定期監査(2026-04-28T21:24)指摘の DB-YAML 不整合 2件を老中が整合化:
+| 件 | 対処 | 結果 |
+|---|---|---|
+| subtask_1154 (cmd_534 WS2812復元) | DB status=done 更新 | commit 9936869「WS2812 LED確認+DI連動完了」で実機完了済を確認・整合化 |
+| subtask_1156 (cmd_536 MacGyver Phase1-4) | ashigaru1.yaml再投入+send-keys再起動 | ashigaru1新セッション(idle/908K)受領確認(inbox読込開始) |
+お針子報告(2026-04-23訂正記録 + 2026-04-28監査)もread:true化+karo_note付与済。
+
+### 🟢 cmd_558 cmd_517結晶化v2実装 完了 close — 結晶化機構 本番運用開始（2026-04-29 01:35 close・kenshu_gate PASS）
+部屋子1 subtask_1184完了+2F合議kenshu_gate=**PASS** (severity:LOW)。
+| 合議 | 判定 |
+|---|---|
+| 軍師(kenshu#275) | PASS_with_minor_notes・適合7+加点1(sys.modules退避設計より洗練)+軽微逸脱4・simplicity check 6問思想継承 |
+| お針子(kenshu#332) | **18/18満点 approved** (correctness3+tests3+code_quality3+completeness3+no_regressions3=15 + PC1-PC3=3) |
+| 家老最終判定(kenshu#281) | PASS / severity LOW |
+
+**実装内容**: crystallize.py 234行新規+cmd_updateフック+8行+swarm.yaml crystals板(L111-114)+.env.example 16行+tests/test_crystallize.py 115行(6件PASS)+パイロット6項目(cmd_555/cmd_557で動作実証)。**結晶化機構は本番運用開始**(以降のcmd_update done時に自動結晶化発動)。
+**コミット**: shogun=244b2af push private OK / **agent-swarm=b6d473c local(remote未設定・🟡殿マター下記)**。worktree未使用ゆえmerge処理不要。
+
+**🟡 殿への申し送り(本cmdで生じた要対応6件)**:
+| # | 内容 | 起票候補 |
+|---|---|---|
+| L1 | MD目次フォーマット拡張(問い+結果+学び+DAT・設計§B-2準拠) | 別cmd起票 |
+| L2 | >>5関連レスにgit commit hash追加(_build_templates +3行) | 別cmd起票 |
+| **L3** | **port 8823(実) vs 8824(swarm.yaml/dat_server.py default)整合・殿裁定要** | **殿裁定→別cmd** |
+| L4 | crystallize_cmd戻り値 partial vs failed分岐(+5行) | 別cmd起票 |
+| #1 | dat_server subject_generic LIMIT 100拡張 | 別cmd起票 |
+| #6 | dat_genericスレタイ表示改修(>>1サマリ反映) | 別cmd起票 |
+
+### 🟡 agent-swarm リモート未設定（2026-04-29 01:35 殿確認要請）
+agent-swarm=b6d473c (crystals板追加commit)が **local commit止まり**・remote未設定。本cmdで初発覚。push可否+remoteリポジトリ設定方針を殿確認願いたい(yasunorioi private 想定だがremote add origin の判断が必要)。
+
+### 🟢 cmd_557 軍師simplicity checkゲート 実装完了 close（2026-04-29 01:30 close）
+ashigaru1 subtask_1183 完了+老中検収PASS。**commit 6bedc19 / push private main**。instructions/gunshi.md L175以降+13行(必須3問+検問結果報告ガイダンス)。North Star Alignment直後・軍師の3つの仕事カテゴリ前に挿入(既存非破壊)。**cmd_516(2026-04-12発行・16日pending)解消**。装飾なし・重い儀式なし(殿要件遵守)。今後の軍師タスクから新ルール適用(過去cmdへの遡及なし)。
+
+### 🟢 cmd_556 cmd_517結晶化 v2設計 殿GO判定 → cmd_558実装着手（2026-04-29 01:10 GO判定）
+殿2026-04-29 v2設計GO + cmd_516実装(cmd_557)も並行GO。両cmd実装中(進行中セクション参照)。
+
+### ~~🟡 cmd_556 cmd_517結晶化 v2設計フェーズ完了 → 殿レビュー要請~~（2026-04-29 01:00 設計納品 → 01:10 GO判定済）
+軍師subtask_1182完了+老中検収PASS。**設計書: `docs/shogun/cmd_517_crystallization_design_v2.md`(465行・23.7KB)** + 分析yaml更新。v1(370行)は履歴比較用に残置。
+| 項目 | 軍師v2案 |
+|---|---|
+| 本体 | agent-swarm DATスレッド(thread_id="cmd_XXX"・新設`crystals`板) |
+| テンプレ | >>1問い/>>2結果/>>3変更点/>>4学び/>>5関連の固定5レス連投 |
+| 追補 | >>6以降に自由レス可(append-only。>>1-5は改変禁止) |
+| MD目次 | `agent-swarm/crystals/{project}.md`(>>1抜粋+DAT直リンク・grep導線) |
+| 書込手段 | Python直叩き `do_reply_add(notify=False)` で5発通知抑止(HTTPフォールバック時は5発許容) |
+| スレ生成 | 未存在thread_idでPOST→自動成立(専用エンドポイント不要) |
+| Docker化 | `SHOGUN_CRYSTALS_DIR` + `SWARM_DAT_URL` + `SWARM_BOARD` + `SWARM_SERVER_PATH` + `SWARM_DB` |
+| simplicity check | 6問再検問通過 |
+| unknown_unknowns | 10項目網羅(古スレ埋没・dat_genericスレタイ表示・sys.path競合等) |
+| 実装規模 | 足軽1名・1日(v1半日から増加・連投ロジック+sys.path注入+板新設のため) |
+| rollback | フック3行削除 or `SHOGUN_CRYSTALS_DISABLE=1` |
+
+**🟡 殿への裁定要請**: v1(MD単独)とv2(ハイブリッド)の比較レビュー願いたい。GO判定なら実装フェーズを別cmd起票。
+v2の段取り(軍師提案):
+1. agent-swarm/config/swarm.yaml にcrystals板追加(小修正)
+2. shogun側 scripts/botsu/crystallize.py 新設(150-200行)
+3. cmd_update フック3行追加 + .env.example 更新
+4. 直近1件 done cmdで手動パイロット → DAT+MD目次両方確認
+
+**追加検討事項(軍師指摘・別cmd候補)**: dat_serverスレタイ表示改修(>>1サマリをタイトル化) / subject_generic LIMIT 100拡張
+| 項目 | 軍師案 |
+|---|---|
+| 書き込み先 | `agent-swarm/crystals/{project}.md` (PJ別1ファイル append-only・新設) |
+| 書き込み手段 | shogun側 `botsu/cmd.py cmd_update()` フック直結+`fcntl.flock`+`open('a')`。swarm API追加なし(YAGNI) |
+| フォーマット | 殿確定の4フィールド(問い/結果/変更点/学び)4-6行/cmd |
+| 実装規模 | scripts/botsu/crystallize.py 80-120行+cmd_update 3行追加(足軽1名半日) |
+| Docker化 | 環境変数 `SHOGUN_CRYSTALS_DIR` でhost/container切替・shared volume |
+| simplicity check | 5問通過(バックフィル/取消/LLM要約/swarm API/wiki_pages連携を刈り込み) |
+| graceful degradation | try/except + `SHOGUN_CRYSTALS_DISABLE=1` でrollback可 |
+
+**🟡 殿への裁定要請**: 上記設計でGO判定なら実装フェーズを別cmd起票(足軽1名半日規模)。
+追加検討事項(軍師指摘): cmds.notes カラム有無確認 → 無ければ`--notes`引数追加 or マイグレーション要。
+見落とし候補(unknown_unknowns): 結晶テキスト腐敗(年次archive提案)・PJ横断cmd所属判定・重複append防止・学びフィールド空欄常態化対策。
+
+### 🟢 cmd_551 Obscura PoC評価 完全終結 — 条件付き推奨（2026-04-26 21:55 close）
+ash2 subtask_1177 完了 + 家老検収PASS。**判定: 条件付き推奨（限定用途）**。本格導入留保・既存curl+SSE / Playwright MCP併用方針維持。
+| タスク | 結果 | 要点 |
+|---|---|---|
+| A: gitdiagram再現 | **FAIL**(期待通り) | SSE非同期生成→networkidle0後も未取得。curl+SSE(cmd_547)優位継続 |
+| B: JS動的サイト(気象庁) | **FAIL** | AngularJS+jQuery `document.createAttribute is not a function` でJSクラッシュ・body空。ステルスモードは webdriver=false/Chrome145偽装 基本動作 |
+| C: Playwright互換 | **SUCCESS** | playwright-core+connectOverCDP で全API(goto/title/content/evaluate/close)動作 |
+
+**実測**: pre-built binary 3.53s DL・77MB単一バイナリ・依存ゼロ・RSS~50MB/fetch1〜2秒(Chrome比大幅軽量・老中install_time.log実測一致)。
+**棲み分け案**: 静的HTML/単純JS=Obscura可、SSE非同期=curl+SSE、Angular/React/jQuery複雑SPA=Playwright MCP、shogun本体wiring=見送り。
+**成果物**: `docs/obscura_poc_report.md`(9セクション 8960B) + `/home/yasu/obscura_poc/`(binary+生HTML+各taskログ+task_c_playwright.mjs)。
+**家老検収軽微指摘**: ash2報告 summary "v0.1.0" vs 殿原典 "v0.1.1" — CDP応答 "Browser: Obscura/0.1.0" 採用と推測。実害なし、次フェーズで版本動向再確認可。
+**🟡 殿への申し送り**: 半年後 v0.2+ で再評価推奨(DOM互換性・page.click/screenshot実動作・並行スループット・ステルス詳細・rotation-planner E2E)。次フェーズ候補リストはレポート §9 に格納。
+
+### 🟢 cmd_549 push一斉完了 全8/8成功（2026-04-25 21:46 close）
+殿pushを裁可 → subtask_1175 ash2全実行成功。**禁則違反なし**(upstream/fork非push)。
+| # | リポ | remote/branch | push結果 |
+|---|------|--------------|---------|
+| 1 | agri-relay | origin/main | SUCCESS 62ff381→182c0de |
+| 2 | multi-agent-shogun | **private/main** | SUCCESS 58ff089→2bd994f |
+| 3 | ntrip-pico | origin/master | SUCCESS d8c120f→a01f1cd |
+| 4 | ntripcaster | origin/master | SUCCESS f4972b3→208d590 |
+| 5 | NTRIP-client-for-Arduino | origin/master | SUCCESS 280f049→78c0047(下記🟡) |
+| 6 | uecs-hardwares | origin/main | SUCCESS 新規branch(下記🟡) |
+| 7 | uecs-llm | origin/v5 | SUCCESS 832449b→3c131f5 |
+| 8 | rotation-planner | origin/main | SUCCESS 34360fa→8d005e0 |
+
+ccm_rp2350_relayは非公開維持で対象外(殿裁定)。
+
+### ~~🟡 cmd_549 push後 殿確認3件~~ → 殿裁定済cmd_550で対処中（2026-04-25 23:05）
+
+### 🟢 cmd_550 完全終結 全3任務クリア（2026-04-25 23:38 close）
+ash2 subtask_1176 全任務完了 + 家老検収PASS。**DB+YAML done整合化完遂**(cmd_550 / subtask_1176 / shogun_to_karo.yaml)。
+| # | 任務 | 結果 | 検証 |
+|---|------|------|------|
+| 1 | NTRIP-CFA master保護撤去 | 殿手動UI操作 | API401(殿予告通り)・殿UI確認を権威データ採用(roju_reports task1_verification_by_karo) |
+| 2 | uecs-hardwares v5 cherry-pick+main削除 | ash2 完了 | ls-remote v5のみ・main消滅確認 |
+| 3 | uecs-hardwares LFS化 | ash2 完了 | force push v5(94cab79)・migrate 40コミット書換・.gitattributes(`*.jar filter=lfs`)コミット済 |
+
+**ash2の重要発見**: v5履歴に*.jar不在 — freerouting.jar(63.88MB)はローカルmain(5eda273系列)経由でcmd_549がorigin/main新規branchにpushした副産物。**任務2でorigin/main削除済→cmd_549 LFS警告は実質解消**。今後v5に*.jar追加時は自動LFS管理。stash pop で殿作業中ファイル(ccm_rp2350_relay.ino/.ini)は保全済。
+
+**🟡 殿への申し送り(要対応ではないが連絡)**: v5の全40コミットhashが書き換わった(旧92e07d6→新94cab79)。他環境(MBP/RPi等)にuecs-hardwares v5クローン残存があれば再clone(or `git fetch && git reset --hard origin/v5`)が必要。
+
+### 🟢 cmd_548 rotation-planner clone+gitdiagram 完了（2026-04-25 21:46 close）
+ash2 subtask_1174完了。**commit 8d005e0(main)** + README +97行(Mermaid図92行)。**ブランチ齟齬報告**: config/projects.yaml=feature/frontend-migration指定だがリモート不在(main+feature/multi-farmerのみ) → mainで作業(殿承認済)。手法はcmd_547確立のPOST /api/generate/stream+SSEを継続使用。push成功(cmd_549で実施)。
+
+### 🟢 cmd_547 gitdiagram追加 完了（2026-04-25 21:21）
+殿閃き案件(medium) → **7/8リポcommit成功・cmd close**。subtask_1173 ashigaru2配布。**手法確立**: POST /api/generate/stream + SSEストリーム(curl完結、Playwright不要 — 家老想定よりはるかに軽量化)。
+| # | リポ | commit | 状態 |
+|---|------|--------|------|
+| 1 | agri-relay (=OGMS) | 182c0de | done |
+| 2 | multi-agent-shogun | 2bd994f | done |
+| 3 | ntrip-pico | a01f1cd | done |
+| 4 | ntripcaster | 208d590 | done |
+| 5 | NTRIP-client-for-Arduino | 78c0047 | done |
+| 6 | uecs-hardwares | 92e07d6 | done |
+| 7 | uecs-llm | 3c131f5 | done |
+| 8 | ccm_rp2350_relay | — | **skip(GitHub private 404)** |
+
+push未実行(F006準拠厳守)。push可否+ccm_rp2350_relay public化要否は下記🟡で殿裁定仰ぐ。
+
+### 🟡 cmd_547 殿裁定2件（2026-04-25 21:21 cmd close後の続き）
+1. **7リポ commit push可否**: 各リモートへのpushを老中に許可されるか? 各リポはyasunorioi/*+yohey-w/multi-agent-shogun。push可ならば一斉実行する(各リポで `git push origin main` or 該当ブランチ)。否ならばこのまま手元commitのみ留め置き。
+2. **ccm_rp2350_relay スキップ理由解消**: 当該リポ yasunorioi/ccm_rp2350_relay は GitHub private で gitdiagram が 404。下記いずれかでご判断:
+   - (A) リポをpublicに変更 → 足軽再投入で1リポ分追加コミット
+   - (B) 殿が自リソースで gitdiagram.com にログインしてMermaid生成 → 老中に貼付して足軽が組み込み
+   - (C) スキップのまま(7リポで打ち止め)
+
+### 🟡 cmd_547 既存3件（前次セッション殿確認継続中・2026-04-25 21:14）
+- **rotation-planner**: /home/yasu/ にディレクトリ不在 → 別ホスト(MBP等)?それとも別パス? 殿に所在ご教示願いたい
+- **agent-swarm**: リモート未設定(no remote)+README無 → push対象外。Mermaid追加要否のご判断（git remote add すればpush可能になるが、新規README作成と remote 設定は殿の意図確認したい）
+- **unipi-agri-ha**: docker専用ディレクトリ・git管理外(.git不在) → 家老判断でスキップ(対象外と扱う)。ご異論あれば指示願う
+
+### 🟢 cmd_546 dynabook-b55 WG接続完了（2026-04-25 21:08 close）
+ashigaru2報告(subtask_1172)受領。**新VPS(B) 153.126.177.239 / 10.20.0.0/24 に接続変更**(VPS(A)はcmd_541 WG移行完了済のためwg-client化済・wg0廃止)。dynabook=10.20.0.30割当、ping双方向OK+handshake成立+systemd enable+lid disable完遂(殿実施分含む)。**重要副産物**: cmd_540(新VPS Docker+wg-easy構築)・cmd_541(WG引っ越し計画)もDB上既done判明 → shogun_to_karo.yaml側のpending放置を done整合化(YAML肥大化対策)。cmd_543(RP2350 USB CDC設計, 軍師)も同様にYAML整合更新。
+
+### 🟢 監査backlog 12件全件done整合（2026-04-25 お針子報告）
+お針子報告: 監査backlog cmd_474〜488 (3週間放置と見えていた12件)は、実は2026-04-02〜04の前任お針子セッションで**全件処理済み**で、`roju_ohariko.yaml` の audit_queue.status が pending のまま放置されていただけ。本日お針子が全件 status=done 整合化。**スコア**: cmd_479(P1 L4)=18/18満点、cmd_474(P2 L3代表)=18/18満点、残9件=17-18/18全合格、不合格0件。家老処置でsubtask_1070 audit_status=done DB更新も完了。
+
+### 🟢 subtask_1146(cmd_526) 既done再確認（2026-04-25 21:07）
+ashigaru1報告受領(commit be1203a / agri-relay)。DB上は2026-04-15 に worker=ashigaru2 で既done済の前セッション残務。再採点不要・read=true更新済み。
+
+### 🟢 cmd_515 要注意①足軽2自発対処完了・スコア16/18訂正 (2026-04-23 23:12)
+
+**お針子自己訂正(2ch #309)**: 採点根拠の読み違いを認め、correctness 2→3 訂正。**総スコア15/18 → 16/18 (approved)**。freshness_score()の「データ無ければ0.5」は明示的フォールバック仕様で、correctness減点の根拠にはならぬと正直に開示。監査官としての矜持を示した。
+
+**足軽2自発対処(commit 58ff089)**: 2ch議論中、自発的にmigrate_vec.pyバグを特定・修正:
+- **根本原因**: line 115で created_at に `""` を固定で渡していた（subtask_1122の実装ミス）
+- **修正内容**: 各元テーブル(commands/subtasks/reports/diary/thread_replies)から日時lookup + --backfillフラグ追加 + 即時2000/2016件補完
+- **老中実測検収**: vec_meta filled=2000/2016件、`--fresh` 実測で「温室制御」検索のランク順変化確認（cmd_515=FRESH0.93 最新優位動作）→ **--fresh機能 実質復活**
+- 自律判断の是非: 実装バグ修正で老中裁量範囲内(F001非抵触)。殿判断が必要な sentence_transformers導入には踏み込まぬ適切な線引き
+
+### 🟡 cmd_515 要注意② sentence_transformers本番インストール 殿判断仰ぎ奉る
+
+足軽2進言: **VPS本番 sentence_transformers インストール要否の殿裁定**が唯一の残課題。
+
+**2ch議論合意 (軍師#307/#311)**: 「sentence_transformers 欠のまま created_at補完しても vec_search=[] のため hybrid は FTS5のみ。つまり --fresh で鮮度が出ていても vec成分ゼロ。精度実測が成立する環境でないとPhase 0-3の真価は問えない」
+
+**殿の選択肢2案:**
+| 案 | 内容 | 殿方針との整合 |
+|----|------|--------------|
+| A. インストール | pip install sentence_transformers + Ruri v3モデル(数GB DL) + migrate_vec.py実行で全件再vec化 | 月額忌避は回避可(買い切りモデル)だが常駐数GB・初回DL時間は要覚悟 |
+| C. 割り切り | FTS5+TYPE_WEIGHT hybridで実用十分。vec/--fresh は未使用機能として保留 | 「80%で出荷」「マクガイバー精神」と整合 |
+
+老中所見: 現時点は**殿の選択次第**。A採用なら subtask化して足軽1/2に投入、C採用ならcmd_515を完全closeして運用継続。お針子・軍師・足軽の議論で技術的判断材料は出揃った。殿のご判断を仰ぎ奉る。
+
+### 🟢 軍師注進・老中対応3件完了（2026-04-23 22:50 殿判断不要）
+お針子・軍師の報告により3件を一括処理:
+- **cmd_544 close**: 全6subtask done → cmd status=done (DB+shogun_to_karo.yaml両方更新)
+- **subtask_1124 再起動**: blocked_by=subtask_1123解消済 → ashigaru1に再起動指示。思考開始確認
+- **gunshi.yaml 状態管理漏れ訂正受領**: 軍師が自発的にassigned放置3件(vector_search/2ch/rotation-planner)をdoneに訂正。いずれも前任軍師が既に献策済み・老中読了済みの管理漏れ。軍師より運用改善提案「完了報告時に gunshi.yaml 側も連動して done 更新すべし」→今後の老中職掌として留意
+
+### 🟢 cmd_544 高札Docker復旧 Q1/Q2 殿裁定完了（2026-04-23 01:50）
+**Q1=C: 高札v2再設計** / **Q2=C: Docker+他用途も見据えて導入**
+殿曰く「全体も色々いじったし、そろそろ再設計の時期かと」。
+方針転換: v1復旧せず、v2再設計+Docker基盤整備。Phase 2-A(軍師=v2設計)+Phase 2-B(ash2=Docker手順書)を並列起動済み。
+sudo手順は下記🟡新項目に切り出し。
+
+### 🟡 cmd_544 Phase 3-A 残: unipi-agri-ha HA root2ファイル — 殿sudo再rsuncご依頼（2026-04-23 11:32）
+subtask_1168 rsync で unipi-agri-ha のみ rc=23 (24/26ファイル成功)。HA Docker root所有の2ファイルが Permission denied。下記2コマンドの殿sudo実行をお願いいたしたく:
+
+```bash
+sudo rsync -a /media/yasu/a0aefbbd-414b-4678-bcad-4db2aed18528/home/yasu/unipi-agri-ha/docker/ha-config/.storage/auth /home/yasu/unipi-agri-ha/docker/ha-config/.storage/auth
+sudo rsync -a /media/yasu/a0aefbbd-414b-4678-bcad-4db2aed18528/home/yasu/unipi-agri-ha/docker/ha-config/.storage/core.uuid /home/yasu/unipi-agri-ha/docker/ha-config/.storage/core.uuid
+```
+他10プロジェクト(ccm_rp2350_relay/agri-relay/agent-swarm/uecs-hardwares/uecs-llm/systrade/ntrip-pico/ntripcaster/NTRIP-client-for-Arduino) と .gitconfig は完全コピー済み。
+
+### 🟢 cmd_544 D3 tools/botsunichiroku-search/ 処分 — 完了 (2026-04-23 11:32)
+軍師調査(subtask_1170)で殿仮説「コピペ副産物」却下確定 → 4/23 00:42 新環境固有作成と判明 → D1=(a)scripts/kousatsu/裁定済のため不要 → **家老が rmdir 実行完了**。tools/ は kanjou/ + kousatsu/ のみに整理済。
+
+### 🟡 cmd_544 Phase 3-A 旧SSD任意ファイル — 殿のコピー要否ご判断（2026-04-23 02:25）
+必須プロジェクト群(ccm_rp2350_relay/unipi-agri-ha/agri-relay/agent-swarm/uecs-hardwares/uecs-llm/systrade/ntrip-pico/ntripcaster/NTRIP-client-for-Arduino+.gitconfig)はsubtask_1168でash6が即rsync実行中。下記は殿が個人で使うものゆえ、yes/noを頂きたく:
+
+**個人作業ディレクトリ**:
+- [ ] `~/.config/` — アプリケーション設定一式(Chrome/Firefox bookmark等含む)
+- [ ] `~/Documents`
+- [ ] `~/Desktop`
+- [ ] `~/Downloads` (ArsproutDIYマニュアル等あり)
+
+**個別ファイル**:
+- [ ] `arsprout-backup20260417.img` — Arsprout SDカードバックアップ
+- [ ] `system_prompt.pdf`
+- [ ] `Project.zip` + `Project/` — 用途不明
+- [ ] `shogun.zip`
+- [ ] `arsprout-logic.md`, `arsprout-wg.txt`
+- [ ] `macgyver_upscale.sh`
+- [ ] `M5Stack-C-SCD40-spec.md`, `M5Stack-C-SCD40.md`
+- [ ] `3-13.md`, `kakutei_shinkoku_2025.md` — 殿のメモ?
+- [ ] 写真群 (`Scan2026-03-16_*.png`, `SC00E030-*.png`)
+- [ ] `output.csv`, `qr-iphone.png`
+- [ ] `bin/` — 殿の独自スクリプト?
+- [ ] `cuda-keyring_1.1-1_all.deb`, `NVIDIA-Linux-x86_64-580.119.02.run` — GPUドライバ
+- [ ] `2026_道央農業振興公社_jpeg/` — 画像群
+- [ ] `rotation-planner-ios.zip`
+- [ ] `docker-mirakurun-epgstation/` — Docker EPGプロジェクト
+- [ ] `fancontrol-gui/`, `i2c_scanner/`, `mcp23017_test/`, `lw-charts-sample/` — 補助プロジェクト
+- [ ] `Arduino/`, `Macgyver/` (空dir) — IDE設定や予約dir
+
+不要分は[ ]のまま、必要分は ✅ 印か個別指示にて。
+
+### 🟢 cmd_544 D1〜D8 殿裁定済（2026-04-23 02:20、D4補足 11:25）
+- **D3**: 殿曰く「コピペでmulti-agent-shogunを持ってきた影響か?」→ subtask_1170で軍師再調査中、副産物確定なら家老rmdir実行
+- **D1/D2/D5/D6/D7/D8**: 軍師推奨で進める方針確定
+- **D4**: cmd_404 Hopfield実装は **scripts/init_db.py + scripts/build_cooccurrence.py に既存確認(2026-04-23 11:25 家老grep)** → **(a)流用** で確定。Phase 2-B Wave 1のS1/S2は既存ファイル拡張で対応
+
+### ~~🟡 cmd_544 Phase 2-A v2再設計 — 殿裁定事項 D1〜D8~~ → 上記🟢で解決済み
+
+### 🟡 cmd_544 Phase 2-A v2再設計 — 殿裁定事項 D1〜D8（2026-04-23 02:12）
+軍師subtask_1166完了。`context/kousatsu-v2-design.md`(31.6KB/502行)で**北極星「没日録DBを連想可能な外部記憶に昇華・CLIで叩ける軽量ロジックを核とし、HTTPは必要時のみ羽織る」**を提示。下記8件のご裁定をお願いいたしたく:
+
+| # | 判断事項 | 軍師推奨 | 老中所見 |
+|---|---------|---------|---------|
+| **D1** | MVP実装場所: (a)scripts/kousatsu/ vs (b)tools/botsunichiroku-search/ | **(a)** | (a)支持。Pythonライブラリ分離は殿の方針と整合 |
+| **D2** | Docker API化のタイミング: (a)Phase 2-Bと同時 / (b)需要発生時 / (c)当面やらない | **(b)** | (b)支持。80%出荷・Simpleと整合 |
+| **D3** | tools/botsunichiroku-search/(4/23 00:42作成・空dir) の扱い: (a)削除 / (b)将来保持 / (c)別用途流用 | **(b)** | **殿の意図確認願う**。当該空dirは殿自ら作成された物か(老中・軍師ともに作成記憶なし) |
+| **D4** | cmd_404 Hopfield既存実装: (a)流用 / (b)書き直し | 調査次第 | 老中がPhase 2-B Wave 0として実装所在調査を先行 |
+| **D5** | cmd add フックの同期/非同期: (a)同期<200ms / (b)バックグラウンド | **(a)** | (a)支持。同期実装→測定→必要時非同期化のアジャイル流 |
+| **D6** | subtask_1164ベクトル検索との関係: (a)v2吸収 / (b)別サービス / (c)Phase 4判断 | **(c)** | (c)支持。両MVP完成後の統合可否判断が妥当 |
+| **D7** | dream.py/TAGE/decay: (a)MVPに入れる / (b)Phase送り | **(b)** | (b)支持。Simple整合 |
+| **D8** | 高札v1 tools/kousatsu/ の最終処分: (a)削除 / (b)参照用保持 / (c)アーカイブ | **(b)** | (b)支持。README DEPRECATED明記済で実害なし、削除コスト低 |
+
+**特に殿のご判断が必要なのは D3**(空dirの作成意図)。**他のD1/D2/D5/D6/D7/D8は軍師推奨で進めても問題なき所存**(殿の追認可否のみ伺いたく)。**D4は老中先行調査で解消予定**。
+**Phase 2-B 実装計画**: §6.1にS1-S10/Wave1-4の分解案あり。軍師→老中引き継ぎ点を明示済み。D1-D8裁定後に subtask 採番・足軽配布。
+
+### 🟢 Docker本体導入 — 殿sudo完了 (2026-04-23 02:20)
+殿のsudo実行完了。subtask_1169でash2が動作確認実施中(docker --version/run hello-world/groups等5項目)。
+
+### ~~🟡 Docker本体導入 — 殿のsudo実行ご依頼~~ → 上記🟢で解決済み（旧詳細は下記参考）
+Q2=C採択により、新環境にDocker本体導入が必要。**ashigaru2のsubnet重複実機調査完了**(LAN=192.168.15/24, WG=10.20+10.30/24[VPS側のみ], Docker=172.17/16 — **重複なし✓**)。下記順序で殿のsudo実行をお願いいたしたく:
+
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker yasu
+# 再ログインで反映（このターミナルだけ即時反映なら: newgrp docker）
+```
+
+**sudo後の動作確認**(足軽が実行可・殿は不要):
+- `docker --version` / `docker compose version`
+- `docker run hello-world`（インターネット接続確認含む）
+- `groups | grep docker`（dockerグループ反映確認）
+- `systemctl status docker`（active running 確認）
+
+**詳細**: docs/shogun/docker_install_plan.md (8607 bytes, §1〜§4完備)。
+**ロールバック**: `sudo apt purge docker.io docker-compose-plugin && sudo deluser yasu docker`。
+**将来注意点**: docker compose のカスタムネットワークは 172.16-31/12 範囲を使うため、将来この範囲のVPN追加時は `daemon.json` で `default-address-pools` 制限要(現時点不要)。
+
+### 🔴 【新発見】OS再インストール後の環境復旧未完了（2026-04-23 01:25 殿対応必須）
+**症状**: ルートFS `/dev/nvme0n1p2 22GB/915GB` で本日 00:39 作成。/home/yasu以下は最小構成のみ。
+- ❌ `git` 未インストール（足軽1のcommitは旧 /media/yasu/a0aefbbd.../usr/bin/git で動作中）
+- ❌ SSHキー未配置 → ashigaru1 subtask_1123 の push 失敗
+- ❌ /home/yasu/ccm_rp2350_relay 不在 → subtask_1154 検収不可
+- ⚠️ /home/yasu/Macgyver 新規空、動画は8TB側 /media/yasu/5ec3490f.../video/Macgyver/output_old に旧E01-E04のみ
+- ✅ multi-agent-shogun は cloneとセットアップ済み
+
+**殿対応依頼**:
+1. `sudo apt install git` （足軽全員のgit操作復旧のため）
+2. SSH鍵設定 → `~/.ssh/id_ed25519` 配置 + GitHub deploy key登録
+3. ashigaru1 subtask_1123 commit 63e3cdd の push: `cd ~/multi-agent-shogun && git push private main`
+4. ccm_rp2350_relay の新環境復旧（`git clone` or 旧 /media/yasu/a0aefbbd.../home/yasu/ccm_rp2350_relay からコピー）
+5. MacGyver処理結果の所在確認 → 8TB側に保管継続するか/home/yasu/Macgyverに移すか裁定
+
+### 🟡 ashigaru1検収結果（2026-04-23 01:25）
+お針子SSD指摘の3件、ashigaru1自走再開し報告完了。検収結果:
+- ✅ **subtask_1123** (没日録Phase 2 freshness_score+--fresh): commit 63e3cdd 実在・--fresh実装line371確認・**done更新済み**。push のみ殿対応待ち
+- ⏸️ **subtask_1154** (WS2812復元): 前セッション完了報告(commit 9936869/37f4812)だが新環境にccm_rp2350_relay不在、検収保留
+- ⏸️ **subtask_1156** (MacGyver S1全8ep): 8TB側に旧output_old E01-E04のみ、報告の「全8ep」検証不可、検収保留
+
+なお ashigaru1 は /clear 指示を実行せず作業継続(コンテキスト30M超表示・累積中)。次回明示再要求が必要。
+
+### 🟢 ashigaru1コンテキスト疲弊インシデント（2026-04-23 01:00 対処中・殿判断不要）
+お針子定期監査(00:55)でassigned放置3件検出 (subtask_1123/1154/1156)。原因:
+1. ashigaru1コンテキスト消費1.49M(Sonnet 4.6 1Mベータ近接)→判断能力低下
+2. ashigaru1.yaml 408KB肥大化、subtask_1146(DB上done)も assigned 残存しYAML/DB不整合
+3. 矛盾を前にashigaru1が「老中の明示指示なしには動かない」と保守的判断停止
+
+**対処済**: ashigaru1にsend-keysで /clear → CLAUDE.md復帰手順 → 3件順次処理(1123→1154→1156)を指示。
+**残課題（老中で対応）**: ashigaru1.yaml GC、ashigaru2(778K)/ashigaru6(877K)の疲弊予兆監視。
 
 ### 🟡 financial-datasets MCP server — 軍師分析: Conditional No-Go (4/10)
 致命的弱点: 日本市場はADR 20-30社のみ(TSE非対応)。月額$200+で月額忌避に衝突。唯一の独自価値はSEC 20-F Filing(ADR日本企業英語開示)だがSEC EDGAR直接で代替可能。既存ツール(Crucix+YFinance+EDINETdb)で十分。詳細: docs/shogun/financial_datasets_analysis.md
@@ -265,6 +1594,283 @@ https://github.com/Panniantong/Agent-Reach — AIエージェントにインタ�
 
 ## 🔄 進行中 - 只今、戦闘中でござる
 
+### cmd_552 JableTV-Downloader tkinter解消 🔄進行中 medium (2026-04-28 21:55〜)
+殿のローカルツール(/home/yasu/Downloads/JableTV-MissAV-Downloader-GUI-2026)が`ModuleNotFoundError: No module named 'tkinter'`で起動失敗。Python標準だがDebian系では`python3-tk`(または`python3.13-tk`)分離。pip不可・apt必須。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1178 | 足軽2 | apt python3-tk導入→venv内 import tkinter動作確認→requirements.txt依存確認→main.py起動でModuleNotFoundError解消まで | 🔄着手(2026-04-28 21:55) |
+
+### cmd_546 dynabook-b55 新PC WireGuard接続＋蓋閉じ無効化 🔄進行中 medium (2026-04-24 12:45〜)
+既存VPS(A:153.127.46.167, 10.10.0.0/24)のピアとして dynabook-b55(Ubuntu24, ssh yasu@dynabook-b55.local) を登録。家老裁量で空きIPを割当。蓋閉じでもWG常時稼働させるため logind.conf HandleLidSwitch=ignore系3項目も併せて設定。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1172 | 足軽2 | VPS既存peer確認→空きIP割当→peer登録→配布→wg-quick up+enable→**lid-ignore 3項目+systemd-logind restart**→双方向ping→IP報告 | 🔄着手(lid追加指示 12:50) |
+
+### cmd_545 ccm_rp2350_relay 新機材へUSB書き込み ✅完了 medium (2026-04-24 11:25〜12:30)
+OTA未設定ゆえ初回USB焼き必須。現行firmware(cmd_533/532反映済, commit 5bc1380)。
+殿sudo(python3.13-venv)→pio自律インスト+ビルド(5bc1380)→API 529で足軽2 2連脱落→**殿自ら手元でBOOTSEL+uf2コピー**→http://192.168.7.1 WebUI応答確認で完了。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1171 | 足軽2→殿代行 | pio自律インスト✅→pio run✅(5bc1380)→(API529で脱落)→殿BOOTSEL+uf2コピー→192.168.7.1起動確認✅ | ✅完了(2026-04-24 12:30) |
+
+**教訓**: Arduino MCP (uvx+arduino-cli) 環境整備は cmd_544 の rsync漏れ由来。次回OS再構築時の rsync リストに `~/bin` `~/.local/bin` を追加すべし。BOOTSEL+uf2コピーはMCP不要で最も確実な書き込み手段として記憶せよ。
+
+### cmd_544 高札Docker復旧 ✅完了 high (2026-04-23 01:35〜22:50)
+**殿裁定(2026-04-23 01:50)**: Q1=C(v2再設計) / Q2=C(Docker+他用途見据え導入)。
+方針転換: v1復旧せず、v2再設計+Docker基盤整備。急ぐな・設計優先(殿明言)。
+全6 subtask(1165-1170) done。cmd close 2026-04-23 22:50(お針子指摘で老中対応)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1165 | 部屋子1 | Phase 1: 旧データ目録+復旧手順+殿sudo必要事項→kousatsu_recovery_plan.md | ✅PASS(高評価) |
+| 1166 | 軍師 | Phase 2-A: 高札v2 North Star再設計(cmd_397/404継承+破棄判断)→context/kousatsu-v2-design.md | ✅PASS(最高評価) |
+| 1168 | 部屋子1 | Phase 3-A: 旧SSD→新環境 必須プロジェクトrsync(11対象+.gitconfig) | ✅条件付PASS(9/10完全一致+.gitconfig復元、unipi-agri-ha HA root2ファイルのみ殿sudo再rsync要) |
+| 1169 | 足軽2 | Phase 3-B: Docker動作確認(殿sudo完了済→hello-world等5項目) | ✅PASS(Docker 29.1.3+Compose v5.1.3全項目OK) |
+| 1170 | 軍師 | Phase 3-C: D3 tools/botsunichiroku-search/空dir追加調査(コピペ副産物確定なら家老rmdir) | ✅PASS(殿仮説却下→新環境4/23 00:42新規作成と確定→D1=(a)裁定済のため家老rmdir実行完了) |
+| 1167 | 足軽2 | Phase 2-B: Docker導入手順書+sudo依頼整理+他用途共存ネットワーク設計→docs/shogun/docker_install_plan.md | ✅PASS(高品質) |
+
+### cmd_543 RP2350 USB CDC-NCM+CDC-ACM Composite設計 ✅完了 medium
+Go判定。TinyUSB NCM実装済み(978行)。USB1本でWebUI(192.168.7.1)+シリアル同時。Phase0-4ロードマップ。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1164 | 軍師 | 6セクション: TinyUSB+dual-netif+ホスト互換+OGMS共通化+影響+ユースケース4フロー | ✅PASS |
+
+### cmd_540 新さくらVPS Docker+wg-easy構築 ✅完了 high
+153.126.177.239 Ubuntu24.04/2GB。Docker CE 29.4.0+wg-easy healthy+10.20.0.x+UFW+DOCKER-USER。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1162 | 足軽2 | Docker CE+wg-easy+UFW+swap+DOCKER-USER+テストピアQR | ✅PASS |
+
+### cmd_541 WireGuard引っ越し計画 ✅完了 medium
+context/wg-migration-plan.md 765行。RPi三重防御(Dual-Stack+Dead Man's Switch+24h猶予)+7日間計画+2グループ分離(admin10.20/user10.30)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1163 | 軍師 | 6セクション: サブネット+ピア移行(RPi三重防御)+撤去+リスク+カットオーバー+2グループ | ✅PASS |
+
+### cmd_539 さくらVPS Docker化設計書 ✅完了 medium
+context/vps-docker-design.md 520行。Phase0→1段階移行+wg-easy推奨+ntripcaster非Docker化。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1161 | 軍師 | メモリ試算+compose+PiVPN+セキュリティ+移行+拡張 | ✅PASS |
+
+### cmd_538 rotation-planner スキン切り替え ✅完了 medium
+CSS変数テーマ3種+マイテーマ保存(カラーピッカー9変数+差分保存+複数保存/削除)。feaeb7b+28b7dab。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1160 | 足軽2 | マイテーマ: カラーピッカー9変数+diff保存+★表示+削除+リアルタイムプレビュー(28b7dab) | ✅PASS |
+| 1158 | 足軽2 | テーマ基盤: App.css 19変数+Supabase/Linear Dark+Layout.jsx セレクタ(feaeb7b) | ✅PASS |
+
+### cmd_537 Arduino MCP Server導入 ✅完了 medium
+uvx+.mcp.json登録(✓Connected)+list_ports確認+policy_checker+CLAUDE.mdルール表。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1157 | 足軽1 | uvx導入+MCP登録+list_ports確認+切腹ルール(policy_checker+CLAUDE.md) | ✅PASS |
+
+### cmd_536 MacGyver DVD→1080pアップスケール 🔄進行中 low
+Real-ESRGAN+ffmpeg+RTX4060。まずDisc1/1epでパイプライン検証。スクリプト化。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1156 | 足軽2 | 簡素化: ~/bin/upscale.sh input output.mkv。ESRGAN+yadifのみ。DVD解析なし | 🔄書き直し中 |
+
+### cmd_535 現場パッチ適用+側窓リレー追加マニュアル ✅完了 medium
+(1) v1.1.0-rcA CCMサフィックス拡張(.rcA/.rC/rcA/opr)+room=1。(2) 側窓マニュアル309行EN/JP。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1155 | 足軽2 | diff適用(37f4812)+setup-side-window.md 309行EN/JP(9c84a0f) | ✅PASS |
+
+### cmd_534 WS2812復元+README LED確認+OTA 🚨OTAブロック medium
+コード復元+pio完了済み。**実機 uecs-ccm-01.local (192.168.15.16) ネットワーク未応答**。殿の実機確認待ち。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1154 | 足軽2 | コード復元+pio SUCCESS済み。OTA BLOCKED(ARP incomplete)。実機復帰待ち | 🚨ブロック |
+
+### cmd_533 WS2812 RGBランダムテスト（デバッグ用） ✅完了 medium
+15秒おきランダムRGB変更。pio SUCCESS+OTA書込。commit/pushなし。殿目視確認待ち。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1153 | 足軽2 | テストコード適用+pio SUCCESS+OTA書込(uptime=9s) commitなし | ✅PASS |
+
+### cmd_532 DI1/DI2 割り込みフラグ未設定バグ修正+OTA ✅完了 ⚡high
+DI1/DI2のISRにdiInterruptFlag追加（2行）。pio SUCCESS+OTA書込+uptime=9s正常。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1152 | 足軽2 | ISR 2行修正+pio SUCCESS(Flash2.0%/RAM14.7%)+OTA書込+README DI更新 | ✅PASS(7edf686) |
+
+### cmd_531 SEN0575 CCM送出テスト + README ArSprout連携 ✅完了 medium
+全6タイプ10s周期ALL PASS。ArSprout連携セクション+50行追加。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1151 | 足軽2 | 全6タイプCCM送出PASS+ArSprout連携セクション(対応表+設定例)+チェックリスト実測値付記 | ✅PASS(0dcb06c) |
+
+### cmd_530 ccm_rp2350_relay 全8chリレー ON/OFFテスト ✅完了 medium
+実機(uecs-ccm-01.local)全8ch ALL PASS。バグ修正: --iface追加(VPN tun0マルチキャスト問題)。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1150 | 足軽2 | 全8ch ON/OFF ALL PASS+ccm_tool.py --iface修正+README更新 | ✅PASS(5f23c2c) |
+
+### cmd_528 ccm_tool.py 機能テスト ✅完了 medium
+5カテゴリ（help/send/listen/scan/edge）ローカルテスト。18項目全PASS。バグなし。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1148 | 足軽2 | 5カテゴリ18項目テスト（help5/send3/listen5/scan3/edge5+2unit）バグなし | ✅PASS |
+
+### cmd_527 ccm_tool.py UECS-CCMデバッグCLIツール ✅完了 medium
+ArSprout UECS Testerの CUI版。scan/listen/send 3コマンド。Python標準ライブラリのみ。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1147 | 足軽2 | tools/ccm_tool.py 404行。scan/listen/send 3コマンド+XML roundtrip+push | ✅PASS(bdecdc1) |
+
+### cmd_526 OGMS README.md EN/JP併記化 ✅完了 medium
+英語メイン+日本語details折りたたみ。内容追加なし、翻訳+構造化のみ。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1146 | 足軽2 | README.md EN/JP併記（680行、19セクションdetails折りたたみ） | ✅PASS(be1203a) |
+
+### cmd_525 agri-relay → OGMS リネーム ✅完了 medium
+Open Greenhouse Management System。GitHub: yasunorioi/OGMS（殿リネーム済み）。コード+docs+remote URL変更。
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1144 | 1 | 足軽2 | コード内リネーム+.ino名変更+README+マニュアル+remote URL+pio run | ✅PASS(87fd868) |
+| 1145 | 2 | 部屋子1 | ccm_rp2350_relay README(35bf13b)+shogun context+残存修正(42d4603) | ✅PASS |
+
+### cmd_524 agri-relay CCM全廃→MQTT置換 実装 ✅完了 ⚡high
+CCM全削除+PubSubClient追加+MQTT publish/subscribe+WebUI /mqtt+InRadiation代替。設計レビュー済み(cmd_523)。
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1141 | 1 | 足軽1 | FW実装(CCM全削除+MQTT core+web_mqtt.h+dashboard+InRadiation+pio run) | ✅PASS(7ae92f2) |
+| 1142 | 2 | 足軽1 | README.md CCM→MQTT更新+コンシューマ方針+ccm_rp2350_relay誘導 | ✅PASS(c8dfd95) |
+| 1143 | 3 | 部屋子1 | docs/operation-manual.md CCM→MQTT+PDF再生成(8頁A4) | ✅PASS(3967427) |
+
+### cmd_523 agri-relay CCM→MQTT置換 設計レビュー ✅完了 medium
+CCMからMQTTへの置換設計を12観点で抜け漏れチェック。実装不要・設計レビューのみ。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1140 | 軍師 | 12観点設計レビュー→context/agri-relay-mqtt-design-review.md | ✅PASS |
+
+重大指摘: InRadiation日射フォールバック経路がCCM廃止で消失（灌水の生命線）。Phase 0共存版で最優先テスト必須。
+
+### cmd_522 Waveshare RS485リレー製品リサーチ ✅完了 low
+RS485マルチドロップでリレー拡張の可能性調査。リサーチのみ・実装不要。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1139 | 軍師 | 製品ラインナップ+Modbusプロトコル+マルチドロップ+ccm統合→context/ccm-rs485-relay.md | ✅PASS |
+
+成果物: context/ccm-rs485-relay.md。推奨(B)8ch 7-36V、ModbusMaster(4-20mA)ライブラリ、DE/REピン実機確認が残課題。Phase0-3段階案。
+
+### cmd_521 ccm_rp2350_relay スタンドアロン機能削除 ✅完了 ⚡high
+agri-relayからfork→温室制御/灌水/保護/Aperture全削除。ArSprout I/Oスレーブ特化。
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1137 | 1 | 足軽1 | FWコード全削除(構造体+ロジック+JSON+WebUI3ファイル)+pio run | ✅PASS(da5aa4b) |
+| 1138 | 2 | 足軽1 | README.md CCMスレーブ特化+agri-relay誘導 | ✅PASS(a6524be) |
+
+### cmd_520 Dew Prevention 側窓制御追加 ✅完了 ⚡high
+結露対策時に側窓も制御。開度%・最低温度をWebUIで設定可能に。実行: 部屋子1。
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1129 | 1 | 部屋子1 | FW改修(DewPreventionCtrl拡張+側窓連携+低温ガード+WebUI+API) | ✅PASS |
+| 1128 | 2 | 部屋子1 | マニュアル一括整合(cmd_519+520反映+PDF再生成) | ✅PASS(c7e9c1b) |
+
+### cmd_519 agri-relay Aperture制御改修: セグメント廃止→2値方式 ✅完了
+4ファイル -106/+49行。57行簡素化。commit a02c7b9。実行: 部屋子1。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1127 | 部屋子1 | FW改修(構造体+ロジック+JSON+WebUI+API)+pio build | ✅PASS(a02c7b9) |
+
+### cmd_518 agri-relay 操作マニュアル作成（農家向けPDF） ✅完了
+成果物: agri-relay/docs/operation-manual.md(17KB) + .pdf(139KB, 7p)。全6ページ網羅。
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1125 | 足軽2 | WebUI全6ページ読解→Markdown作成→/md2pdfでPDF変換 | ✅PASS(f1ee03c) |
+| 1126 | 部屋子1 | 訂正: 側窓Limit DI未使用明記+秒数制御説明+PDF再生成 | ✅PASS(829f32b) |
+| 1130 | 部屋子1 | 訂正: 全7箇所3列表→2列統合(PDF文字ダブり修正)+PDF再生成 | ✅PASS(7f21ad3) |
+| 1131 | 部屋子1 | 訂正: PDF長文はみ出し修正(pdf-header.tex+表p{}カラム+overfull 0件) | ✅PASS(006ba26) |
+| 1132 | 部屋子1 | 訂正: IP/URL→mDNS(uecs-ccm-01.local)統一+接続方法mDNS前提化 | ✅PASS(142edbc) |
+| 1133 | 部屋子1 | 追加: Windows 11 mDNS接続注記(追加ソフト不要+プライベートプロファイル) | ✅PASS(39ebffc) |
+| 1134 | 部屋子1 | 追加: README.mdマニュアル誘導+ファイル構成docs/ | ✅PASS(4dd06de) |
+| 1135 | 部屋子1 | README.md全面更新: 全8ソース読了→cmd_519/520/509反映+側窓セクション新設+LittleFS8ファイル+web10分割+調停8制御者 | ✅PASS(79b121f) |
+| 1136 | 部屋子1 | README方針変更: CCM核心機能のみに絞り込み(452→294行/-35%) スタンドアロン7セクション削除 | ✅PASS(c874a20) |
+
+### cmd_515 没日録DBセマンティック検索修正・拡張 Phase 0-3 ✅実装完了(2026-04-13〜04-23) — ⚠️残課題2件
+対象: scripts/botsu/vec.py + scripts/botsu/search.py + 全CRUDモジュール | 基づき: context/botsunichiroku-semantic.md
+**お針子総括監査: 15/18点 合格(approved)**。4コミット全実在・後方互換OK・エッジケースOK・TYPE_WEIGHT/--verbose/--boost-project動作確認済。
+**🚨実環境の残課題(殿判断要)は要対応セクションへ起票**: (1)--fresh実効性ゼロ(vec_meta.created_at=空2016/2016件で実証) (2)sentence_transformers未インストール→vec検索常時空 (3)テスト未実装
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1121 | 1 | 足軽1 | P0: Ruriプレフィックス修正+sqlite-vec upgrade+全件再ベクトル化 | ✅完了(c9e3cb1) |
+| 1122 | 2 | 足軽1 | P1: インクリメンタルvec(全7CRUDパス)+thread_replies+バックフィル | ✅完了(350f8ec) ※migrate_vec.py thread_replies未対応 |
+| 1123 | 3 | 足軽1 | P2: 時間鮮度スコア(指数減衰90日)+--freshフラグ | ✅完了(63e3cdd) |
+| 1124 | 4 | 足軽1 | P3: TYPE_WEIGHT RRF+--verbose内訳+project boost | ✅完了(dfebc66) 老中機械チェックPASS |
+
+### cmd_514 没日録DBセマンティック検索リサーチ ✅完了
+担当: 軍師 | 成果物: context/botsunichiroku-semantic.md
+重大発見: (1)Ruriプレフィックス未使用→精度50-70% (2)519+288件vec未登録 (3)sqlite-vec要アップグレード
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1120 | 軍師 | 6軸調査+Phase 0-4実装計画策定 | ✅PASS |
+
+### cmd_513 lightweight-charts v5 サンプル作成 ✅完了
+対象: /home/yasu/lw-charts-sample/index.html（158行、CDN IIFE、file://動作OK）
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1119 | 足軽1 | ローソク足(pane0)+出来高(pane1)+ダークテーマ+1秒リアルタイム更新 | ✅PASS |
+
+### cmd_512 agri-relay ダッシュボード メニュー二重表示バグ修正 ✅完了
+原因: cmd_510 serverRender変換時、DASHBOARD_JS内の旧ナビリンク消し忘れ（printNavLinksと二重）
+
+| subtask | 担当 | 内容 | 状態 |
+|---------|------|------|------|
+| 1118 | 足軽1 | JS内ナビ1行削除+OTA+ナビcount=1確認+全7ページ200 | ✅PASS 79177cf |
+
+### cmd_510 agri-relay 監査是正: dashboard COMMON_CSS統一+i18n完全化 ✅完了
+起因: お針子監査(cmd_505-509後) — Critical3+High4件
+対象: /home/yasu/agri-relay/ web_dashboard.h, web_protection.h, web_greenhouse.h, web_irrigation.h
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1114 | 1 | 足軽1 | dashboard.h PROGMEM→サーバーレンダリング変換+protection/greenhouse/irrigation L()補完 | ✅PASS 1d9cecb |
+| 1115 | 2 | 足軽1 | ~~OTAビルド~~ cmd_511 OTAで代替 | 🚫cancelled |
+
+### cmd_511 agri-relay WebUI統一性修正 — お針子監査21件全件 ✅完了
+起因: お針子自主監査(cmd_505-509後) — 21件全件実機検証PASS
+対象: web_common/dashboard/ota/greenhouse/irrigation/protection/ccm.h
+OTA: 286780bytes → 192.168.15.5 書込みOK
+
+| subtask | Wave | 担当 | 内容 | 状態 |
+|---------|------|------|------|------|
+| 1116 | 1 | 足軽1 | Medium+Minor+FORM-01全18箇所修正(JS i18n+CSS統一+a11y+ラベル統一) | ✅PASS 31845dc |
+| 1117 | 2 | 足軽1 | OTAビルド→書込み→全21件検証(A-E全セクションPASS) | ✅PASS 286780bytes |
+
 ### cmd_509 agri-relay WebUI EN/JP言語切り替え ✅完了
 対象: /home/yasu/agri-relay/ 全7ページ + LittleFS永続化 + OTAデプロイ
 
@@ -306,13 +1912,14 @@ https://github.com/Panniantong/Agent-Reach — AIエージェントにインタ�
 | 1106 | 2 | 足軽1 | フォームUX: エラー/バリデーション/ローディング/保存確認 (項目1,3,4,5) | ✅PASS 8c38110 (+86/-21) |
 | 1107 | 3 | 足軽1 | ダッシュボード強化+アクセシビリティ (項目6,7,9,10,11,12) | ✅PASS f0895db (+48/-23) |
 
-### cmd_504 RP2350実機到着 — USB-UARTデバッグ+実機検証 🔄進行中
+### cmd_504 RP2350実機到着 — USB-UARTデバッグ+実機検証 ✅完了
+FW側作業完了。実機書込み+動作確認は殿待ち。UART排水センサーは凍結（センサー未到着）。
 
 | subtask | 担当 | 内容 | 状態 |
 |---------|------|------|------|
 | 1104 | 足軽1 | USB-UARTデバッグ出力(3バリアント) | ✅PASS 4349866@uecs-hardwares |
 | — | 殿 | 実機FW書込み+動作確認(Task2) | ⏳FW準備完了・殿待ち |
-| 1076 | 足軽1 | UART排水センサー(Task3) | ⏳実機確認後 |
+| 1076 | 足軽1 | UART排水センサー(Task3) | ❌凍結(センサー未到着) |
 
 ### cmd_503 3件順次: allowlist→wiki→systrade ✅完了
 
@@ -502,18 +2109,17 @@ subtask_1079を使って検収→合議→kenshu_gate→書記官の全フロー
 ### 🟡 殿裁定待ち: agent-swarmまとめwiki — 軍師設計完了
 Karpathy LLM Wikiパターン×SQLite+DAT+matome板。設計書: context/agent-swarm-wiki-architecture.md。お針子による完了定義逐条確認→設計承認済み。正式起票・実装着手に殿裁定が必要。
 
-### cmd_489 Waveshare RP2350-POE-ETH-8DI-8RO FW先行開発 🔄進行中
-2棟目ハウス統合制御ノード。**RP2350版に切替**（殿裁定: ESP32のWiFi/BTデバッグ面倒、PoE前提ならRP2350+arduino-pico）。
-**殿追加方針(04/05)**: RO1-4=側窓A/B開閉, RO5=電磁弁, RO6-7=循環扇, RO8=予備。DI=灌水パルス+窓リミット。UART=排水センサー。WebUI追加。制御判断はuecs-llm側。
+### cmd_489 Waveshare RP2350-POE-ETH-8DI-8RO FW先行開発 ✅完了
+2棟目ハウス統合制御ノード。RP2350版FW基盤+WebUI+チャンネル割当完了。UART排水センサーはセンサー未到着のため凍結（センサー入手後に別cmdで対応）。
 
 | subtask | 担当 | 内容 | 状態 |
 |---------|------|------|------|
-| 1071 | 部屋子1 | ESP32-S3版リサーチ+設計書 | ✅完了(929f7f1) ※RP2350切替で要更新 |
+| 1071 | 部屋子1 | ESP32-S3版リサーチ+設計書 | ✅完了(929f7f1) |
 | ~~1072~~ | ~~足軽1~~ | ~~ESP32-S3版FW実装~~ | ❌cancelled(RP2350切替) |
-| 1073 | 部屋子1 | RP2350版Wikiリサーチ+ピンマップ確定(DEV_Config.h裏取り) | ✅完了(b88c0a3) |
-| 1074 | 足軽1 | RP2350版FW基盤(MQTT+HA+WDT+GPIO) | ✅完了(9bf57fd+572b2d7) 監査13/18→SHT40修正→老中承認 |
+| 1073 | 部屋子1 | RP2350版Wikiリサーチ+ピンマップ確定 | ✅完了(b88c0a3) |
+| 1074 | 足軽1 | RP2350版FW基盤(MQTT+HA+WDT+GPIO) | ✅完了(9bf57fd+572b2d7) |
 | 1075 | 足軽1 | WebUI (HTTP server, 状態確認+手動操作) | ✅完了(996336f) 監査満点18/18 |
-| **1076** | **足軽1** | **UART排水センサー (RS485→MQTT pub)** | 🟡assigned(実機到着待ち) |
+| ~~1076~~ | ~~足軽1~~ | ~~UART排水センサー (RS485→MQTT pub)~~ | ❌凍結(センサー未到着) |
 | 1077 | 足軽1 | チャンネル割当+DIパルスカウント+窓リミット | ✅完了(996336f) 監査満点18/18 |
 
 ### cmd_488 TiDE推論ランタイム tflite→ONNX Runtime切替 ✅完了 — 監査満点(18/18)
@@ -2132,6 +3738,36 @@ W4: cmd_315(反省会モード) ✅ ← 全Wave完了！
 ## ✅ 本日の戦果（直近）
 | 時刻 | 戦場 | 任務 | 結果 |
 |------|------|------|------|
+| 4/22 | ccm_rp2350_relay | cmd_543 USB CDC-NCM+CDC-ACM Composite設計。468行。Go判定。TinyUSB NCM実装済み+dual-netif+192.168.7.1 DHCPサーバー+Phase0-4。軍師 | ✅ **cmd_543完了(PASS)** |
+| 4/21 | shogun | cmd_541 WG引っ越し計画。765行。RPi三重防御+7日間カットオーバー+2グループ分離(admin10.20/user10.30)+プロビジョニング。軍師 | ✅ **cmd_541完了(PASS)** |
+| 4/21 | shogun | cmd_540 新さくらVPS Docker+wg-easy構築。153.126.177.239 Ubuntu24.04/2GB。Docker CE29.4+wg-easy healthy+10.20.0.x+UFW+DOCKER-USER+テストピアQR。足軽2 | ✅ **cmd_540完了(PASS)** |
+| 4/20 | shogun | cmd_539 さくらVPS Docker化設計書。context/vps-docker-design.md 520行。Phase0(457MB)→Phase1(1G)段階移行、wg-easy推奨、ntripcaster非Docker化。軍師 | ✅ **cmd_539完了(PASS)** |
+| 4/20 | rotation-planner | cmd_538 全2subtask完了。(1)CSS変数テーマ3種(feaeb7b) (2)マイテーマ保存: カラーピッカー9変数+diff保存+★表示+削除(28b7dab)。足軽2 | ✅ **cmd_538完了(全2subtask PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_535 (1)v1.1.0-rcA CCMサフィックス拡張(.rcA/.rC/rcA/opr)+room=1(37f4812) (2)側窓マニュアル309行EN/JP(9c84a0f)。足軽2 | ✅ **cmd_535完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_533 WS2812ランダムRGBテストコード適用+pio SUCCESS+OTA書込(uptime=9s)。commit/pushなし(デバッグ用)。殿目視確認待ち。足軽2 | ✅ **cmd_533完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_532 DI1/DI2 diInterruptFlagバグ修正(ISR 2行)+pio SUCCESS+OTA書込(uptime=9s正常)+README DI更新。7edf686。足軽2 | ✅ **cmd_532完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_531 SEN0575 CCM送出テスト全6タイプALL PASS(InAirTemp24.6℃/InAirHumid44%/CO2 1165ppm/InRadiation0.1/WRainfall0.56mm/Relay×8)10s周期。ArSprout連携セクション+50行。0dcb06c。足軽2 | ✅ **cmd_531完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_530 全8chリレーON/OFF実機テスト ALL PASS。バグ修正: ccm_tool.py --iface追加(VPN tun0→enp4s0明示)。CCMマッピング: Relay r=2 rg=61 o=1-8。README更新。5f23c2c。足軽2 | ✅ **cmd_530完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_529 README.md実機検証チェックリスト更新。リレーON/OFF(CH1-3)+CCM受信制御 2項目チェック済み化。ca19168。老中直接処理 | ✅ **cmd_529完了** |
+| 4/18 | ccm_rp2350_relay | cmd_528 ccm_tool.py機能テスト。5カテゴリ18項目全PASS（help5/send3/listen5/scan3/edge7）。バグなし修正なし。足軽2 | ✅ **cmd_528完了(PASS)** |
+| 4/18 | ccm_rp2350_relay | cmd_527 ccm_tool.py UECS-CCMデバッグCLI。404行。scan/listen/send 3コマンド。Python標準ライブラリのみ。XML roundtrip確認。bdecdc1。足軽2 | ✅ **cmd_527完了(PASS)** |
+| 4/15 11:25 | OGMS | cmd_526 README EN/JP併記化。680行、19セクションdetails折りたたみ。374挿入/19削除。be1203a。足軽2 | ✅ **cmd_526完了(PASS)** |
+| 4/15 11:15 | OGMS+ccm | cmd_525 agri-relay→OGMSリネーム全完了。Wave1: ogms.ino+FW_NAME+mDNS+docs(87fd868)。Wave2: ccm README(35bf13b)+context rename+残存修正(42d4603)。足軽2+部屋子1 | ✅ **cmd_525完了(全2Wave PASS)** |
+| 4/15 01:25 | agri-relay | cmd_524 全3Wave完了。Wave1: CCM全廃→MQTT FW(7ae92f2)。Wave2: README MQTT化(c8dfd95)。Wave3: マニュアル+PDF 8頁(3967427)。足軽1+部屋子1 | ✅ **cmd_524完了(全3Wave PASS)** |
+| 4/15 00:35 | agri-relay | cmd_523 CCM→MQTT設計レビュー完了。12観点389行。重大1件: InRadiation日射フォールバック消失(灌水生命線)。Phase 0共存→Phase 1→Phase 2段階案。軍師 | ✅ **cmd_523完了(PASS)** |
+| 4/14 10:20 | ccm_rp2350_relay | cmd_521 Wave2 README.md CCMスレーブ特化。239行。112挿入/166削除。agri-relay誘導+RelayOwner 2値。a6524be。足軽1 | ✅ **cmd_521完了(全2Wave PASS)** |
+| 4/14 10:10 | ccm_rp2350_relay | cmd_522 RS485リレーリサーチ完了。製品9種比較+Modbusプロトコル+マルチドロップ+ccm統合分析。context/ccm-rs485-relay.md。軍師 | ✅ **cmd_522完了(PASS)** |
+| 4/14 10:05 | ccm_rp2350_relay | cmd_521 Wave1 スタンドアロン全削除。10ファイル-2427行。RelayOwner 2値化。pio SUCCESS。GitHub push。da5aa4b。足軽1 | ✅ **subtask_1137完了(PASS)** |
+| 4/14 09:29 | agri-relay | cmd_518 README方針変更。452→294行(-35%)。CCM核心のみに絞り込み、スタンドアロン7セクション削除+マニュアル誘導。c874a20。部屋子1 | ✅ **subtask_1136完了(PASS)** |
+| 4/14 09:19 | agri-relay | cmd_518 README.md全面更新。+86/-19行。cmd_519/520/509反映+側窓セクション+LittleFS8+web10分割。79b121f。部屋子1 | ✅ **subtask_1135完了(PASS)** |
+| 4/14 09:15 | agri-relay | cmd_518 Windows 11 mDNS接続注記追加。blockquote形式。39ebffc。部屋子1 | ✅ **subtask_1133完了(PASS)** |
+| 4/14 09:05 | agri-relay | cmd_518 IP/URL→mDNS(uecs-ccm-01.local)統一。接続方法+node_id+Hostname+FAQ全5箇所。142edbc。部屋子1 | ✅ **subtask_1132完了(PASS)** |
+| 4/14 08:49 | agri-relay | cmd_518 PDF長文はみ出し修正。pdf-header.tex新規(fvextra+xurl+XeTeX ja)+表p{}カラム強制+overfull 0件。006ba26。部屋子1 | ✅ **subtask_1131完了(PASS)** |
+| 4/14 08:33 | agri-relay | cmd_518 マニュアル3列表→2列統合。全7箇所のPDF文字ダブり修正+PDF再生成。7f21ad3。部屋子1 | ✅ **subtask_1130完了(PASS)** |
+| 4/13 23:52 | agri-relay | cmd_519+520 マニュアル一括整合完了。側窓2値化+Dew側窓4項目+パターン例+PDF再生成。c7e9c1b。部屋子1 | ✅ **subtask_1128完了(PASS)** |
+| 4/13 23:44 | agri-relay | cmd_520 Dew Prevention側窓制御+低温ガード。4フィールド+温度追従+WebUI+API。5cd2df4。部屋子1 | ✅ **cmd_520完了** |
+| 4/13 23:37 | agri-relay | cmd_519 Aperture制御セグメント廃止→open/close 2値方式。4ファイル-106/+49行。a02c7b9。部屋子1 | ✅ **cmd_519完了** |
+| 4/13 21:44 | agri-relay | cmd_518 操作マニュアル作成+訂正(Limit DI未使用+Rate Guard 1h5℃)。MD+PDF 7p。足軽2+部屋子1 | ✅ **cmd_518完了(全2subtask PASS)** |
 | 4/10 22:50 | agri-relay | cmd_509 Wave2完了。OTA書込み(303KB)→EN初期PASS→JP切替(温室制御/ルールを保存等確認)PASS→EN復帰PASS→全7ページHTTP 200 PASS | ✅ **cmd_509完了(全2Wave PASS)** |
 | 4/10 22:30 | agri-relay | cmd_509 Wave1完了。WebUI EN/JP言語切替。web_i18n.h新規+L()+printNavLinks(言語切替リンク付)+/api/language GETエンドポイント+g_language+saveLangToConfig+全7ページi18n+JS Tオブジェクト。ビルドPASS(d7d602c,285KB,+180) | ✅ **cmd_509 Wave1 PASS** |
 | 4/10 21:00 | agri-relay | cmd_508 OTAビルド→実機書き込み→動作確認。RP2530B/16MB/150MHz 299KB。OTA OK(192.168.15.5)。API全フィールド確認(version/curve_mode/aperture/ccm_solar)。全6ページHTTP 200 | ✅ **cmd_508完了** |

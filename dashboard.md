@@ -1,44 +1,93 @@
 # 📊 戦況報告
-最終更新: 2026-05-02 02:25
+最終更新: 2026-05-02 09:30
 
 ## 🚧 進行中
 
-### 🔴 cmd_575【high・🚨殿就寝前緊急】PCモニター対策実装(SSH+DPMS/idle+logind・全revert可)
-- **担当**: ash6(Opus 4.7) — subtask_1218
-- **背景**: cmd_574結論=nouveau問題仮説(RTX 4060+5K2K+Chrome→Xid:13・5h内4回)
-- **Phase 1-4**: 情報収集→SSH有効化→DPMS/idle回避→朝の報告
-- **V4自動運転可カテゴリ**(内部設定・全revert可・HW破壊リスクなし)
-- **成果物**: `docs/shogun/pc_monitor_recovery_workaround_20260502.md`(§1-§6・§6 30行以内必須)
-- **配布時刻**: 2026-05-02 02:23
+### 🔴 cmd_576【high・殿外出中・V4自動運転GO】nouveau→nvidia-driver-550切替+今朝のフリーズログ救出(Phase 0-6)
+- **担当**: ash6(Opus 4.7) — subtask_1219
+- **殿朝の裁定**: Q1=調査全権任せる(自動運転GO)/Q2=GPU出力のみ死亡(nouveau Xid確証)/Q3=GO
+- **Phase**: 0=フリーズログ救出最優先(SSH切れる前) / 1=環境確認(secure boot等) / 2=ubuntu-drivers install or nvidia-driver-550 / 3=nouveau blacklist+initramfs-u / 4=動作確認(reboot無) / 5=dashboard更新 / 6=レポート
+- **V4自動運転判定**: HW破壊リスク無+apt revert可=**自動運転可** ✅
+- **停止条件**: secure boot+MOK未対応 or driver未対応 → 殿確認必須で中断
+- **成果物**: `docs/shogun/nvidia_driver_migration_20260502.md`(§1-§8・§8 30行以内必須)
+- **再起動なし**(殿帰宅後判断)
+- **配布時刻**: 2026-05-02 09:30
 
-## 🌅 朝の確認事項(殿起床時即把握用) — cmd_575 subtask_1218 完了
+## 🌅 殿帰宅時の作業手順 — cmd_575 + cmd_576(subtask_1219) 続き
 
-### A. 画面真っ暗で起きた場合
-1. 別端末から `ssh yasu@192.168.15.14` (SSH既稼働・鍵認証可・LISTEN中)
-2. 接続成功 → `journalctl -k --since "1 hour ago" | grep -iE 'nouveau|xid|fault' | tail -30` でフリーズ時刻のGPU例外確認
-3. `sudo systemctl reboot` で再起動（リセットボタン不要）
-4. SSH失敗時のみリセットボタン
+### 🚨 帰宅したらまず実行（順番厳守・全コピペ可・所要約3-5分）
 
-### B. 画面正常で起きた場合 (=対策成功 or 偶発的不発症)
-1. `journalctl -b 0 -p warning | grep -iE 'nouveau|drm' | tail -20` でGPU例外発生有無確認
-2. **§3 殿手動実行手順 3-A/3-B** をdocs/shogun/pc_monitor_recovery_workaround_20260502.md からコピペ実行
-   - 3-A: logind IdleAction=ignore (revert: bak.20260502)
-   - 3-B: SSH enable + PasswordAuth=no (revert: bak.20260502)
-3. 推奨: B(SSH enableのみ)即実行→cmd_576(nvidia-driver切替)へ移行
+#### Step 1. sudo認証準備
+```bash
+sudo -v   # パスワード入力で sudo セッション開始
+```
 
-### C. ash6が既に実施済の対策 (user権限・revert可)
-- gsettings `idle-dim` true → false (revert: gsettings reset)
-- gsettings `idle-activation-enabled` true → false (revert: gsettings reset)
-- gsettings `ambient-enabled` true → false (revert: gsettings reset)
-- 効果: idle由来のモニターOFF経路遮断。但し nouveau Xid例外は防げず(根本対策はnvidia-driver)
+#### Step 2. cmd_575 残作業（logind + SSH 強化・bak付revert可）
+```bash
+# 2-A. logind IdleAction=ignore
+sudo cp /etc/systemd/logind.conf /etc/systemd/logind.conf.bak.20260502
+echo -e "\n# ===== cmd_575 subtask_1218 =====\n# original: IdleAction=suspend (default)\nIdleAction=ignore\nIdleActionSec=0\n# ===== /cmd_575 =====" | sudo tee -a /etc/systemd/logind.conf
+sudo systemctl restart systemd-logind
 
-### D. 殿への質問3問 (§6エグゼクティブサマリ参照)
-- Q1: §5 3-A/3-B のコピペ手順、起床直後実行可能か？
-- Q2: 直近boot gap 3分33秒は就寝中フリーズか操作中フリーズか？
-- Q3: cmd_576(nvidia-driver-550切替)着手可否
+# 2-B. SSH強化(authorized_keys存在確認済)
+sudo systemctl enable ssh
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.20260502
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+ss -tlnp | grep :22  # 動作確認
+```
+
+#### Step 3. cmd_576 nvidia-driver導入（**transitional package回避・595-open推奨**）
+
+**⚠️ 重要**: 指示書は `nvidia-driver-550` 指定だったが、Ubuntu 25.10 では550=transitional packageで実体は550-server等。**ubuntu-drivers recommended は `nvidia-driver-595-open`**。RTX 4060 (Lovelace AD107) は 595系で公式サポート。
+
+```bash
+# 3-A. ubuntu-drivers 自動選択(recommended=595-open)
+sudo ubuntu-drivers install 2>&1 | tee /tmp/nvidia_install.log
+# もしくは明示指定:
+# sudo apt install -y nvidia-driver-595-open
+
+# 3-B. nouveau ブラックリスト化(自動作成されない場合)
+ls /etc/modprobe.d/blacklist-nouveau.conf 2>/dev/null || \
+  echo -e "blacklist nouveau\noptions nouveau modeset=0" | sudo tee /etc/modprobe.d/blacklist-nouveau.conf
+
+# 3-C. initramfs再構築(blacklist反映)
+sudo update-initramfs -u
+
+# 3-D. dkmsステータス確認
+dkms status | grep nvidia
+
+# 3-E. 再起動(殿判断・本cmd範囲外で sudo systemctl reboot)
+```
+
+#### Step 4. 再起動後の動作確認
+```bash
+lsmod | grep nouveau    # 期待: 空(blacklist済)
+lsmod | grep nvidia     # 期待: nvidia/nvidia_modeset/nvidia_drm/nvidia_uvm 等ロード
+nvidia-smi              # 期待: RTX 4060 + driver 595.x 表示
+```
+
+### 📝 ash6が既に実施済の対策(user権限/revert可・5/2朝までに自動実施)
+
+- gsettings idle-dim/idle-activation-enabled/ambient-enabled = false (cmd_575)
+- フリーズログ救出済 → /tmp/freeze_log_b-1.txt /tmp/freeze_kernel_b-1.txt /tmp/current_boot_log.txt /tmp/reboot_history.txt (cmd_576 Phase 0)
+- nouveau Xid証拠保全: 4/29 22:44:24 + 22:44:55 GPC0/1/2 全多発+chrome原因確認
+
+### 🔴 cmd_576 停止条件発動内訳(殿帰宅後判断要)
+1. **sudo passwordless 不可** → ash6 が apt install/sudo tee 実行不能（殿帰宅後手動）
+2. **nvidia-driver-550 が transitional package** → Ubuntu 25.10 公式 recommended は **595-open**(指示書で「別バージョン選定要・殿確認必須」該当)
+
+### ロールバック手順(nvidia不調時 nouveau復帰)
+```bash
+sudo apt remove --purge 'nvidia-*'
+sudo rm /etc/modprobe.d/blacklist-nouveau.conf
+sudo update-initramfs -u
+sudo systemctl reboot
+```
 
 ### 詳細レポート
-`docs/shogun/pc_monitor_recovery_workaround_20260502.md` (§1-§6・§6 25行)
+- cmd_575: `docs/shogun/pc_monitor_recovery_workaround_20260502.md` (§1-§6・§6 25行)
+- cmd_576: `docs/shogun/nvidia_driver_migration_20260502.md` (§1-§8・§8 30行以内)
 
 
 ## 📜 殿の方針
@@ -84,6 +133,35 @@
 | SDカード互換 | Pi Lite ↔ ArSprout をSD差し替えで切り替え可能 |
 
 ## 🚨 要対応 - 殿のご判断をお待ちしております
+
+### 🟢 cmd_575【high・殿就寝前緊急】PCモニター暫定回避実装 完遂 — SSH既稼働確認・GNOME idle 3件即適用・sudo必要分は朝実行コピペ手順化（2026-05-02 02:32 close）
+ash6(Opus 4.7) subtask_1218 単独完遂・老中独自検収PASS。
+
+**📜 レポート**: `docs/shogun/pc_monitor_recovery_workaround_20260502.md`(§1-§6完備・**§6=25行**・30行以内厳守✓・V4方針2号3例目連続成功)
+**📦 commit**: `f9e50ae` push済(private/main HEAD一致)
+
+**🟢 ash6の判断品質高い**:
+| 観点 | 内容 | 老中所見 |
+|---|---|---|
+| **SSH既稼働発見** | 殿descriptionは「SSH未設定」だが実態 LISTEN中・鍵認証可・LAN IP 192.168.15.14 — 一次情報で確認 | ★★★ 殿の認識を覆す重要発見・救出経路既確保 |
+| user権限分は即実装 | gsettings idle-dim/idle-activation/ambient = false 3件適用(全revert可) | ★★★ sudo無し範囲は即時実行 |
+| sudo必要分はrevert可bak付きコピペ | logind IdleAction=ignore + SSH PasswordAuth=no を §3 殿朝実行用に整備 | ★★★ 殿締め出しリスク回避 |
+| 朝の確認事項 dashboard追記 | 場合分けA/B/C+殿質問3問 即把握可能な構成 | ★★★ V4自動運転に寄与する補完 |
+
+**🟢 §6 エグゼクティブサマリ核心**:
+- **結論3行**: SSH既稼働・GNOME idle 3件適用済・sudo必要分は朝実行
+- **選択肢**: A=§5朝手順B全実行 / B=SSH enable最低限 / C=即cmd_576(nvidia-driver切替)
+- **推奨**: B(SSH enable最小)即実行 → 短期間でC(nvidia-driver切替)へ移行
+- 「logind対策はnouveau問題に効果限定的・根本対策=nvidia-driver切替急ぐべし」と軍師レベルの判断
+
+**🟡 殿への質問3問(朝判断用)**:
+- Q1: §5 3-A/3-B コピペ手順、起床直後実行可能か?
+- Q2: 直近boot gap 3分33秒は就寝中フリーズか操作中フリーズか?
+- Q3: cmd_576(nvidia-driver-550切替)着手可否
+
+**🌅 朝の確認事項**: dashboard 上部セクション (line 14〜) 参照・場合分けA/B/C/D完備。
+
+---
 
 ### 🟢 cmd_574【high】PCモニター復帰不能 診断データ完遂 — nouveau問題仮説確定・推奨nvidia-driver-550切替（2026-05-02 02:25 close）
 ash6 subtask_1217 単独完遂・老中独自検収PASS。

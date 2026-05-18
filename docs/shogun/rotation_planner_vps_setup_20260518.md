@@ -277,3 +277,95 @@ ssh debian@ik1-421-42663.vs.sakura.ne.jp '...'
 ---
 
 (Wave 1終了。Wave 2着手は §6 Q1-Q2 への殿回答後)
+
+---
+
+## §7 Wave 2a SSH key準備完了 (2026-05-18T11:19)
+
+### 殿回答(2026-05-18)を踏まえた本Waveの位置付け
+- Q1=A: 既存版更新 → Wave 2b で実施
+- Q2=a: VPS差分(gradio追加・python-multipart削除) を origin/main へ push → Wave 2b で実施
+- Q5=SSH key移行 → **本Wave 2a で SSH key 準備のみ完了**
+- Q3/Q4/Q6/Q7=放置
+
+### 既存SSH key検出 → 新規鍵を別ファイル名で追設(既存鍵温存)
+webapp ユーザーには既に既存鍵が1つあった:
+
+| 項目 | 既存鍵 (温存) | 新規鍵 (本Wave 2a生成) |
+|---|---|---|
+| ファイル | `/home/webapp/.ssh/id_ed25519` | `/home/webapp/.ssh/id_ed25519_rotation_planner` |
+| 公開鍵 | `/home/webapp/.ssh/id_ed25519.pub` | `/home/webapp/.ssh/id_ed25519_rotation_planner.pub` |
+| 作成日 | 2026-01-31 | 2026-05-18 |
+| コメント | `debian@ik1-421-42663` (用途不明) | `vps-rotation-planner-deploy-20260518` |
+| 指紋 | `SHA256:ByyTcXiJd+X/r/NPZ6vgEO31m7q+PlCLKPs/sxykl6E` | `SHA256:DzSqCMSXC3DgQGK4a7Si9iMeFVTkg9IR/HT6OSs0Lqg` |
+
+**理由**: 既存鍵のコメントが用途明示でなく、別所(別サーバ/別サービス)で利用されている可能性があるため、上書き生成は破壊リスク。別ファイル名で生成し既存鍵を温存。Wave 2b で `.git/config` の `core.sshCommand` または `~/.ssh/config` で新規鍵を明示指定する。
+
+### 🔴 殿への提示: 新規鍵 公開鍵全文 (GitHubに登録するもの)
+
+下記をそのままコピーしてGitHub UIに貼り付け:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN1IAKaVg5p6l21yay/SLxsq6dIQEVjGXiChLyZruDm8 vps-rotation-planner-deploy-20260518
+```
+
+指紋(登録後の照合用): `SHA256:DzSqCMSXC3DgQGK4a7Si9iMeFVTkg9IR/HT6OSs0Lqg`
+
+### 🔴 殿への登録依頼 (2択)
+
+#### 推奨: (b) Deploy Key (rotation-planner専用)
+GitHub UI: **`yasunorioi/rotation-planner` → Settings → Deploy keys → Add deploy key**
+
+| 項目 | 値 |
+|---|---|
+| Title | `vps-rotation-planner-deploy-20260518` |
+| Key | (上記公開鍵全文) |
+| ☑ Allow write access | **必須チェック** (Wave 2b で git push するため) |
+
+**長所**: rotation-planner リポジトリ専用。yasunorioi アカウント全体・他リポジトリへの影響なし。露出最小。
+**短所**: なし(本Wave 2bの用途には完全に合致)。
+
+#### 代替: (a) アカウントレベルSSH key
+GitHub UI: **yasunorioi アカウント → Settings → SSH and GPG keys → New SSH key**
+
+| 項目 | 値 |
+|---|---|
+| Title | `vps-rotation-planner-deploy-20260518` |
+| Key type | Authentication Key |
+| Key | (上記公開鍵全文) |
+
+**長所**: 殿の他リポジトリにも同じ鍵で push 可能。
+**短所**: 万一VPS侵害時に yasunorioi 配下の全リポジトリが書き込み可能になる露出。
+
+→ **(b) Deploy Key 推奨**。rotation-planner 1リポジトリだけ書き込み可能にする最小権限。
+
+### 🚫 秘密鍵について (絶対不出)
+
+秘密鍵 `/home/webapp/.ssh/id_ed25519_rotation_planner` は **本報告書に一切記載しない**。
+鍵生成時に webapp ユーザー領域(600 権限)へ保存済み・GitHub登録は公開鍵 (.pub) のみで完結する。
+
+### ntripcaster 影響評価 (Wave 2a)
+
+| 項目 | 結果 |
+|---|---|
+| プロセス | 変動なし (pid 3216892/3216893 健在・確認は §5 baseline と同じコマンドで Wave 2b 冒頭に実施) |
+| ポート 2101 | 変動なし(ssh-keygen はネットワーク無関与) |
+| systemd / apt | 操作なし |
+| screen セッション | 操作なし |
+| 共有ライブラリ | 変動なし(パッケージインストールなし) |
+
+Wave 2a はwebappユーザー領域のファイル生成のみ。ntripcaster 完全保全。
+
+### Wave 2b 着手条件 (殿の手動操作完了後)
+
+殿が GitHub UI で公開鍵を **Deploy Key (Allow write access)** または **Account SSH key** として登録 → 完了通知を受領後、家老が **subtask_1222 (Wave 2b)** を起票:
+- SSH接続テスト `ssh -T -i ~/.ssh/id_ed25519_rotation_planner git@github.com`
+- `.git/config` origin URL を `git@github.com:yasunorioi/rotation-planner.git` へ変更 (旧PAT URL置換)
+- `~/.ssh/config` または `core.sshCommand` で新規鍵を明示指定
+- VPS差分 (gradio追加・python-multipart削除) を origin/main へ push (Q2=a)
+- 既存版更新 (Q1=A): stop → backup → git pull → pip install → start
+- 起動確認 (curl 7863) + ntripcaster無影響確認 (ss/ps before-after)
+- 旧PAT (`ghp_xxx`) は GitHub Settings → Personal access tokens で殿が手動 Revoke
+- 報告書 §4 と §8 を追記
+
+

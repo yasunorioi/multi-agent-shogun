@@ -16,9 +16,9 @@
 ## §1 エグゼクティブサマリ (殿レビュー用・30行以内厳守)
 
 **結論3行:**
-1. **構造的網羅監査で 5パターンの不整合カテゴリ(A-E) を抽出。最重要は ★★★ パターンA 致命的 1件 = `PlanRepository.get_plans()` (db_access.py L577) が SELECT に `user_id` 欠如・`plans.py:74` が `PlanResponse(**p)` 直接展開で `user_id: int` 必須を満たせず → GET /api/plans 500 ValidationError が依然発生中(cmd_586 Wave 11 subtask_1271 の修正が origin/main に未マージ)**。
-2. **軍師独立提案 3案** を 7軸×重み100 で公平採点: **案G1=66/100 個別hot-fix ★最高得点** / 案G2=58/100 from_db pattern 統一 / 案G3=43/100 ORM Repo層導入。但し**G1だけでは再発予防ゼロ** → §5 で **「短期G1+中期G2+長期G3」の段階提案** も併記。
-3. **構造的予防策(L6)** = (a) Repository層の SELECT列を constant化(pinned_assignments の `_COLS` パターン拡散)・(b) pytest CI で全 list endpoint smoke-test 自動化・(c) PRAGMA table_info ↔ Pydantic model_fields の定期 diff スクリプト。**(b)が最小コストで再発検出 → 別cmd起票推奨**。
+1. **構造的網羅監査で 5パターンの不整合カテゴリ(A-E) を抽出・初版 5件 + cmd_589 Wave 2 追記で 6件**(Wave 2 で cmd_591 Wave 1 真因η4 = main.py:629 Field kwarg mismatch を §3.6 に統合・系列4件目・パターンE)。最重要は ★★★ パターンA 致命的 1件 = `PlanRepository.get_plans()` (db_access.py L577) が SELECT に `user_id` 欠如 → GET /api/plans 500・**新規 ★★ 不整合#6 (cmd_591 η4) は POST /api/rotation/optimize 全件 500 で殿運用ブロック発生** (J1 殿御裁定済 = field_code→name rename 1行修正)。
+2. **軍師独立提案 3案** を 7軸×重み100 で公平採点: **案G1=66/100 個別hot-fix ★最高得点** / 案G2=58/100 from_db pattern 統一 / 案G3=43/100 ORM Repo層導入。**Wave 2 追記=J1 殿御裁定済は G1 採用の典型例**(段階提案「短期G1」継続中の傍証)。
+3. **構造的予防策(L6)** = (a) Repository層の SELECT列を constant化・(b) pytest CI で全 list endpoint smoke-test 自動化(★Wave 2 追記=**GET だけでなく POST endpoint も対象範囲に拡張**すべきことを cmd_591 η4 で再実証)・(c) PRAGMA table_info ↔ Pydantic model_fields の定期 diff。**(b)が最小コストで再発検出 → 別cmd起票推奨**。
 
 **検出した不整合(優先度順・詳細§3):**
 
@@ -29,6 +29,7 @@
 | 3 | **★★** | B: 型不一致 | `CropHistoryResponse.year: int` vs DB schema `year TEXT NOT NULL` | 暗黙変換失敗時の 422/500 |
 | 4 | ★ | C: 命名揺れ | `FieldResponse.field_name` vs DB column `name` | `from_db` で alias 吸収済 |
 | 5 | ★ | D: 層構造揺れ | `PinnedAssignment` だけ Repository層なし(pinned_assignments.py 直接SQL) | 保守性低下 |
+| **6** | **★★** | **E: kwarg mismatch** | **`main.py:629` `Field(field_code=...)` vs `@dataclass Field(..., name, ...)`** (cmd_591 Wave 1 真因η4・系列4件目) | **POST /api/rotation/optimize 全件 500 (殿運用ブロック)** |
 
 **殿への質問3問:**
 - Q1' 修正方針: (G1個別 / G2 from_db統一 / G3 ORM導入) どれを今 Wave 2 で発動するか?(軍師独立評価 G1=66点最高・但し再発予防ゼロ)
@@ -251,7 +252,108 @@ class CropHistoryResponse(BaseModel):
 
 **推奨修正案:** `PinnedAssignmentRepository` を `db_access.py` に新規追加し、SQL を集約。pinned_assignments.py は Repository呼出のみに簡素化。**長期改修**(G2 or G3 に統合)。
 
-### §3.6 監査外で確認できなかった残課題
+### §3.6 ★★ 不整合#6 = main.py:629 Field kwarg mismatch (cmd_591 Wave 1 真因η4 追記)
+
+> **追記 (cmd_589 Wave 2 / subtask_1282 / 2026-05-19 殿御裁定 Q2=YES 採択):**
+> cmd_591 Wave 1 で発覚した真因η4 を本書に統合。**系列4件目**(cmd_585=1 / cmd_586 Wave 11=2 / cmd_589 subtask_1273 自体=3 / 本件 cmd_591 Wave 1=4)・**累計 schema 差異検出 14回目相当**(家老所感の上位カウント)。
+
+**コード位置:**
+- `api/main.py` L626-636 (`/api/rotation/optimize` endpoint, `optimize_rotation()` 関数内)
+- `rotation_planner/app/utils.py` L33-41 (`Field` `@dataclass` 定義)
+
+**問題:**
+
+```python
+# main.py L626-636 (optimize_rotation)
+for f in req.fields:
+    field_obj = Field(
+        field_id=str(f.get("field_id", f.get("fieldId", ""))),
+        field_code=f.get("field_code", f.get("fieldCode", "")),    # ★ Field に存在しない kwarg
+        area_ha=float(f.get("area_ha", f.get("areaHa", 0))),
+        district=f.get("district", ""),
+        history=f.get("history", {}),
+        beet_forbidden=f.get("beet_forbidden", f.get("beetForbidden", False))
+    )
+```
+
+```python
+# rotation_planner/app/utils.py L33-41
+@dataclass
+class Field:
+    """ほ場データ"""
+    field_id: str
+    district: str
+    name: str          # ★ Field の名前フィールドは name (field_code ではない)
+    area_ha: float
+    history: Dict[str, str] = field(default_factory=dict)
+    has_unknown: bool = False
+    beet_forbidden: bool = False
+```
+
+→ **`Field(field_code=...)` で `TypeError: Field.__init__() got an unexpected keyword argument 'field_code'`** が発生。
+→ POST `/api/rotation/optimize` (OR-Tools 経由の輪作計画最適化エンドポイント) が **全件 500 Internal Server Error**。**殿運用ブロック発生**(本件が cmd_591 priority high の根拠)。
+
+**影響:**
+- OR-Tools 輪作計画の自動最適化が完全不能(GET /api/plans は復旧したが POST 最適化は別系統で死亡)
+- frontend (Rotation.jsx) で「OR-Tools 最適化」ボタンを押すと 500・エラーメッセージ表示
+- JS版ヒューリスティック(rotationSolver.js)では動作するが、OR-Tools 厳密解は使えない状態
+
+**修正案 J1(殿御裁定済・cmd_591 Wave 2 subtask_1280 で部屋子1が実装中):**
+
+```python
+# main.py L626-636 修正後
+for f in req.fields:
+    field_obj = Field(
+        field_id=str(f.get("field_id", f.get("fieldId", ""))),
+        name=f.get("field_code", f.get("fieldCode", "")),    # ★ field_code → name に rename
+        area_ha=float(f.get("area_ha", f.get("areaHa", 0))),
+        district=f.get("district", ""),
+        history=f.get("history", {}),
+        beet_forbidden=f.get("beet_forbidden", f.get("beetForbidden", False))
+    )
+```
+
+- **1行・1ファイル修正**・git revert 容易・V4境界線「戻せるか」○
+- 軍師独立 3案 (§5) のうち **G1 個別 hot-fix** の典型例として殿御裁定で採択
+
+**重要度判定根拠:**
+- 重要度 **★★** (POST endpoint 全件 500・殿運用ブロック発生だが GET 系は無影響)
+- ★★★ 致命的 (#1 PlanRepository GET 500) と比べて影響範囲は POST optimize 限定だが、輪作計画の本質機能ブロック
+
+**パターン分類:**
+- **パターンE = kwarg mismatch** (§4.1 分類)
+- 系列: cmd_585(plans.py L80 plan_data→data) + cmd_591(main.py:629 field_code→name) = **パターンE 系列 2件目**
+- 軍師 §3.6 残課題で「router の POST/PUT body kwarg ↔ Repository method 引数名」を列挙していた領域に該当(残課題§3.7 → §3.6.4 で挙げていた)が、`Field` dataclass(Repository method ではなく dataclass init kwarg)も同種パターンの拡張ケース
+
+**L6 予防策(b) pytest CI smoke-test との関連性:**
+
+cmd_589 §6.2 で軍師が提案した **pytest CI smoke-test** は「全 GET list endpoint で 500 検出」を主対象としていたが、**本件は POST endpoint で発生**。**予防策(b) を POST endpoint 全件にも拡張**すべきことが本件で再度実証された。
+
+```python
+# 拡張提案: tests/test_endpoint_smoke.py に POST も追加
+POST_ENDPOINTS = [
+    ("/api/rotation/optimize", {"fields": [...minimal_valid_body...], "constraints": {}}),
+    ("/api/plans", {"name": "test", "start_year": 2026, "end_year": 2030, "details": []}),
+    ("/api/fields", {"field_code": "test", "area_ha": 1.0}),
+    # ... 全 POST endpoint with minimal valid body
+]
+
+@pytest.mark.parametrize("ep, body", POST_ENDPOINTS)
+def test_post_no_500_typeerror(ep, body):
+    """全 POST endpoint で TypeError/ValidationError 500 を検出"""
+    res = client.post(ep, json=body, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert res.status_code != 500, f"{ep} returned 500: {res.text[:300]}"
+```
+
+→ **本件のような Field kwarg mismatch は POST smoke-test で deploy前検出可能だった** ことが確定。Q3'(別cmd起票)で予防策(b) を発動する際、**GET + POST 両方を対象範囲**にすべきと §6.2 に追記提案(§6.2 既存内容は GET 中心)。
+
+**累計集計:**
+- 系列 4件目(cmd_585=1 / cmd_586 Wave 11=2 / cmd_589 subtask_1273=3 / cmd_591 Wave 1=4)
+- 累計 14回目相当(家老所感の schema差異検出累計カウント・本書 §2.5 「3回目候補」とは別系統の上位カウント)
+
+---
+
+### §3.7 監査外で確認できなかった残課題
 
 時間制約により本subtask では以下を完全確認できなかった。**別subtask での残課題確認推奨**:
 
@@ -277,7 +379,7 @@ class CropHistoryResponse(BaseModel):
 | **B: 型不一致** | DB schema 型 vs Pydantic 型 違い | #3 CropHistoryResponse.year | DB=TEXT で柔軟・Pydantic=int で厳格・暗黙変換不可 |
 | **C: 命名揺れ** | DB列名 vs Pydantic フィールド名 | #4 name vs field_name | snake_case 統一の中の例外・歴史的経緯 |
 | **D: 層構造揺れ** | Repository 集約 vs router 直接 SQL | #5 PinnedAssignment | 新規実装時の急ぎ → Repository新設より router内SQL が早かった |
-| **E: kwarg mismatch** | Router→Repository 引数名違い | cmd_585 plan_data→data | Pydantic model フィールド名 vs Repository 引数名の不一致 |
+| **E: kwarg mismatch** | Router→Repository (or dataclass) 引数名違い | cmd_585 plan_data→data / **#6 cmd_591 main.py:629 field_code→name** | Pydantic model フィールド名 vs Repository/dataclass 引数名の不一致 |
 
 ### §4.2 根因の深掘り(なぜ発生したか)
 
@@ -287,12 +389,13 @@ class CropHistoryResponse(BaseModel):
 4. **「列追加 migration の通知漏れ」**: cmd_577 D3 で inventory に 8列追加・crop_master.category 追加があったが、Pydantic Response 側の追従が手動。
 5. **「Repository アーキテクチャの揺れ」**: 古い実装は db_access.py 集約・新しい実装(pinned)は router 直接SQL → 一貫性なし。
 
-### §4.3 cmd_585/586 で検出済 2件と本subtask検出 5件の関係
+### §4.3 cmd_585/586 で検出済 2件と本subtask検出 5件+cmd_591 Wave 1 追記1件 の関係
 
-- cmd_585 = **パターンE** (kwarg mismatch)・1件
-- cmd_586 Wave 11 = **パターンA** (PlanRepository SELECT欠如)・1件 → 修正案出るが origin/main 未マージ
-- 本cmd_589 = **パターンA/B/C/D を横断的に検出**・5件
-- 結論: cmd_585/586 は氷山の一角・本cmd_589 で構造的網羅監査が必要だった判断は正しい
+- cmd_585 = **パターンE** (kwarg mismatch・plans.py L80 plan_data→data)・1件 / **系列1件目**
+- cmd_586 Wave 11 = **パターンA** (PlanRepository SELECT欠如)・1件 → 修正案出るが origin/main 未マージ / **系列2件目**
+- 本cmd_589 subtask_1273 = **パターンA/B/C/D を横断的に検出**・5件 / **系列3件目**(構造的網羅監査としての立ち位置)
+- **cmd_591 Wave 1 真因η4(本書 §3.6 追記)** = **パターンE 2件目**(main.py:629 Field kwarg mismatch)・1件 / **系列4件目**・累計14回目相当(家老所感の上位カウント)
+- 結論: cmd_585/586 は氷山の一角・本cmd_589 で構造的網羅監査+cmd_591 で更にパターンEの2件目発見 → **予防策(b) pytest CI smoke-test を GET+POST 両方に拡張すべき**(本書 §6.2 拡張提案)
 
 ---
 
@@ -360,10 +463,13 @@ class CropHistoryResponse(BaseModel):
 | **中期** | G2 + 予防策(b) | from_db pattern 統一 + pytest CI smoke-test で再発予防 | 1-2週間 |
 | **長期** | G3 | ORM/Repo層導入で構造的根本解決(余裕がある時期) | 月単位 |
 
+**★ Wave 2 追記: 不整合#6 (cmd_591 Wave 1 真因η4) も G1 採用済:**
+殿御裁定 (2026-05-19 Q2=YES + cmd_591 J1) で **不整合#6 main.py:629 Field kwarg mismatch は J1=field_code→name rename・1行修正で G1 採用済**。cmd_591 Wave 2 subtask_1280 で部屋子1が実装中。**段階提案「短期G1」が継続中である傍証**。Wave 2 で G1 採用範囲は **不整合#1-#3 + #6** に拡大。
+
 ### §5.5 dissent (推奨案の最大リスク)
 
-- **G1 最大リスク:** 「**ホットフィックスで終わる病**」= 個別修正後に予防策(b)を起票しない場合、cmd_585→cmd_586→cmd_589 の連鎖が続く
-- **緩和:** Q3' で「予防策(b) pytest CI smoke-test 自動化を別cmd 起票するか?」を殿確認
+- **G1 最大リスク:** 「**ホットフィックスで終わる病**」= 個別修正後に予防策(b)を起票しない場合、cmd_585→cmd_586→cmd_589→**cmd_591** の連鎖が続く(Wave 2 追記=本件 cmd_591 が連鎖4件目として実証)
+- **緩和:** Q3' で「予防策(b) pytest CI smoke-test 自動化を別cmd 起票するか?」を殿確認(★Wave 2 追記=POST endpoint も対象範囲に拡張すべき・§6.2 拡張提案参照)
 - **撤回条件:** 短期内に G2 中期改修を発動できるなら G1 単独でも可・できないなら G2 を含む段階発動を選好
 
 ---
@@ -419,6 +525,35 @@ def test_get_list_no_500(ep):
     assert res.status_code != 500, f"{ep} returned 500: {res.text[:200]}"
     # 200 or 401 or 404 は OK・500 のみ NG
 ```
+
+**★ Wave 2 追記(cmd_591 Wave 1 真因η4 を踏まえた拡張提案):**
+
+cmd_591 Wave 1 で発覚した main.py:629 `Field(field_code=...)` TypeError は **POST endpoint で発生**。本書初版の予防策(b) は GET list endpoint 中心だったが、**POST endpoint も全件 smoke-test 対象に拡張**すべき。
+
+```python
+# tests/test_endpoint_smoke.py 拡張 (cmd_591 Wave 2 教訓反映)
+POST_ENDPOINTS = [
+    ("/api/rotation/optimize", {"fields": [{"field_id": "1", "field_code": "F1", "area_ha": 1.0, "district": "d", "history": {}}], "constraints": {}}),
+    ("/api/plans", {"name": "test", "start_year": 2026, "end_year": 2030, "details": []}),
+    ("/api/fields", {"field_code": "test", "area_ha": 1.0}),
+    ("/api/pinned-assignments", {"field_id": 1, "year": "R10", "crop": "test"}),
+    # ... 全 POST endpoint with minimal valid body
+]
+
+@pytest.mark.parametrize("ep, body", POST_ENDPOINTS)
+def test_post_no_500_typeerror(ep, body):
+    """全 POST endpoint で TypeError(kwarg mismatch)/ValidationError 500 を検出
+    
+    cmd_591 Wave 1 η4 のような Field(field_code=...) TypeError は本テストで deploy前検出可能。
+    """
+    res = client.post(ep, json=body, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert res.status_code != 500, f"{ep} returned 500: {res.text[:300]}"
+    # 200/201/400/401/422 は OK(リクエストvalidationエラーは想定範囲)・500のみNG
+```
+
+**根拠**: cmd_591 Wave 1 で **`Field(field_code=...)` TypeError** が deploy 後の殿実機操作で初めて発覚し殿運用ブロック発生。GET smoke-test だけでは検出できなかった。**POST smoke-test を含めれば本件は deploy前に確実に検出された**ことが §3.6 で実証済。
+
+**工数追加**: POST endpoint も対象化 → smoke-test 全体で 2-3時間(初版1-2時間から +1時間程度)。**ROI 最大**(殿運用ブロック1件分の検出価値だけで投資回収)。
 
 **CI 統合:** GitHub Actions(または既存 CI)で push毎に実行。**所要 1-2 時間で実装可能**(別cmd 起票推奨・Q3'で殿確認)。
 
